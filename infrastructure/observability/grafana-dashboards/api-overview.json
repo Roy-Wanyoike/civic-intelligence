@@ -1,0 +1,48 @@
+{
+  "title": "Civic Intelligence — API Overview",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "title": "API Request Rate",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "rate(civic_api_requests_total[5m])"}],
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "title": "API Latency (p95)",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "histogram_quantile(0.95, rate(civic_api_request_latency_seconds_bucket[5m]))"}],
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "title": "Bills Discovered",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "civic_bills_discovered_total"}],
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+    },
+    {
+      "title": "Adapter Errors",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "civic_adapter_errors_total"}],
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+    },
+    {
+      "title": "AI Questions",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "civic_ai_questions_total"}],
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 8}
+    },
+    {
+      "title": "Citation Validation Failures",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "civic_ai_citation_failures_total"}],
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 8}
+    }
+  ]
+}
