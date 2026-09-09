@@ -2,9 +2,12 @@
 package main
 
 import (
+        "bytes"
         "context"
+        "crypto/sha1"
         "encoding/json"
         "fmt"
+        "io"
         "log"
         "net/http"
         "os"
