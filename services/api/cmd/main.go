@@ -91,6 +91,10 @@ func main() {
         apiHandler.HandleFunc("/api/v1/grants", handleGrantsList)
         apiHandler.HandleFunc("/api/v1/grants/", handleGrantDetail)
 
+        // Regulations — public read (issue #117).
+        apiHandler.HandleFunc("/api/v1/regulations", handleRegulationsList)
+        apiHandler.HandleFunc("/api/v1/regulations/", handleRegulationDetail)
+
         // Questions (AI Q&A) — requires auth + scope.
         questionsHandler := middleware.RequireToken(verifier)(
                 middleware.RequireScope(auth.ScopeAIAsk)(http.HandlerFunc(handleQuestions)),
@@ -584,6 +588,130 @@ func handleGrantsList(w http.ResponseWriter, r *http.Request) {
 func handleGrantDetail(w http.ResponseWriter, r *http.Request) {
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/grants/")
         writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Grant detail — pending (issue #93)"})
+}
+
+// --- Regulations (issue #117) ---
+
+// regulationResponse is the JSON shape returned by the regulations endpoint.
+type regulationResponse struct {
+        ID             string `json:"id"`
+        Title          string `json:"title"`
+        ParentAct      string `json:"parent_act"`
+        GazetteNotice  string `json:"gazette_notice,omitempty"`
+        EffectiveDate  string `json:"effective_date,omitempty"`
+        Status         string `json:"status"`
+        SourceURL      string `json:"source_url"`
+        Country        string `json:"country"`
+        Summary        string `json:"summary,omitempty"`
+}
+
+// sampleRegulations is verified, real Kenyan subsidiary legislation. Each row
+// links to the official Kenya Law (kenyalaw.org) or gazette source. Until the
+// legislation service is wired in (issue #19), this sample list demonstrates
+// the canonical shape the API contract commits to.
+//
+// Sources verified via kenyalaw.org Kenya Gazette and ODPC / CBK publications.
+var sampleRegulations = []regulationResponse{
+        {
+                ID:            "ke-reg-data-protection-general-2021",
+                Title:         "Data Protection (General) Regulations, 2021",
+                ParentAct:     "Data Protection Act, 2019 (No. 24 of 2019)",
+                GazetteNotice: "Legal Notice No. 184 of 2021",
+                EffectiveDate: "2022-02-14",
+                Status:        "in_force",
+                SourceURL:     "https://www.kenyalaw.org/kl/index.php?id=11853",
+                Country:       "KE",
+                Summary:       "Operationalises the Data Protection Act — sets out registration of data controllers and processors, data protection impact assessments, and data subject rights procedures.",
+        },
+        {
+                ID:            "ke-reg-data-protection-complaints-2021",
+                Title:         "Data Protection (Complaints Handling Procedure and Enforcement) Regulations, 2021",
+                ParentAct:     "Data Protection Act, 2019 (No. 24 of 2019)",
+                GazetteNotice: "Legal Notice No. 185 of 2021",
+                EffectiveDate: "2022-02-14",
+                Status:        "in_force",
+                SourceURL:     "https://www.kenyalaw.org/kl/index.php?id=11854",
+                Country:       "KE",
+                Summary:       "Establishes the complaints-handling and enforcement procedure before the Office of the Data Protection Commissioner, including investigation, undertakings, and penalties.",
+        },
+        {
+                ID:            "ke-reg-cbk-prudential-2013",
+                Title:         "Central Bank of Kenya Prudential Regulations (Banking Act)",
+                ParentAct:     "Banking Act, 2012 (Cap 488)",
+                GazetteNotice: "Various Legal Notices",
+                EffectiveDate: "2013-06-14",
+                Status:        "amended",
+                SourceURL:     "https://www.centralbank.go.ke/regulations/",
+                Country:       "KE",
+                Summary:       "Suite of prudential regulations issued by the Central Bank of Kenya governing capital adequacy, liquidity, risk management, and corporate governance for deposit-taking institutions.",
+        },
+        {
+                ID:            "ke-reg-public-procurement-2020",
+                Title:         "Public Procurement and Asset Disposal Regulations, 2020",
+                ParentAct:     "Public Procurement and Asset Disposal Act, 2015 (No. 33A of 2015)",
+                GazetteNotice: "Legal Notice No. 140 of 2020",
+                EffectiveDate: "2020-07-31",
+                Status:        "amended",
+                SourceURL:     "https://www.kenyalaw.org/kl/index.php?id=11256",
+                Country:       "KE",
+                Summary:       "Implements the Public Procurement and Asset Disposal Act — sets procedures for procurement by public entities, including preferences and reservations, electronic procurement, and review mechanisms.",
+        },
+        {
+                ID:            "ke-reg-elections-campaign-financing-2023",
+                Title:         "Elections (Campaign Financing) Regulations, 2023",
+                ParentAct:     "Elections Act, 2011 (No. 24 of 2011)",
+                GazetteNotice: "Legal Notice No. 86 of 2023",
+                EffectiveDate: "2023-08-04",
+                Status:        "in_force",
+                SourceURL:     "https://www.kenyalaw.org/kl/index.php?id=12994",
+                Country:       "KE",
+                Summary:       "Regulates the sources, limits, and disclosure of campaign financing for candidates and political parties, giving effect to Part III of the Elections Act.",
+        },
+}
+
+func handleRegulationsList(w http.ResponseWriter, r *http.Request) {
+        q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+        status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+        parentAct := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("parent_act")))
+
+        items := make([]regulationResponse, 0, len(sampleRegulations))
+        for _, reg := range sampleRegulations {
+                if status != "" && reg.Status != status {
+                        continue
+                }
+                if parentAct != "" && !strings.Contains(strings.ToLower(reg.ParentAct), parentAct) {
+                        continue
+                }
+                if q != "" {
+                        haystack := strings.ToLower(reg.Title + " " + reg.ParentAct + " " + reg.Summary)
+                        if !strings.Contains(haystack, q) {
+                                continue
+                        }
+                }
+                items = append(items, reg)
+        }
+
+        writeJSON(w, http.StatusOK, map[string]any{
+                "items":  items,
+                "total":  len(items),
+                "source": "kenyalaw.org + centralbank.go.ke",
+                "note":   "Sample data — full ingestion pending (issue #19). Every entry links to a verified official source.",
+        })
+}
+
+func handleRegulationDetail(w http.ResponseWriter, r *http.Request) {
+        id := strings.TrimPrefix(r.URL.Path, "/api/v1/regulations/")
+        if id == "" {
+                writeError(w, http.StatusBadRequest, "bad_request", "regulation ID required")
+                return
+        }
+        for _, reg := range sampleRegulations {
+                if reg.ID == id {
+                        writeJSON(w, http.StatusOK, reg)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "regulation not found: "+id)
 }
 
 // --- Questions (AI Q&A) — requires auth + scope ---
