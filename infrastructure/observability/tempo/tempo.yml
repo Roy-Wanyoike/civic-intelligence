@@ -1,0 +1,47 @@
+# Tempo config — single-binary dev. For prod, use the microservices chart
+# (tempo-distributed) and replace the local storage with S3.
+
+server:
+  http_listen_port: 3200
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+  trace_idle_period: 30s
+
+compactor:
+  compaction:
+    block_retention: 48h           # 2-day trace retention in dev
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+
+# Enable metrics generator for service-graph / span metrics.
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_interval: 15s
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graph, span-metrics]

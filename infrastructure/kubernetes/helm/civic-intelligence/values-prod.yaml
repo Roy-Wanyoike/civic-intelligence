@@ -1,0 +1,90 @@
+# values-prod.yaml — overrides for production.
+# All replicas scaled for HA, TLS via prod issuer, HPA enabled, PDBs strict.
+
+global:
+  imageTag: ""            # pinned by Argo CD per release tag
+  domain: civic.example
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "200"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: api.civic.example
+      service: api
+      port: 8080
+    - host: civic.example
+      service: web
+      port: 3000
+  tls:
+    - hosts: [api.civic.example, civic.example]
+      secretName: civic-tls-prod
+
+postgresql:
+  enabled: true
+  architecture: replication
+  primary:
+    persistence:
+      size: 200Gi
+      storageClass: gp3-encrypted
+  readReplicas:
+    persistence:
+      size: 200Gi
+      storageClass: gp3-encrypted
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+services:
+  api:
+    replicas: 4
+    autoscaling:
+      minReplicas: 4
+      maxReplicas: 24
+      cpuUtilization: 65
+  ingestion:
+    replicas: 3
+    autoscaling:
+      minReplicas: 3
+      maxReplicas: 10
+  documents:
+    replicas: 3
+    autoscaling:
+      minReplicas: 3
+      maxReplicas: 12
+  legislation:
+    replicas: 4
+  evidence:
+    replicas: 3
+  intelligence:
+    replicas: 3
+  ai:
+    replicas: 4
+    resources:
+      requests: { cpu: 2000m, memory: 2Gi }
+      limits:   { cpu: 4000m, memory: 6Gi }
+    autoscaling:
+      enabled: true
+      minReplicas: 4
+      maxReplicas: 16
+      cpuUtilization: 70
+  search:
+    replicas: 3
+  notifications:
+    replicas: 3
+  identity:
+    replicas: 3
+  web:
+    replicas: 4
+
+externalSecrets:
+  enabled: true
+  backend: aws-secrets-manager
+  secretStoreName: civic-secrets-prod
+
+serviceMesh:
+  enabled: true

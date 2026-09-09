@@ -1,0 +1,114 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Ingestion pipeline health: crawl/fetch job throughput, success rate, sources by health, and per-source latency.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Crawl jobs per minute (by status)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        { "expr": "sum(rate(ingestion_crawl_jobs_total[5m])) by (status)", "legendFormat": "{{status}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Fetch success rate (%)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "red", "value": null },
+          { "color": "orange", "value": 80 },
+          { "color": "green", "value": 95 }
+        ]
+      }}},
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "100 * sum(rate(ingestion_fetch_jobs_total{status=\"succeeded\"}[5m])) / clamp_min(sum(rate(ingestion_fetch_jobs_total[5m])), 1)" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Sources by health",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        { "expr": "sum by (health) (ingestion_sources_total)", "legendFormat": "{{health}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Fetch latency p95 (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(ingestion_fetch_duration_seconds_bucket[5m])) by (le, source_id))", "legendFormat": "{{source_id}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Bytes fetched per minute",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "sum(rate(ingestion_fetch_bytes_total[5m])) by (source_id)" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Crawls blocked by robots.txt",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops", "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 1 },
+          { "color": "red", "value": 10 }
+        ]
+      }}},
+      "targets": [
+        { "expr": "sum(rate(ingestion_robots_blocked_total[5m]))" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Documents queued for parsing",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 1000 },
+          { "color": "red", "value": 10000 }
+        ]
+      }}},
+      "targets": [
+        { "expr": "sum(ingestion_documents_queued)" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["civic", "ingestion"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Ingestion Health",
+  "uid": "ingestion-health",
+  "version": 1,
+  "weekStart": ""
+}

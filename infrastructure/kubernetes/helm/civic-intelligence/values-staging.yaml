@@ -1,0 +1,46 @@
+# values-staging.yaml — overrides for staging.
+# HPA enabled, replicas scaled down from prod, TLS via staging issuer.
+
+global:
+  imageTag: "staging"
+  domain: staging.civic.example
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  hosts:
+    - host: api.staging.civic.example
+      service: api
+      port: 8080
+    - host: app.staging.civic.example
+      service: web
+      port: 3000
+  tls:
+    - hosts: [api.staging.civic.example, app.staging.civic.example]
+      secretName: civic-tls-staging
+
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      size: 30Gi
+  architecture: standalone
+
+services:
+  api:
+    replicas: 2
+    autoscaling:
+      minReplicas: 2
+      maxReplicas: 4
+  ingestion:
+    replicas: 1
+  documents:
+    replicas: 1
+  legislation:
+    replicas: 2
+  ai:
+    replicas: 1
+  web:
+    replicas: 2

@@ -1,0 +1,115 @@
+# OpenTelemetry Collector config for the Civic Intelligence Platform.
+# Receives OTLP (gRPC + HTTP) from application services, exports traces to
+# Tempo, logs to Loki, and metrics to Prometheus (via the prometheus exporter).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Host metrics (CPU, memory, disk, network) for the collector pod itself.
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      disk: {}
+      network: {}
+      processes: {}
+
+processors:
+  # Sample 50% of traces in dev to keep storage costs sane. Prod uses tail-based sampling.
+  probabilistic_sampler:
+    sampling_percentage: 100
+
+  # Drop high-volume noisemakers.
+  filter:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.route"] == "/healthz/live"'
+        - 'attributes["http.route"] == "/healthz/ready"'
+        - 'attributes["http.route"] == "/metrics"'
+
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+    send_batch_max_size: 4096
+
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        from_attribute: deployment.environment
+        action: upsert
+      - key: service.namespace
+        value: civic-intelligence
+        action: upsert
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+exporters:
+
+  # Traces → Tempo (OTLP gRPC).
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Logs → Loki (Loki HTTP push format via Loki exporter).
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    default_labels_enabled:
+      exporter: false
+      job: true
+    headers:
+      X-Scope-OrgID: civic
+
+  # Metrics → Prometheus (pull-based scrape of the collector's :8888).
+  prometheus:
+    endpoint: 0.0.0.0:8888
+    namespace: civic
+    const_labels:
+      environment: dev
+    send_timestamps: true
+    metric_expiration: 5m
+
+  # Optional debug exporter — disabled in prod.
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check, pprof, zpages]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, filter, resource, probabilistic_sampler, batch]
+      exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [loki]
+    metrics:
+      receivers: [otlp, hostmetrics]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus]
+  telemetry:
+    logs:
+      level: info
+      development: false
+    metrics:
+      address: 0.0.0.0:8888

@@ -1,0 +1,110 @@
+{{/*
+Render one Deployment per enabled service in `.Values.services`.
+*/}}
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "civic.serviceLabels" (dict "root" $ "svc" $svc "name" $name) | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/name: {{ $name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "civic.serviceLabels" (dict "root" $ "svc" $svc "name" $name) | nindent 8 }}
+      annotations:
+        # Force roll on every helm upgrade (configmap checksum below).
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ ($svc.env.PORT | default "8080") | quote }}
+        prometheus.io/path: "/metrics"
+    spec:
+      imagePullSecrets:
+        {{- toYaml $.Values.global.imagePullSecrets | nindent 8 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: {{ include "civic.image" (dict "root" $ "svc" $svc) }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            privileged: false
+          envFrom:
+            - configMapRef:
+                name: {{ $.Release.Name }}-{{ $name }}-config
+            {{- if $.Values.externalSecrets.enabled }}
+            - secretRef:
+                name: {{ $.Release.Name }}-{{ $name }}-secret
+            {{- end }}
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: OTEL_SERVICE_NAME
+              value: {{ $name }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://{{ $.Release.Name }}-otel-collector.{{ $.Release.Namespace }}.svc.cluster.local:4317"
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.env.PORT | default 8080 | int }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 5
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: ca-certs
+              mountPath: /etc/ssl/certs/ca-certificates.crt
+              subPath: ca-certificates.crt
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: ca-certs
+          configMap:
+            name: {{ $.Release.Name }}-ca-bundle
+            defaultMode: 0644
+{{- end }}
+{{- end }}

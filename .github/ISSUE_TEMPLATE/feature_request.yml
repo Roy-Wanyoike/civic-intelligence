@@ -1,0 +1,20 @@
+---
+name: Feature request
+about: Suggest a new capability or improvement
+labels: ['feature', 'needs-triage']
+---
+## What
+<!-- One-sentence description of the capability. -->
+
+## Why
+<!-- The user problem this solves. -->
+
+## Evidence-grounded?
+<!-- How do we keep this from introducing speculation? Every factual claim
+must trace to an authoritative source. -->
+
+## Proposed approach
+<!-- Brief design sketch. -->
+
+## Out of scope
+<!-- What this explicitly does NOT include. -->

@@ -1,0 +1,157 @@
+# Civic Intelligence — local development stack.
+# Usage: docker compose -f infrastructure/docker/docker-compose.yml up -d
+# Then run migrations: psql $DATABASE_URL -f infrastructure/postgres/migrations/NNN_*.up.sql
+
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: civic-postgres
+    environment:
+      POSTGRES_USER: civic
+      POSTGRES_PASSWORD: civic
+      POSTGRES_DB: civic_intelligence
+    ports: ["5432:5432"]
+    volumes:
+      - civic-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civic -d civic_intelligence"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: civic-redis
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  nats:
+    image: nats:2.10
+    container_name: civic-nats
+    command: ["-js", "-m", "8222"]   # JetStream enabled, monitoring on 8222
+    ports: ["4222:4222", "8222:8222"]
+    volumes:
+      - civic-nats-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: civic-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: civic
+      MINIO_ROOT_PASSWORD: civicpassword
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - civic-minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: civic-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports: ["9200:9200"]
+    volumes:
+      - civic-opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.22
+    container_name: civic-temporal
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: civic
+      POSTGRES_PWD: civic
+      POSTGRES_SEEDS: civic-temporal
+    ports: ["7233:7233"]
+    depends_on: [postgres]
+    healthcheck:
+      test: ["CMD-SHELL", "tctl --address localhost:7233 cluster health | grep SERVING || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  temporal-ui:
+    image: temporalio/ui:2.21.0
+    container_name: civic-temporal-ui
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports: ["8080:8080"]
+    depends_on: [temporal]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: civic-keycloak
+    command: ["start-dev"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports: ["8081:8080"]
+    volumes:
+      - civic-keycloak-data:/opt/keycloak/data
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: civic-mailhog
+    ports: ["1025:1025", "8025:8025"]
+
+  ai-service:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.python-ai
+    container_name: civic-ai
+    environment:
+      AI_SERVICE_PORT: "8000"
+      AI_ENV: "dev"
+      AI_LOG_FORMAT: "json"
+      AI_MODEL_GATEWAY_DEFAULT_PROVIDER: "stub"
+      DATABASE_URL: "postgresql://civic:civic@postgres:5432/civic_intelligence"
+      SEARCH_SERVICE_URL: "http://search-service:9004"
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.web
+    container_name: civic-web
+    environment:
+      AI_SERVICE_URL: "http://ai-service:8000"
+      API_SERVICE_URL: "http://api-service:9000"
+    ports: ["3000:3000"]
+    depends_on: [ai-service]
+
+volumes:
+  civic-postgres-data:
+  civic-nats-data:
+  civic-minio-data:
+  civic-opensearch-data:
+  civic-keycloak-data:

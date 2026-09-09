@@ -1,0 +1,48 @@
+# values-dev.yaml — overrides for local/cluster dev.
+# Lighter replicas, no HPA scaling, no TLS, single-replica backing services.
+
+global:
+  imageTag: "dev"
+
+ingress:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+services:
+  api:
+    replicas: 1
+    autoscaling: { enabled: false }
+  ingestion:
+    replicas: 1
+    autoscaling: { enabled: false }
+  documents:
+    replicas: 1
+    autoscaling: { enabled: false }
+  legislation:
+    replicas: 1
+    autoscaling: { enabled: false }
+  evidence:
+    replicas: 1
+    autoscaling: { enabled: false }
+  intelligence:
+    replicas: 1
+    autoscaling: { enabled: false }
+  ai:
+    replicas: 1
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits:   { cpu: 1000m, memory: 2Gi }
+    autoscaling: { enabled: false }
+  search:
+    replicas: 1
+    autoscaling: { enabled: false }
+  notifications:
+    replicas: 1
+    autoscaling: { enabled: false }
+  identity:
+    replicas: 1
+    autoscaling: { enabled: false }
+  web:
+    replicas: 1

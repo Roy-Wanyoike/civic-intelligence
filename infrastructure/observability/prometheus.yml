@@ -1,0 +1,108 @@
+# Prometheus scrape config for the Civic Intelligence Platform.
+# Targets all Go services (each exposes /metrics on its service port), the
+# Python AI service (prometheus_fastapi_instrumentator), Temporal, NATS,
+# Postgres (via postgres_exporter), and the OTel collector itself.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: civic-intelligence
+    environment: dev
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+
+  # ---------------------------------------------------------------------------
+  # Self-monitoring
+  # ---------------------------------------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ---------------------------------------------------------------------------
+  # Go services — scrape the pod IPs directly via k8s service discovery.
+  # ---------------------------------------------------------------------------
+  - job_name: civic-services
+    metrics_path: /metrics
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [civic, civic-staging, civic-prod]
+    relabel_configs:
+      # Only scrape pods with annotation prometheus.io/scrape=true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      # Use the port from annotation prometheus.io/port, default to http.
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_ip]
+        action: replace
+        target_label: __address__
+        regex: (.+);(.+)
+        replacement: $2:$1
+      # Standard labels
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        target_label: service
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_instance]
+        target_label: release
+
+  # ---------------------------------------------------------------------------
+  # Python AI service (FastAPI + prometheus_fastapi_instrumentator on /metrics).
+  # Included in the job above via the same k8s discovery, but kept here as a
+  # separate job for the local docker-compose dev stack.
+  # ---------------------------------------------------------------------------
+  - job_name: civic-ai-local
+    static_configs:
+      - targets: ['host.docker.internal:8000']
+        labels: { service: ai, environment: dev }
+    metrics_path: /metrics
+
+  # ---------------------------------------------------------------------------
+  # Backing services
+  # ---------------------------------------------------------------------------
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels: { service: postgres, environment: dev }
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels: { service: redis, environment: dev }
+
+  - job_name: nats
+    static_configs:
+      - targets: ['nats:8222']
+        labels: { service: nats, environment: dev }
+
+  - job_name: temporal
+    static_configs:
+      - targets: ['temporal:7233']
+        labels: { service: temporal, environment: dev }
+    metrics_path: /metrics
+
+  - job_name: opensearch
+    static_configs:
+      - targets: ['opensearch:9200']
+        labels: { service: opensearch, environment: dev }
+    metrics_path: /_prometheus/metrics
+
+  # ---------------------------------------------------------------------------
+  # OTel collector — receives metrics from services and re-exports them.
+  # ---------------------------------------------------------------------------
+  - job_name: otel-collector
+    static_configs:
+      - targets: ['otel-collector:8888']
+        labels: { service: otel-collector, environment: dev }

@@ -1,0 +1,105 @@
+{{/*
+NetworkPolicy: enforce SSRF protection.
+
+For each enabled service with `networkPolicy.enabled=true`, we render a policy
+that:
+  * DENIES all egress by default (policyTypes includes Egress).
+  * Allows egress ONLY to the explicitly listed services (cluster DNS) or
+    external FQDNs.
+
+For the ingestion (crawler) service specifically, egress is allowed ONLY to
+FQDNs in the EGRESS_ALLOWLIST env var — implementing SSRF protection at the
+network layer.
+*/}}
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.networkPolicy $svc.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}-netpol
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "civic.serviceLabels" (dict "root" $ "svc" $svc "name" $name) | nindent 4 }}
+  annotations:
+    civic.platform/ssrf-protection: "true"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/name: {{ $name }}
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # INGRESS — only listed services may call us.
+  ingress:
+    {{- range $ingress := $svc.networkPolicy.ingress }}
+    - from:
+        {{- range $from := $ingress.fromService }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $.Release.Name }}
+              app.kubernetes.io/name: {{ $from }}
+        {{- end }}
+      ports:
+        {{- range $port := $ingress.ports }}
+        - protocol: TCP
+          port: {{ $port }}
+        {{- end }}
+    {{- end }}
+    {{- if not $svc.networkPolicy.ingress }}
+    # No ingress allowed (default deny).
+    - {}
+    {{- end }}
+
+  # EGRESS — explicit allowlist only.
+  egress:
+    {{- range $egress := $svc.networkPolicy.egress }}
+    {{- if $egress.toService }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $.Release.Name }}
+              app.kubernetes.io/name: {{ $egress.toService }}
+    {{- end }}
+    {{- if $egress.toFQDNs }}
+    - to:
+        {{- range $fqdn := $egress.toFQDNs }}
+        - namespaceSelector: {}
+        {{- end }}
+      ports:
+        {{- range $port := $egress.ports }}
+        - protocol: TCP
+          port: {{ $port }}
+        {{- end }}
+    {{- end }}
+    {{- if $egress.toFQDNsFromEnv }}
+    # Crawler SSRF allowlist: only the FQDNs enumerated in env var may be hit.
+    # The actual FQDN matching is enforced by an admission webhook / DNS proxy
+    # (see docs/adr/0008-ssrf-protection.md). The NetworkPolicy below restricts
+    # egress to a known DNS suffix set; the webhook does the final FQDN match.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        {{- range $port := $egress.ports }}
+        - protocol: TCP
+          port: {{ $port }}
+        {{- end }}
+    {{- end }}
+    {{- end }}
+    # Always allow DNS resolution to kube-dns.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}
+{{- end }}

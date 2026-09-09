@@ -1,0 +1,127 @@
+{
+  "annotations": { "list": [] },
+  "description": "AI service quality: citation validation failure rate, hallucination rate, latency, LLM cost ($/day), tokens/s.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Citation validation failure rate (%)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 5 },
+          { "color": "red", "value": 15 }
+        ]
+      }}},
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "100 * sum(rate(intelligence_citation_validation_failures_total[5m])) / clamp_min(sum(rate(intelligence_citations_total[5m])), 1)" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Hallucination rate (%)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 2 },
+          { "color": "red", "value": 10 }
+        ]
+      }}},
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "100 * sum(rate(intelligence_hallucinations_total[5m])) / clamp_min(sum(rate(intelligence_responses_total[5m])), 1)" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "LLM cost (USD / day)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 100 },
+          { "color": "red", "value": 500 }
+        ]
+      }}},
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum(increase(intelligence_ai_cost_cents_total[24h])) / 100" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Pending candidate_facts awaiting validation",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 50 },
+          { "color": "red", "value": 200 }
+        ]
+      }}},
+      "targets": [
+        { "expr": "sum(intelligence_candidate_facts{validated=\"false\"})" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "LLM latency p50/p95 (ms) by model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(intelligence_ai_latency_ms_bucket[5m])) by (le, model))", "legendFormat": "p50 {{model}}" },
+        { "expr": "histogram_quantile(0.95, sum(rate(intelligence_ai_latency_ms_bucket[5m])) by (le, model))", "legendFormat": "p95 {{model}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Tokens per second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        { "expr": "sum(rate(intelligence_ai_completion_tokens_total[5m])) by (model)", "legendFormat": "completion {{model}}" },
+        { "expr": "sum(rate(intelligence_ai_prompt_tokens_total[5m])) by (model)", "legendFormat": "prompt {{model}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Validation failure breakdown (by code)",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "targets": [
+        { "expr": "sum by (code) (increase(intelligence_validation_failures_total[1h]))", "legendFormat": "{{code}}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Cost per 1k tokens by model (cents)",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "cent" } },
+      "targets": [
+        { "expr": "100 * sum(increase(intelligence_ai_cost_cents_total[1h])) by (model) / clamp_min(sum(increase(intelligence_ai_completion_tokens_total[1h])) by (model), 1)" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["civic", "ai", "intelligence"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "title": "AI Quality & Cost",
+  "uid": "ai-quality",
+  "version": 1,
+  "weekStart": ""
+}

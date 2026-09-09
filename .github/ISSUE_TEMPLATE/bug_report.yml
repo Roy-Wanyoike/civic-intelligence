@@ -1,0 +1,29 @@
+---
+name: Bug report
+about: Report something that is broken or incorrect
+labels: ['bug', 'needs-triage']
+---
+## What happened?
+<!-- Concise description of the broken behaviour. -->
+
+## What did you expect?
+<!-- What you expected to happen. -->
+
+## Steps to reproduce
+1.
+2.
+3.
+
+## Environment
+- Browser / device:
+- Country:
+- URL:
+
+## Evidence
+<!-- Screenshots, error text, or source links. -->
+
+## Severity
+- [ ] Blocks user from reading civic information
+- [ ] Blocks user from asking a question
+- [ ] Wrong/missing evidence
+- [ ] Cosmetic

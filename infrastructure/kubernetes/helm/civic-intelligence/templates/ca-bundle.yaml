@@ -1,0 +1,16 @@
+---
+# Shared CA bundle ConfigMap for outbound TLS verification.
+# In production this is filled by cert-manager / trust-manager.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-ca-bundle
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "civic.labels" . | nindent 4 }}
+data:
+  ca-certificates.crt: |
+    -----BEGIN CERTIFICATE-----
+    # Placeholder — replaced by cert-manager trust-manager in production.
+    # For dev, the distroless images ship with a usable Mozilla CA bundle.
+    -----END CERTIFICATE-----
