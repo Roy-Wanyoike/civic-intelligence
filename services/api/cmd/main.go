@@ -241,6 +241,8 @@ func makeBillDetailHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                         switch {
                         case strings.HasPrefix(sub, "timeline"):
                                 handleBillTimeline(w, r, adapter, billID)
+                        case strings.HasPrefix(sub, "changes"):
+                                handleBillChanges(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "versions"):
                                 writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
                         case strings.HasPrefix(sub, "documents"):
@@ -435,6 +437,66 @@ func handleBillTimeline(w http.ResponseWriter, r *http.Request, adapter *kenya_l
                 "bill_id": bill.SourceID,
                 "events":  events,
                 "total":   len(events),
+                "source":  "new.kenyalaw.org",
+        })
+}
+
+// --- Bill Version Comparison (#102) ---
+
+// billChangeResponse is the JSON shape returned by /api/v1/bills/{id}/changes.
+// It represents a single structural difference between two Bill versions.
+// Until the documents service stores multiple Bill versions (issue #19 + ADR-0011),
+// the `changes` array is empty and `note` explains why.
+type billChangeResponse struct {
+        Kind         string `json:"kind"`                   // "addition" | "removal" | "modification"
+        Section      string `json:"section,omitempty"`      // e.g., "Clause 14(2)"
+        Description  string `json:"description,omitempty"`   // plain-language description
+        Before       string `json:"before,omitempty"`        // prior text (for modification/removal)
+        After        string `json:"after,omitempty"`         // new text (for modification/addition)
+        SourceURL    string `json:"source_url,omitempty"`    // link to the version that introduced the change
+        Confidence   string `json:"confidence,omitempty"`   // "high" | "medium" | "low"
+}
+
+// handleBillChanges returns a structural diff between Bill versions.
+//
+// Route: GET /api/v1/bills/{id}/changes
+//
+// Behavior:
+//   - If the Bill cannot be found, returns 404.
+//   - If the adapter is unreachable, returns 503.
+//   - If only one version exists in the DB (the current state), returns an
+//     empty `changes` array with a note explaining that version comparison
+//     requires multiple Bill versions in the database.
+//   - Never invents changes. When versions are eventually available, the AI
+//     document_comparator capability will produce the diff, gated by the
+//     anti-hallucination validator.
+func handleBillChanges(w http.ResponseWriter, r *http.Request, adapter *kenya_law.Adapter, billID string) {
+        ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+        defer cancel()
+
+        bill, err := findBillByID(ctx, adapter, billID)
+        if err != nil {
+                if err == errEmptyBillID {
+                        writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+                        return
+                }
+                log.Printf("changes handler: adapter error: %v", err)
+                writeError(w, http.StatusServiceUnavailable, "adapter_error", "failed to discover bills from Kenya Law")
+                return
+        }
+        if bill == nil {
+                writeError(w, http.StatusNotFound, "not_found", "bill not found: "+billID)
+                return
+        }
+
+        // Until the documents service stores multiple immutable Bill versions
+        // (per ADR-0011 + issue #19), there is nothing to diff. Return an
+        // empty array with a transparent note explaining the gap.
+        writeJSON(w, http.StatusOK, map[string]any{
+                "bill_id": bill.SourceID,
+                "changes": []billChangeResponse{},
+                "total":   0,
+                "note":    "Version comparison requires multiple Bill versions in the database",
                 "source":  "new.kenyalaw.org",
         })
 }
