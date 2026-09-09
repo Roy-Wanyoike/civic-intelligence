@@ -25,6 +25,7 @@ export function Header() {
         <nav aria-label="Primary" className="hidden md:block">
           <ul className="flex items-center gap-6 text-sm">
             <li><Link href="/bills" className="hover:text-civic-leaf">Bills</Link></li>
+            <li><Link href="/acts" className="hover:text-civic-leaf">Acts</Link></li>
             <li><Link href="/trending" className="hover:text-civic-leaf">Trending</Link></li>
             <li><Link href="/loans" className="hover:text-civic-leaf">Loans</Link></li>
             <li><Link href="/grants" className="hover:text-civic-leaf">Grants</Link></li>
