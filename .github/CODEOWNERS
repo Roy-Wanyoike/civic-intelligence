@@ -1,0 +1,42 @@
+# Civic Intelligence Platform — CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything not covered below
+* @Roy-Wanyoike
+
+# AI service (Python)
+/services/ai/ @Roy-Wanyoike
+
+# Frontend (Next.js)
+/apps/web/ @Roy-Wanyoike
+
+# Go backend services
+/services/api/ @Roy-Wanyoike
+/services/legislation/ @Roy-Wanyoike
+/services/ingestion/ @Roy-Wanyoike
+/services/documents/ @Roy-Wanyoike
+/services/evidence/ @Roy-Wanyoike
+/services/intelligence/ @Roy-Wanyoike
+/services/search/ @Roy-Wanyoike
+/services/notifications/ @Roy-Wanyoike
+/services/identity/ @Roy-Wanyoike
+
+# Kenya adapter
+/adapters/kenya/ @Roy-Wanyoike
+
+# Shared packages
+/packages/ @Roy-Wanyoike
+
+# Infrastructure
+/infrastructure/ @Roy-Wanyoike
+
+# Database migrations
+/infrastructure/postgres/migrations/ @Roy-Wanyoike
+
+# CI/CD
+/.github/workflows/ @Roy-Wanyoike
+
+# Documentation
+/docs/ @Roy-Wanyoike
+/ARCHITECTURE.md @Roy-Wanyoike
+/SECURITY.md @Roy-Wanyoike
