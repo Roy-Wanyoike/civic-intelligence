@@ -66,6 +66,13 @@ func main() {
 	apiHandler.HandleFunc("/api/v1/bills", handleBillsList)
 	apiHandler.HandleFunc("/api/v1/bills/", handleBillDetail) // handles /bills/{id} and sub-routes
 
+	// Loans & Grants — public read. Each row links to a source URL
+	// (evidence-first contract). Filterable by lender/donor, sector, status.
+	apiHandler.HandleFunc("/api/v1/loans", handleLoansList)
+	apiHandler.HandleFunc("/api/v1/loans/", handleLoanDetail)
+	apiHandler.HandleFunc("/api/v1/grants", handleGrantsList)
+	apiHandler.HandleFunc("/api/v1/grants/", handleGrantDetail)
+
 	// Search — public.
 	apiHandler.HandleFunc("/api/v1/search", handleSearch)
 
@@ -199,10 +206,10 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	// TODO(issue #19): call search service.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"q":      q,
-		"items":  []any{},
-		"total":  0,
-		"note":   "Search — backend service connection pending (issue #19)",
+		"q":     q,
+		"items": []any{},
+		"total": 0,
+		"note":  "Search — backend service connection pending (issue #19)",
 	})
 }
 
@@ -270,4 +277,111 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": code, "message": message})
+}
+
+// --- Loans & Grants ---
+//
+// These endpoints expose the sovereign loan / grant tracker introduced by
+// migration 017. Until the legislation service exposes a Loans/Grants query
+// API (issue #19 follow-up), the handlers return a transparent placeholder
+// acknowledging that the HTTP contract is wired but the backend read path is
+// pending. Frontend pages (apps/web/src/app/{loans,grants}) currently render
+// the seed data directly so the citizen UX is unblocked.
+
+// handleLoansList handles GET /api/v1/loans.
+//
+// Query parameters:
+//
+//	lender  — filter by lender name (case-insensitive substring match)
+//	sector  — filter by sector (fiscal, infrastructure, climate, ...)
+//	status  — filter by status (applied, approved, disbursed, repaid, defaulted)
+//	page    — 1-based page number (default 1)
+//	page_size — items per page (default 20, max 100)
+func handleLoansList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
+		return
+	}
+	q := r.URL.Query()
+	filters := map[string]string{
+		"lender": q.Get("lender"),
+		"sector": q.Get("sector"),
+		"status": q.Get("status"),
+	}
+	// TODO(issue #19 follow-up): call legislation service LoansRepo.List(filters, page, pageSize).
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":     []any{},
+		"total":     0,
+		"page":      1,
+		"page_size": 20,
+		"filters":   filters,
+		"note":      "Loan listing — backend service connection pending (issue #19)",
+	})
+}
+
+// handleLoanDetail handles GET /api/v1/loans/{id}.
+func handleLoanDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
+		return
+	}
+	loanID := strings.TrimPrefix(r.URL.Path, "/api/v1/loans/")
+	if loanID == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "loan ID required")
+		return
+	}
+	// TODO(issue #19 follow-up): call legislation service LoansRepo.Get(loanID).
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":   loanID,
+		"note": "Loan detail — backend service connection pending (issue #19)",
+	})
+}
+
+// handleGrantsList handles GET /api/v1/grants.
+//
+// Query parameters:
+//
+//	donor    — filter by donor name (case-insensitive substring match)
+//	sector   — filter by sector
+//	status   — filter by status (announced, disbursed, pending)
+//	page     — 1-based page number (default 1)
+//	page_size — items per page (default 20, max 100)
+func handleGrantsList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
+		return
+	}
+	q := r.URL.Query()
+	filters := map[string]string{
+		"donor":  q.Get("donor"),
+		"sector": q.Get("sector"),
+		"status": q.Get("status"),
+	}
+	// TODO(issue #19 follow-up): call legislation service GrantsRepo.List(filters, page, pageSize).
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":     []any{},
+		"total":     0,
+		"page":      1,
+		"page_size": 20,
+		"filters":   filters,
+		"note":      "Grant listing — backend service connection pending (issue #19)",
+	})
+}
+
+// handleGrantDetail handles GET /api/v1/grants/{id}.
+func handleGrantDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
+		return
+	}
+	grantID := strings.TrimPrefix(r.URL.Path, "/api/v1/grants/")
+	if grantID == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "grant ID required")
+		return
+	}
+	// TODO(issue #19 follow-up): call legislation service GrantsRepo.Get(grantID).
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":   grantID,
+		"note": "Grant detail — backend service connection pending (issue #19)",
+	})
 }

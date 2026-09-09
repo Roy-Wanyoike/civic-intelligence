@@ -7,9 +7,11 @@ interface FilterSelectProps {
   name: string;
   value: string;
   options: readonly string[];
+  /** Base path the filter applies to (e.g. "/bills", "/loans"). Defaults to "/bills". */
+  basePath?: string;
 }
 
-export function FilterSelect({ label, name, value, options }: FilterSelectProps) {
+export function FilterSelect({ label, name, value, options, basePath = '/bills' }: FilterSelectProps) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -28,7 +30,7 @@ export function FilterSelect({ label, name, value, options }: FilterSelectProps)
           } else {
             next.set(name, e.target.value);
           }
-          router.push(`/bills?${next.toString()}`);
+          router.push(`${basePath}?${next.toString()}`);
         }}
       >
         {options.map((o) => (

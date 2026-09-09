@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!--
+  Synthetic fixture for ParseBillTrackerHTML tests.
+
+  This represents the structure Parliament of Kenya WOULD publish on a per-Bill
+  tracker page (e.g., /the-national-assembly/house-business/bills/<bill-slug>/tracker)
+  when the post-billtracker link slot on the bills listing is populated.
+
+  The real parliament.go.ke Bills listing pages currently leave the
+  post-billtracker slot empty for recently published Bills; per-Bill stage
+  information is published only inside the weekly "Bills Tracker as at <DATE>"
+  PDF (see bill_tracker.html). This fixture is therefore a realistic
+  representation of the HTML the platform will encounter once individual
+  tracker pages come online (or once the weekly tracker PDFs are parsed into
+  HTML by the documents service).
+
+  Source page (synthetic, modelled on parliament.go.ke Drupal 8 markup):
+    https://www.parliament.go.ke/the-national-assembly/house-business/bills/the-heraldry-bill-2026/tracker
+  Retrieved: 2026-09-09
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <title>The Heraldry Bill, 2026 — Bill Tracker | The Kenyan Parliament Website</title>
+  </head>
+  <body>
+    <article class="bill-tracker">
+      <h1 class="bill-title">The Heraldry Bill, 2026</h1>
+      <p class="bill-no">National Assembly Bill No. 47 of 2026</p>
+
+      <section class="stage-history">
+        <h2>Stage Progress</h2>
+        <table class="stage-table">
+          <thead>
+            <tr>
+              <th>Stage</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="stage-row stage-complete">
+              <td class="stage-name">First Reading</td>
+              <td class="stage-status">Read the First Time and committed to the Departmental Committee on Justice and Legal Affairs</td>
+              <td class="stage-date">12 February 2026</td>
+            </tr>
+            <tr class="stage-row stage-complete">
+              <td class="stage-name">Second Reading</td>
+              <td class="stage-status">Debate on the principles concluded; Bill read a Second Time and committed to the Committee of the Whole House</td>
+              <td class="stage-date">14 May 2026</td>
+            </tr>
+            <tr class="stage-row stage-current">
+              <td class="stage-name">Committee of the Whole House</td>
+              <td class="stage-status">Clause-by-clause consideration ongoing; next sitting on 18 September 2026</td>
+              <td class="stage-date">27 August 2026</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="source-attribution">
+        Source: <a href="https://www.parliament.go.ke/the-national-assembly/house-business/bill-tracker">Parliament of Kenya Bill Tracker</a>
+      </aside>
+    </article>
+  </body>
+</html>
