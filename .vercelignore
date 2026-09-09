@@ -1,0 +1,61 @@
+# Vercel should only deploy what's needed for the web + ai services.
+# Everything else (Go services, infra, docs, tests) is not part of the
+# Vercel deployment — those run on Kubernetes/containers.
+
+# Git
+.git
+.gitignore
+
+# Go backend — deployed via container, not Vercel
+services/api/
+services/legislation/
+services/ingestion/
+services/documents/
+services/evidence/
+services/intelligence/
+services/search/
+services/notifications/
+services/identity/
+adapters/
+packages/
+go.mod
+
+# Infrastructure (deployed via Helm/Terraform)
+infrastructure/
+
+# Documentation (not needed at runtime)
+docs/
+*.md
+!apps/web/README.md
+!services/ai/README.md
+
+# Tests
+tests/
+services/ai/tests/
+services/ai/eval/
+
+# Scripts
+scripts/
+
+# Worklog + audit (internal)
+worklog.md
+MASTER_AUDIT.md
+
+# CI
+.github/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
