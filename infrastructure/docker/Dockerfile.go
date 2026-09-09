@@ -1,7 +1,7 @@
 # Multi-stage Go build for any service in services/*
 # Usage: docker build -f infrastructure/docker/Dockerfile.go -t civic/api --build-arg SERVICE=api ../..
 
-FROM golang:1.22-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /src
 ARG SERVICE
 COPY go.mod go.sum ./
