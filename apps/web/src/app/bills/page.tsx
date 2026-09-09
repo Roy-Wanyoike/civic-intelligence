@@ -4,6 +4,7 @@ import { mockBills } from '@/lib/mock-data';
 import { formatDate } from '@/lib/utils';
 import { FilterSelect } from '@/components/filter-select';
 import type { Metadata } from 'next';
+import type { Bill } from '@/lib/types';
 
 export const metadata: Metadata = {
   title: 'Bills',
@@ -14,18 +15,35 @@ const STATUS_FILTERS = ['all', 'in_progress', 'enacted', 'withdrawn'] as const;
 const HOUSE_FILTERS = ['all', 'National Assembly', 'Senate'] as const;
 const TOPIC_FILTERS = ['all', 'housing', 'data-protection', 'public-finance', 'education', 'transport', 'county-government'] as const;
 
-export default function BillsPage({
+async function fetchBills(): Promise<{ bills: Bill[]; source: string }> {
+  try {
+    // During dev, /api/v1/bills is rewritten to the Go API on port 9000.
+    // On Vercel, it's rewritten to the Go service (if deployed) or fails.
+    const resp = await fetch('http://localhost:9000/api/v1/bills', {
+      next: { revalidate: 300 }, // cache for 5 minutes
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return { bills: data.items || [], source: data.source || 'api' };
+  } catch {
+    // Fallback to mock data if the API is not running (e.g., on Vercel without Go backend)
+    return { bills: mockBills, source: 'mock' };
+  }
+}
+
+export default async function BillsPage({
   searchParams,
 }: {
   searchParams: { status?: string; house?: string; topic?: string; q?: string };
 }) {
-  let bills = mockBills.slice();
+  const { bills: fetchedBills, source } = await fetchBills();
+  let bills = fetchedBills;
   const status = searchParams.status ?? 'all';
   const house = searchParams.house ?? 'all';
   const topic = searchParams.topic ?? 'all';
   const q = searchParams.q?.toLowerCase().trim();
   if (status !== 'all') bills = bills.filter(b => b.status === status);
-  if (house !== 'all') bills = bills.filter(b => b.house_name === house);
+  if (house !== 'all') bills = bills.filter(b => b.house_name === house || b.house === house);
   if (topic !== 'all') bills = bills.filter(b => b.topics?.includes(topic));
   if (q) {
     bills = bills.filter(
@@ -40,6 +58,16 @@ export default function BillsPage({
         <p className="mt-2 text-sm text-civic-stone">
           Each Bill links to a plain-language explanation, verified timeline, and the original documents. No claim is published without an authoritative source.
         </p>
+        {source === 'mock' && (
+          <p className="mt-2 rounded-md bg-civic-acacia/10 px-3 py-1.5 text-xs text-civic-clay">
+            Showing sample data — connect the Go API (port 9000) for real Bills from kenyalaw.org
+          </p>
+        )}
+        {source !== 'mock' && (
+          <p className="mt-2 rounded-md bg-civic-leaf/10 px-3 py-1.5 text-xs text-civic-leaf">
+            ✅ Live data from {source} — {fetchedBills.length} Bills discovered
+          </p>
+        )}
       </header>
 
       <form className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Filter Bills">
@@ -71,9 +99,14 @@ export default function BillsPage({
                 <h2 className="mt-2 font-serif text-lg font-semibold text-civic-ink">{b.title}</h2>
                 {b.current_stage && (<p className="mt-2 text-sm text-civic-stone"><span className="font-medium text-civic-ink">Current stage:</span> {b.current_stage}</p>)}
                 {b.purpose && (<p className="mt-2 line-clamp-2 text-sm text-civic-stone">{b.purpose}</p>)}
+                {b.source_url && (
+                  <p className="mt-2 text-xs text-civic-leaf truncate">
+                    <a href={b.source_url} target="_blank" rel="noopener noreferrer">{b.source_url}</a>
+                  </p>
+                )}
                 <div className="mt-4 flex items-center justify-between text-xs text-civic-stone">
-                  <span>Updated {formatDate(b.updated_at)}</span>
-                  <span>{b.citation_count} citations</span>
+                  <span>{b.house_name || b.house || '—'}</span>
+                  {b.publication_date && <span>Published {b.publication_date}</span>}
                 </div>
               </Link>
             </li>
@@ -83,4 +116,3 @@ export default function BillsPage({
     </div>
   );
 }
-

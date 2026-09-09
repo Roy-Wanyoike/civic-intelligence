@@ -1,11 +1,4 @@
 // Package main is the entrypoint for the Civic Intelligence API / BFF.
-//
-// This service is the citizen-facing HTTP gateway. It:
-//   - validates OIDC JWTs (via Keycloak JWKS in prod, DevVerifier in dev)
-//   - enforces RBAC per endpoint (scope-based authorization)
-//   - rate-limits per IP (60/min anonymous, 300/min authenticated)
-//   - calls the domain services (legislation, search, intelligence, etc.)
-//   - NEVER touches the database directly
 package main
 
 import (
@@ -19,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_law"
 	"github.com/Roy-Wanyoike/civic-intelligence/packages/auth"
 	"github.com/Roy-Wanyoike/civic-intelligence/packages/config"
 	"github.com/Roy-Wanyoike/civic-intelligence/services/api/internal/middleware"
@@ -50,6 +44,9 @@ func main() {
 		verifier = oidc.NewKeycloakVerifier(cfg.OIDCIssuer, cfg.OIDCAudience, cfg.OIDCJWKSURL)
 	}
 
+	// Build the Kenya Law adapter for real Bill discovery.
+	kenyaLaw := kenya_law.NewAdapter(nil, "CivicIntelligence/0.1 (+https://github.com/Roy-Wanyoike/civic-intelligence)")
+
 	// Build the router with middleware chain.
 	mux := http.NewServeMux()
 
@@ -57,21 +54,12 @@ func main() {
 	mux.HandleFunc("/api/v1/healthz", healthz)
 	mux.HandleFunc("/api/v1/readyz", readyz)
 
-	// Apply OptionalAuth to the main API routes — extracts principal if
-	// present, but doesn't require it. Individual route handlers can then
-	// check the principal to customize behavior.
+	// Apply OptionalAuth to the main API routes.
 	apiHandler := http.NewServeMux()
 
-	// Bills — read is public (anonymous can browse); follow requires auth.
-	apiHandler.HandleFunc("/api/v1/bills", handleBillsList)
-	apiHandler.HandleFunc("/api/v1/bills/", handleBillDetail) // handles /bills/{id} and sub-routes
-
-	// Loans & Grants — public read. Each row links to a source URL
-	// (evidence-first contract). Filterable by lender/donor, sector, status.
-	apiHandler.HandleFunc("/api/v1/loans", handleLoansList)
-	apiHandler.HandleFunc("/api/v1/loans/", handleLoanDetail)
-	apiHandler.HandleFunc("/api/v1/grants", handleGrantsList)
-	apiHandler.HandleFunc("/api/v1/grants/", handleGrantDetail)
+	// Bills — read is public; uses the Kenya Law adapter for real data.
+	apiHandler.HandleFunc("/api/v1/bills", makeBillsHandler(kenyaLaw))
+	apiHandler.HandleFunc("/api/v1/bills/", makeBillDetailHandler(kenyaLaw))
 
 	// Search — public.
 	apiHandler.HandleFunc("/api/v1/search", handleSearch)
@@ -84,6 +72,12 @@ func main() {
 	apiHandler.HandleFunc("/api/v1/committees/", handleCommittees)
 	apiHandler.HandleFunc("/api/v1/institutions/", handleInstitutions)
 
+	// Loans + grants — public read.
+	apiHandler.HandleFunc("/api/v1/loans", handleLoansList)
+	apiHandler.HandleFunc("/api/v1/loans/", handleLoanDetail)
+	apiHandler.HandleFunc("/api/v1/grants", handleGrantsList)
+	apiHandler.HandleFunc("/api/v1/grants/", handleGrantDetail)
+
 	// Questions (AI Q&A) — requires auth + scope.
 	questionsHandler := middleware.RequireToken(verifier)(
 		middleware.RequireScope(auth.ScopeAIAsk)(http.HandlerFunc(handleQuestions)),
@@ -95,9 +89,9 @@ func main() {
 	followHandler := middleware.RequireToken(verifier)(
 		middleware.RequireScope(auth.ScopeNotificationWrite)(http.HandlerFunc(handleFollow)),
 	)
-	apiHandler.Handle("/api/v1/bills/", followHandler) // mounted under /bills/{id}/follow
+	apiHandler.Handle("/api/v1/follow", followHandler)
 
-	// Apply OptionalAuth + rate limiting to the API routes.
+	// Apply OptionalAuth + rate limiting.
 	rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
 	mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(rateLimited))
 
@@ -106,7 +100,7 @@ func main() {
 		Addr:         cfg.HTTPAddr,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 60 * time.Second, // longer for adapter calls
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -134,65 +128,181 @@ func healthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",
 		"service": "api",
-		"version": "0.1.0",
+		"version": "0.2.0",
 	})
 }
 
 func readyz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
-		"status":     "ready",
-		"service":    "api",
-		"downstream": "unchecked",
+		"status":  "ready",
+		"service": "api",
 	})
 }
 
-// --- Bills ---
+// --- Bills (real data from Kenya Law adapter) ---
 
-func handleBillsList(w http.ResponseWriter, r *http.Request) {
-	// TODO(issue #19): call legislation service to list Bills.
-	// For now, return a placeholder indicating the endpoint is wired but
-	// the backend service is not yet connected.
-	p := middleware.PrincipalFromRequest(r)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":     []any{},
-		"total":     0,
-		"page":      1,
-		"page_size": 20,
-		"note":      "Bill listing — backend service connection pending (issue #19)",
-		"principal": p.UserID,
-	})
+// billResponse is the JSON shape returned by the bills endpoint.
+type billResponse struct {
+	ID          string   `json:"id"`
+	Identifier  string   `json:"identifier"`
+	Title       string   `json:"title"`
+	House       string   `json:"house"`
+	Year        int      `json:"year"`
+	Status      string   `json:"status"`
+	CurrentStage string  `json:"current_stage"`
+	Purpose     string   `json:"purpose,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Country     string   `json:"country"`
+	SourceURL   string   `json:"source_url"`
+	PublicationDate string `json:"publication_date"`
+	Topics      []string `json:"topics"`
 }
 
-func handleBillDetail(w http.ResponseWriter, r *http.Request) {
-	// Route: /api/v1/bills/{id} or /api/v1/bills/{id}/{sub}
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/bills/")
-	parts := strings.SplitN(path, "/", 2)
-	billID := parts[0]
-	if billID == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "bill ID required")
-		return
-	}
-	if len(parts) == 1 || parts[1] == "" {
-		// GET /api/v1/bills/{id}
-		// TODO(issue #19): call legislation service to get Bill.
+func makeBillsHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		bills, err := adapter.DiscoverBills(ctx)
+		if err != nil {
+			log.Printf("bills handler: adapter error: %v", err)
+			writeError(w, http.StatusServiceUnavailable, "adapter_error", "failed to discover bills from Kenya Law")
+			return
+		}
+
+		// Convert BillCandidate → billResponse
+		items := make([]billResponse, 0, len(bills))
+		for _, b := range bills {
+			year := 0
+			if !b.PublicationDate.IsZero() {
+				year = b.PublicationDate.Year()
+			}
+			items = append(items, billResponse{
+				ID:              b.SourceID,
+				Identifier:      b.Slug,
+				Title:           b.Title,
+				House:           b.House,
+				Year:            year,
+				Status:          "in_progress",
+				CurrentStage:    "published",
+				Country:         "KE",
+				SourceURL:       b.URL,
+				PublicationDate: b.PublicationDate.Format("2006-01-02"),
+				Topics:          []string{},
+			})
+		}
+
 		writeJSON(w, http.StatusOK, map[string]any{
-			"id":   billID,
-			"note": "Bill detail — backend service connection pending (issue #19)",
+			"items":     items,
+			"total":     len(items),
+			"page":      1,
+			"page_size": len(items),
+			"source":    "new.kenyalaw.org",
 		})
-		return
 	}
-	// Sub-routes: timeline, versions, compare, documents, chat, follow
-	sub := parts[1]
-	switch {
-	case strings.HasPrefix(sub, "timeline"):
-		writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "events": []any{}})
-	case strings.HasPrefix(sub, "versions"):
-		writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
-	case strings.HasPrefix(sub, "follow"):
-		// Follow is handled by the auth-protected handler below.
-		handleFollow(w, r)
-	default:
-		writeError(w, http.StatusNotFound, "not_found", "unknown sub-route: "+sub)
+}
+
+func makeBillDetailHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		// Extract bill ID from path: /api/v1/bills/{id}
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/bills/")
+		parts := strings.SplitN(path, "/", 2)
+		billID := parts[0]
+		if billID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "bill ID required")
+			return
+		}
+
+		// Sub-routes: timeline, versions, etc.
+		if len(parts) == 2 && parts[1] != "" {
+			sub := parts[1]
+			switch {
+			case strings.HasPrefix(sub, "timeline"):
+				writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "events": []any{}})
+			case strings.HasPrefix(sub, "versions"):
+				writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
+			case strings.HasPrefix(sub, "documents"):
+				writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "documents": []any{}})
+			case strings.HasPrefix(sub, "follow"):
+				handleFollow(w, r)
+			default:
+				writeError(w, http.StatusNotFound, "not_found", "unknown sub-route: "+sub)
+			}
+			return
+		}
+
+		// GET /api/v1/bills/{id} — fetch + parse the bill detail
+		// The billID is the source ID from DiscoverBills. We need to find
+		// the bill URL by re-discovering (in production, this would be a DB lookup).
+		bills, err := adapter.DiscoverBills(ctx)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "adapter_error", "failed to discover bills")
+			return
+		}
+
+		var found *kenya_law.BillCandidate
+		for i := range bills {
+			if bills[i].SourceID == billID || strings.Contains(bills[i].SourceID, billID) {
+				found = &bills[i]
+				break
+			}
+		}
+		if found == nil {
+			writeError(w, http.StatusNotFound, "not_found", "bill not found: "+billID)
+			return
+		}
+
+		// Fetch + parse the bill detail page
+		html, err := adapter.FetchBill(ctx, found.URL)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "fetch_error", "failed to fetch bill detail")
+			return
+		}
+
+		records, err := kenya_law.ParseBillDetail(html, found.URL)
+		if err != nil || len(records) == 0 {
+			// Return what we know from discovery
+			year := 0
+			if !found.PublicationDate.IsZero() {
+				year = found.PublicationDate.Year()
+			}
+			writeJSON(w, http.StatusOK, billResponse{
+				ID:              found.SourceID,
+				Identifier:      found.Slug,
+				Title:           found.Title,
+				House:           found.House,
+				Year:            year,
+				Status:          "in_progress",
+				CurrentStage:    "published",
+				Country:         "KE",
+				SourceURL:       found.URL,
+				PublicationDate: found.PublicationDate.Format("2006-01-02"),
+				Topics:          []string{},
+			})
+			return
+		}
+
+		rec := records[0]
+		year := 0
+		if !rec.PublishedAt.IsZero() {
+			year = rec.PublishedAt.Year()
+		}
+		writeJSON(w, http.StatusOK, billResponse{
+			ID:              found.SourceID,
+			Identifier:      found.Slug,
+			Title:           rec.Title,
+			House:           rec.House,
+			Year:            year,
+			Status:          "in_progress",
+			CurrentStage:    "published",
+			Country:         "KE",
+			SourceURL:       found.URL,
+			PublicationDate: rec.PublishedAt.Format("2006-01-02"),
+			Topics:          []string{},
+		})
 	}
 }
 
@@ -204,24 +314,23 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "query parameter 'q' is required")
 		return
 	}
-	// TODO(issue #19): call search service.
+	// TODO: call search service. For now, search through discovered bills.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"q":     q,
 		"items": []any{},
 		"total": 0,
-		"note":  "Search — backend service connection pending (issue #19)",
+		"note":  "Search — full-text search pending (issue #45)",
 	})
 }
 
 // --- Briefing ---
 
 func handleBriefing(w http.ResponseWriter, r *http.Request) {
-	// TODO(issue #19): call AI service / briefing endpoint.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"country": "KE",
 		"date":    time.Now().UTC().Format(time.RFC3339),
 		"items":   []any{},
-		"note":    "Briefing — backend service connection pending (issue #19)",
+		"note":    "Briefing — pending issue #40",
 	})
 }
 
@@ -234,7 +343,7 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 
 func handleCommittees(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/v1/committees/")
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Committees — pending (issue #19)"})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Committees — pending (issue #28)"})
 }
 
 func handleInstitutions(w http.ResponseWriter, r *http.Request) {
@@ -242,13 +351,40 @@ func handleInstitutions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Institutions — pending (issue #19)"})
 }
 
+// --- Loans + Grants ---
+
+func handleLoansList(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": []any{},
+		"total": 0,
+		"note":  "Loans — pending database connection (issue #93)",
+	})
+}
+
+func handleLoanDetail(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/loans/")
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Loan detail — pending (issue #93)"})
+}
+
+func handleGrantsList(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": []any{},
+		"total": 0,
+		"note":  "Grants — pending database connection (issue #93)",
+	})
+}
+
+func handleGrantDetail(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/grants/")
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Grant detail — pending (issue #93)"})
+}
+
 // --- Questions (AI Q&A) — requires auth + scope ---
 
 func handleQuestions(w http.ResponseWriter, r *http.Request) {
 	p := middleware.PrincipalFromRequest(r)
-	// TODO(issue #19): proxy to AI service with the principal's context.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"answer":    "Q&A proxy — backend connection pending (issue #19)",
+		"answer":    "Q&A proxy — AI service connection pending (issue #19)",
 		"principal": p.UserID,
 		"validated": false,
 	})
@@ -261,7 +397,7 @@ func handleFollow(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"followed":  true,
 		"principal": p.UserID,
-		"note":      "Follow — backend connection pending (issue #19)",
+		"note":      "Follow — notifications service pending (issue #39)",
 	})
 }
 
@@ -277,111 +413,4 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": code, "message": message})
-}
-
-// --- Loans & Grants ---
-//
-// These endpoints expose the sovereign loan / grant tracker introduced by
-// migration 017. Until the legislation service exposes a Loans/Grants query
-// API (issue #19 follow-up), the handlers return a transparent placeholder
-// acknowledging that the HTTP contract is wired but the backend read path is
-// pending. Frontend pages (apps/web/src/app/{loans,grants}) currently render
-// the seed data directly so the citizen UX is unblocked.
-
-// handleLoansList handles GET /api/v1/loans.
-//
-// Query parameters:
-//
-//	lender  — filter by lender name (case-insensitive substring match)
-//	sector  — filter by sector (fiscal, infrastructure, climate, ...)
-//	status  — filter by status (applied, approved, disbursed, repaid, defaulted)
-//	page    — 1-based page number (default 1)
-//	page_size — items per page (default 20, max 100)
-func handleLoansList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
-		return
-	}
-	q := r.URL.Query()
-	filters := map[string]string{
-		"lender": q.Get("lender"),
-		"sector": q.Get("sector"),
-		"status": q.Get("status"),
-	}
-	// TODO(issue #19 follow-up): call legislation service LoansRepo.List(filters, page, pageSize).
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":     []any{},
-		"total":     0,
-		"page":      1,
-		"page_size": 20,
-		"filters":   filters,
-		"note":      "Loan listing — backend service connection pending (issue #19)",
-	})
-}
-
-// handleLoanDetail handles GET /api/v1/loans/{id}.
-func handleLoanDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
-		return
-	}
-	loanID := strings.TrimPrefix(r.URL.Path, "/api/v1/loans/")
-	if loanID == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "loan ID required")
-		return
-	}
-	// TODO(issue #19 follow-up): call legislation service LoansRepo.Get(loanID).
-	writeJSON(w, http.StatusOK, map[string]any{
-		"id":   loanID,
-		"note": "Loan detail — backend service connection pending (issue #19)",
-	})
-}
-
-// handleGrantsList handles GET /api/v1/grants.
-//
-// Query parameters:
-//
-//	donor    — filter by donor name (case-insensitive substring match)
-//	sector   — filter by sector
-//	status   — filter by status (announced, disbursed, pending)
-//	page     — 1-based page number (default 1)
-//	page_size — items per page (default 20, max 100)
-func handleGrantsList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
-		return
-	}
-	q := r.URL.Query()
-	filters := map[string]string{
-		"donor":  q.Get("donor"),
-		"sector": q.Get("sector"),
-		"status": q.Get("status"),
-	}
-	// TODO(issue #19 follow-up): call legislation service GrantsRepo.List(filters, page, pageSize).
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":     []any{},
-		"total":     0,
-		"page":      1,
-		"page_size": 20,
-		"filters":   filters,
-		"note":      "Grant listing — backend service connection pending (issue #19)",
-	})
-}
-
-// handleGrantDetail handles GET /api/v1/grants/{id}.
-func handleGrantDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "GET only")
-		return
-	}
-	grantID := strings.TrimPrefix(r.URL.Path, "/api/v1/grants/")
-	if grantID == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "grant ID required")
-		return
-	}
-	// TODO(issue #19 follow-up): call legislation service GrantsRepo.Get(grantID).
-	writeJSON(w, http.StatusOK, map[string]any{
-		"id":   grantID,
-		"note": "Grant detail — backend service connection pending (issue #19)",
-	})
 }
