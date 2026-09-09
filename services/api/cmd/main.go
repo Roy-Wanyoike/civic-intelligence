@@ -68,6 +68,12 @@ func main() {
         apiHandler.HandleFunc("/api/v1/bills", makeBillsHandler(kenyaLaw))
         apiHandler.HandleFunc("/api/v1/bills/", makeBillDetailHandler(kenyaLaw))
 
+        // Trending — recently enacted + approaching final stage.
+        apiHandler.HandleFunc("/api/v1/trending", makeTrendingHandler(kenyaLaw))
+
+        // Terminology — Kenya parliamentary terms.
+        apiHandler.HandleFunc("/api/v1/terminology/", makeTerminologyHandler())
+
         // Search — public.
         apiHandler.HandleFunc("/api/v1/search", handleSearch)
 
@@ -340,6 +346,199 @@ func handleBriefing(w http.ResponseWriter, r *http.Request) {
                 "items":   []any{},
                 "note":    "Briefing — pending issue #40",
         })
+}
+
+// --- Trending Bills (#107) ---
+
+func makeTrendingHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+                ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+                defer cancel()
+
+                bills, err := adapter.DiscoverBills(ctx)
+                if err != nil {
+                        writeError(w, http.StatusServiceUnavailable, "adapter_error", "failed to discover bills")
+                        return
+                }
+
+                // Categorize bills:
+                // - recently_published: published in last 30 days
+                // - trending: most recent (hot)
+                // - approaching_final: bills whose titles suggest late-stage (Amendment, etc.)
+                // In production, this would use actual stage data from the Parliament adapter.
+
+                now := time.Now()
+                var recentlyPublished []billResponse
+                var hot []billResponse
+                var approaching []billResponse
+
+                for _, b := range bills {
+                        year := 0
+                        if !b.PublicationDate.IsZero() {
+                                year = b.PublicationDate.Year()
+                        }
+                        resp := billResponse{
+                                ID:              b.SourceID,
+                                Identifier:      b.Slug,
+                                Title:           b.Title,
+                                House:           b.House,
+                                Year:            year,
+                                Status:          "in_progress",
+                                CurrentStage:    "published",
+                                Country:         "KE",
+                                SourceURL:       b.URL,
+                                PublicationDate: b.PublicationDate.Format("2006-01-02"),
+                                Topics:          []string{},
+                        }
+
+                        // Recently published (last 30 days)
+                        if !b.PublicationDate.IsZero() && now.Sub(b.PublicationDate) < 30*24*time.Hour {
+                                recentlyPublished = append(recentlyPublished, resp)
+                        }
+
+                        // Hot = most recent 5
+                        if len(hot) < 5 {
+                                hot = append(hot, resp)
+                        }
+
+                        // Approaching final stage — bills with "Amendment" in the title
+                        // (in production, use actual stage data from Parliament adapter)
+                        titleLower := strings.ToLower(b.Title)
+                        if strings.Contains(titleLower, "amendment") ||
+                           strings.Contains(titleLower, "finance") ||
+                           strings.Contains(titleLower, "appropriation") {
+                                approaching = append(approaching, resp)
+                        }
+                }
+
+                // Limit recently_published to 10
+                if len(recentlyPublished) > 10 {
+                        recentlyPublished = recentlyPublished[:10]
+                }
+                // Limit approaching to 5
+                if len(approaching) > 5 {
+                        approaching = approaching[:5]
+                }
+
+                writeJSON(w, http.StatusOK, map[string]any{
+                        "recently_published": recentlyPublished,
+                        "hot":                hot,
+                        "approaching_final":  approaching,
+                        "total_bills":        len(bills),
+                        "source":             "new.kenyalaw.org",
+                })
+        }
+}
+
+// --- Terminology (#103) ---
+
+func makeTerminologyHandler() http.HandlerFunc {
+        // Kenya parliamentary terminology — sourced from adapters/kenya/internal/terminology.go
+        // In production, this would call the Kenya adapter's GetTerminology() method.
+        terms := map[string]map[string]string{
+                "second_reading": {
+                        "term":               "Second Reading",
+                        "simple_explanation": "MPs debate the principles and policy of the Bill. A vote is taken on whether the Bill should proceed.",
+                        "official_definition": "Per Standing Order 95.",
+                        "stage_code":         "SECOND_READING",
+                        "country":            "KE",
+                        "source":             "https://parliament.go.ke/standing-orders",
+                },
+                "first_reading": {
+                        "term":               "First Reading",
+                        "simple_explanation": "The Bill is read for the first time in the House. No debate on the substance yet — the Bill is simply introduced.",
+                        "official_definition": "Per Standing Order 91.",
+                        "stage_code":         "FIRST_READING",
+                        "country":            "KE",
+                        "source":             "https://parliament.go.ke/standing-orders",
+                },
+                "committee_stage": {
+                        "term":               "Committee Stage",
+                        "simple_explanation": "A committee examines the Bill clause-by-clause and may propose amendments.",
+                        "official_definition": "Per Standing Order 117.",
+                        "stage_code":         "COMMITTEE_STAGE",
+                        "country":            "KE",
+                        "source":             "https://parliament.go.ke/standing-orders",
+                },
+                "presidential_assent": {
+                        "term":               "Presidential Assent",
+                        "simple_explanation": "The President signs the Bill into law. Within 14 days of receipt. The President may refer it back once.",
+                        "official_definition": "Article 115, Constitution of Kenya, 2010.",
+                        "stage_code":         "PRESIDENTIAL_ASSENT",
+                        "country":            "KE",
+                        "source":             "https://www.kenyalaw.org/kl/index.php?id=398",
+                },
+                "commencement": {
+                        "term":               "Commencement",
+                        "simple_explanation": "The Act comes into force. Either on the date of assent, on a date specified in the Act, or by a separate commencement notice in the Kenya Gazette.",
+                        "official_definition": "Article 116, Constitution of Kenya, 2010.",
+                        "stage_code":         "COMMENCEMENT",
+                        "country":            "KE",
+                        "source":             "https://www.kenyalaw.org/kl/index.php?id=398",
+                },
+                "hansard": {
+                        "term":               "Hansard",
+                        "simple_explanation": "The official verbatim record of parliamentary debates.",
+                        "country":            "KE",
+                        "source":             "https://parliament.go.ke/hansard",
+                },
+                "order_paper": {
+                        "term":               "Order Paper",
+                        "simple_explanation": "The official daily agenda of the House — what will be discussed, in what order.",
+                        "country":            "KE",
+                        "source":             "https://parliament.go.ke/order-papers",
+                },
+                "gazette_notice": {
+                        "term":               "Gazette Notice",
+                        "simple_explanation": "An official publication in the Kenya Gazette — the official record of government notices.",
+                        "country":            "KE",
+                        "source":             "https://www.kenyalaw.org/kl/index.php?id=589",
+                },
+                "money_bill": {
+                        "term":               "Money Bill",
+                        "simple_explanation": "A Bill that concerns taxation, public debt, or public expenditure. Originates only in the National Assembly.",
+                        "official_definition": "Article 114, Constitution of Kenya, 2010.",
+                        "country":            "KE",
+                        "source":             "https://www.kenyalaw.org/kl/index.php?id=398",
+                },
+                "public_participation": {
+                        "term":               "Public Participation",
+                        "simple_explanation": "Constitutionally required process where the public is invited to submit views on proposed legislation.",
+                        "official_definition": "Article 118, Constitution of Kenya, 2010.",
+                        "country":            "KE",
+                        "source":             "https://www.kenyalaw.org/kl/index.php?id=398",
+                },
+        }
+
+        return func(w http.ResponseWriter, r *http.Request) {
+                // GET /api/v1/terminology/ → list all terms
+                // GET /api/v1/terminology/{term} → single term
+                path := strings.TrimPrefix(r.URL.Path, "/api/v1/terminology/")
+                if path == "" {
+                        // List all
+                        items := make([]map[string]string, 0, len(terms))
+                        for _, t := range terms {
+                                items = append(items, t)
+                        }
+                        writeJSON(w, http.StatusOK, map[string]any{
+                                "items": items,
+                                "total": len(items),
+                        })
+                        return
+                }
+
+                // Single term lookup
+                term, ok := terms[path]
+                if !ok {
+                        // Try with spaces replaced by underscores
+                        term, ok = terms[strings.ReplaceAll(path, " ", "_")]
+                }
+                if !ok {
+                        writeError(w, http.StatusNotFound, "not_found", "terminology not found: "+path)
+                        return
+                }
+                writeJSON(w, http.StatusOK, term)
+        }
 }
 
 // --- People / Committees / Institutions ---
