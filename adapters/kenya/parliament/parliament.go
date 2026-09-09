@@ -224,7 +224,7 @@ func (a *Adapter) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
 		{a.naBillsURL, "National Assembly"},
 		{a.senateBillsURL, "Senate"},
 	} {
-		body, err := a.fetchURL(ctx, page.url)
+		body, err := a.fetchURL(ctx, page.url, "bill")
 		if err != nil {
 			// A single failing page does not abort discovery of the other.
 			continue
@@ -262,7 +262,7 @@ func (a *Adapter) FetchBillTracker(ctx context.Context, billURL string) (*BillTr
 	if billURL == "" {
 		return nil, fmt.Errorf("parliament.FetchBillTracker: empty billURL")
 	}
-	body, err := a.fetchURL(ctx, billURL)
+	body, err := a.fetchURL(ctx, billURL, "bill_tracker")
 	if err != nil {
 		return nil, fmt.Errorf("parliament.FetchBillTracker: %w", err)
 	}
@@ -284,30 +284,7 @@ func (a *Adapter) ParseStage(ctx context.Context, input string) string {
 	return MapStageText(input)
 }
 
-// fetchURL is the shared HTTP helper used by DiscoverBills, FetchBillTracker,
-// and the contracts.LegislativeSourceAdapter methods. It sets the polite
-// User-Agent and Accept headers and returns the response body as a string.
-func (a *Adapter) fetchURL(ctx context.Context, target string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", a.userAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/pdf")
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetch %s: %w", target, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fetch %s: HTTP %d", target, resp.StatusCode)
-	}
-	body, err := io_ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read %s: %w", target, err)
-	}
-	return string(body), nil
-}
+
 
 // Discover implements contracts.LegislativeSourceAdapter. It discovers Bills
 // (and, in future, Hansard / Order Papers / Votes & Proceedings) by
@@ -359,7 +336,7 @@ func (a *Adapter) Fetch(ctx context.Context, item contracts.SourceItem) (*contra
 	if item.URL == "" {
 		return nil, fmt.Errorf("parliament.Fetch: empty URL")
 	}
-	body, err := a.fetchURL(ctx, item.URL)
+	body, err := a.fetchURL(ctx, item.URL, "bill")
 	if err != nil {
 		return nil, err
 	}
