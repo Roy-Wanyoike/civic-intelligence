@@ -1,40 +1,9 @@
 apiVersion: v2
 name: civic-intelligence
-description: |
-  Civic Intelligence Platform — modular monolith + workers for tracking the
-  full lifecycle of legislation across supported countries (starting with Kenya).
+description: Civic Intelligence Platform — making government information understandable
 type: application
 version: 0.1.0
-appVersion: "0.1.0"
-keywords:
-  - civic-tech
-  - legislation
-  - parliament
-  - pgvector
-  - open-data
-home: https://github.com/Roy-Wanyoike/civic-intelligence
-sources:
-  - https://github.com/Roy-Wanyoike/civic-intelligence
+appVersion: "0.2.0"
 maintainers:
-  - name: Civic Intelligence Platform Team
-    email: ops@civic-intelligence.example
-icon: https://raw.githubusercontent.com/Roy-Wanyoike/civic-intelligence/main/docs/architecture/logo.svg
-dependencies:
-  - name: postgresql
-    version: "15.x.x"
-    repository: https://charts.bitnami.com/bitnami
-    condition: postgresql.enabled
-    alias: postgresql
-  - name: redis
-    version: "20.x.x"
-    repository: https://charts.bitnami.com/bitnami
-    condition: redis.enabled
-    alias: redis
-  - name: nats
-    version: "1.x.x"
-    repository: https://nats-io.github.io/k8s/helm/charts/
-    condition: nats.enabled
-    alias: nats
-annotations:
-  category: CivicTech
-  licenses: MIT
+  - name: Civic Intelligence Team
+    url: https://github.com/Roy-Wanyoike/civic-intelligence

@@ -1,313 +1,67 @@
-# Civic Intelligence Platform — Helm values
-# Default values target a DEV cluster. Override per-env via -f values-<env>.yaml.
+# Default values for civic-intelligence.
+# This is a YAML-formatted file.
 
-# -----------------------------------------------------------------------------
-# Global: image registry + pull secrets shared across all services.
-# -----------------------------------------------------------------------------
-global:
-  imageRegistry: ghcr.io/roy-wanyoike
-  imagePullSecrets:
-    - name: ghcr-pull-secret
-  imageTag: "0.1.0"
-  storageClass: standard
-  domain: civic.local
+replicaCount: 1
 
-# Cloud-native secrets: externalSecrets.enabled=true switches from inline
-# Secret templates to ExternalSecrets backed by AWS Secrets Manager (or Vault).
-externalSecrets:
-  enabled: false
-  backend: aws-secrets-manager
-  secretStoreName: civic-secrets
+image:
+  repository: civic-intelligence
+  tag: latest
+  pullPolicy: IfNotPresent
 
-# -----------------------------------------------------------------------------
-# Postgres cluster (pgvector). Disabled by default in dev (use docker compose);
-# enabled in staging/prod via values override.
-# -----------------------------------------------------------------------------
-postgresql:
-  enabled: false
-  architecture: replication
-  auth:
-    username: civic
-    database: civic
-    existingSecret: civic-postgres-secret
-    secretKeys:
-      adminPasswordKey: password
-      userPasswordKey: password
-  primary:
-    persistence:
-      size: 50Gi
-  postgresqlExtensions:
-    - name: vector
-  postgresqlParameters:
-    shared_preload_libraries: "pgvector,pg_trgm"
-
-# -----------------------------------------------------------------------------
-# Service definitions. Each entry renders Deployment + Service + HPA +
-# ConfigMap + (optional) NetworkPolicy + PDB.
-# -----------------------------------------------------------------------------
 services:
-
   api:
     enabled: true
-    kind: Deployment
-    image: civic-intelligence-api
-    replicas: 3
-    resources:
-      requests: { cpu: 250m, memory: 384Mi }
-      limits:   { cpu: 1000m, memory: 768Mi }
-    autoscaling:
-      enabled: true
-      minReplicas: 3
-      maxReplicas: 12
-      cpuUtilization: 70
+    port: 9000
     env:
-      PORT: "8080"
-      LOG_LEVEL: info
-    # NetworkPolicy: API may egress ONLY to: Postgres, NATS, Keycloak, MinIO,
-    # OpenSearch. Crawler egress is blocked entirely.
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: nats
-        - toService: redis
-        - toService: keycloak
-        - toService: minio
-        - toService: opensearch
-        # Allow outbound HTTPS to LLM provider (Anthropic/OpenAI).
-        - toFQDNs: ["api.anthropic.com", "api.openai.com"]
-          ports: [443]
-      ingress:
-        - fromService: web
-          ports: [8080]
-
-  ingestion:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-ingestion
-    replicas: 2
-    resources:
-      requests: { cpu: 500m, memory: 512Mi }
-      limits:   { cpu: 2000m, memory: 1Gi }
-    autoscaling:
-      enabled: true
-      minReplicas: 2
-      maxReplicas: 8
-      cpuUtilization: 75
-    env:
-      LOG_LEVEL: info
-      # SSRF protection: explicit allowlist of upstreams the crawler may hit.
-      # All other egress is blocked by the NetworkPolicy below.
-      EGRESS_ALLOWLIST: "parliament.go.ke,kenyalaw.org,gazette.go.ke,councilof governors.go.ke"
-    # The crawler is the ONLY service allowed to egress to arbitrary HTTPS.
-    # NetworkPolicy allows egress only to FQDNs in EGRESS_ALLOWLIST.
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: nats
-        - toService: minio
-        - toFQDNsFromEnv: EGRESS_ALLOWLIST
-          ports: [443, 80]
-
-  documents:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-documents
-    replicas: 2
-    resources:
-      requests: { cpu: 500m, memory: 512Mi }
-      limits:   { cpu: 2000m, memory: 2Gi }
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: nats
-        - toService: minio
-        - toService: opensearch
-
-  legislation:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-legislation
-    replicas: 3
-    resources:
-      requests: { cpu: 250m, memory: 256Mi }
-      limits:   { cpu: 1000m, memory: 512Mi }
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: nats
-
-  evidence:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-evidence
-    replicas: 2
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: nats
-
-  intelligence:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-intelligence
-    replicas: 2
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: nats
-
-  ai:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-ai
-    replicas: 2
-    resources:
-      requests: { cpu: 1000m, memory: 1Gi }
-      limits:   { cpu: 4000m, memory: 4Gi }
-    env:
-      MODEL_TIMEOUT_SECS: "60"
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: redis
-        - toFQDNs: ["api.anthropic.com", "api.openai.com"]
-          ports: [443]
-
-  search:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-search
-    replicas: 2
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: opensearch
-        - toService: redis
-
-  notifications:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-notifications
-    replicas: 2
-    env:
-      SMTP_HOST: mailhog
-      SMTP_PORT: "1025"
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: nats
-        - toService: redis
-        # Dev: MailHog. Prod: SES / SendGrid allowlist.
-        - toFQDNs: ["email.us-east-1.amazonaws.com"]
-          ports: [443, 587]
-
-  identity:
-    enabled: true
-    kind: Deployment
-    image: civic-intelligence-identity
-    replicas: 2
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: postgresql
-        - toService: keycloak
-        - toService: redis
-
+      DEV_MODE: "false"
+      OIDC_ISSUER: "http://keycloak:8080/realms/civic"
   web:
     enabled: true
-    kind: Deployment
-    image: civic-intelligence-web
-    replicas: 3
-    resources:
-      requests: { cpu: 100m, memory: 128Mi }
-      limits:   { cpu: 500m, memory: 512Mi }
-    service:
-      type: ClusterIP
-      port: 3000
-    networkPolicy:
-      enabled: true
-      egress:
-        - toService: api
-        - toService: keycloak
-
-# -----------------------------------------------------------------------------
-# External backing services when running in K8s (otherwise use docker compose).
-# -----------------------------------------------------------------------------
-nats:
-  enabled: false
-  clusterName: civic-nats
-  jetstream:
+    port: 3000
+  ai:
     enabled: true
-    fileStore:
-      enabled: true
-      size: 10Gi
+    port: 8000
 
-redis:
-  enabled: false
-  architecture: standalone
-  auth:
-    enabled: true
-    existingSecret: civic-redis-secret
-
-keycloak:
-  enabled: false
-  auth:
-    adminUser: admin
-    existingSecret: civic-keycloak-secret
-  postgresql:
-    enabled: true
-
-opensearch:
-  enabled: false
-  clusterName: civic-opensearch
-  replicas: 3
-  persistence:
-    size: 50Gi
-
-# -----------------------------------------------------------------------------
-# Temporal — durable workflow engine. Disabled in dev (docker compose).
-# -----------------------------------------------------------------------------
-temporal:
-  enabled: false
-  image: temporalio/auto-setup:1.22
-  replicas: 1
-
-# -----------------------------------------------------------------------------
-# Ingress: shared internal ingress for API + web.
-# -----------------------------------------------------------------------------
 ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-  hosts:
-    - host: api.civic.local
-      service: api
-      port: 8080
-    - host: app.civic.local
-      service: web
-      port: 3000
-  tls:
-    - hosts: [api.civic.local, app.civic.local]
-      secretName: civic-tls
-
-# -----------------------------------------------------------------------------
-# Observability — PodDisruptionBudgets default to minAvailable 1.
-# -----------------------------------------------------------------------------
-podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
-
-# Service mesh: optional Istio sidecar injection.
-serviceMesh:
   enabled: false
+  className: nginx
+  hosts:
+    - host: civic-intelligence.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# NetworkPolicy restricts API → DB and crawler egress
+networkPolicy:
+  enabled: true
+  crawlerEgressAllowlist:
+    - parliament.go.ke
+    - kenyalaw.org
+    - president.go.ke
+    - treasury.go.ke
+
+# PostgreSQL configuration
+postgres:
+  host: postgres
+  port: 5432
+  database: civic_intelligence
+  username: civic
+  existingSecret: postgres-credentials
+  secretKey: password
+
+# Redis
+redis:
+  host: redis
+  port: 6379
+
+# NATS
+nats:
+  url: nats://nats:4222
