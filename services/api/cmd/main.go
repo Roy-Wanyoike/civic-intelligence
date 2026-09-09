@@ -4,6 +4,7 @@ package main
 import (
         "context"
         "encoding/json"
+        "fmt"
         "log"
         "net/http"
         "os"
@@ -239,7 +240,7 @@ func makeBillDetailHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                         sub := parts[1]
                         switch {
                         case strings.HasPrefix(sub, "timeline"):
-                                writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "events": []any{}})
+                                handleBillTimeline(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "versions"):
                                 writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
                         case strings.HasPrefix(sub, "documents"):
@@ -322,6 +323,120 @@ func makeBillDetailHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                         Topics:          []string{},
                 })
         }
+}
+
+// --- Bill Timeline (#101) ---
+
+// billEventResponse is the JSON shape returned by /api/v1/bills/{id}/timeline.
+// Every field except `note` is non-empty when sourced from a verified primary
+// source. `note` carries any caveat (e.g., an inferred date).
+type billEventResponse struct {
+        ID                string  `json:"id"`
+        BillID            string  `json:"bill_id"`
+        EventType         string  `json:"event_type"`
+        Date              string  `json:"date"`
+        DateIsApproximate bool    `json:"date_is_approximate"`
+        House             string  `json:"house"`
+        Description       string  `json:"description"`
+        SourceURL         string  `json:"source_url"`
+        Confidence        string  `json:"confidence"`
+        Note              *string `json:"note"`
+}
+
+// findBillByID locates a single Bill by its source ID. In production this would
+// be a Postgres lookup; for now we re-discover from the Kenya Law adapter and
+// match by SourceID (with a substring fallback because callers sometimes use
+// truncated IDs from URLs).
+func findBillByID(ctx context.Context, adapter *kenya_law.Adapter, billID string) (*kenya_law.BillCandidate, error) {
+        if billID == "" {
+                return nil, errEmptyBillID
+        }
+        bills, err := adapter.DiscoverBills(ctx)
+        if err != nil {
+                return nil, err
+        }
+        for i := range bills {
+                if bills[i].SourceID == billID || strings.Contains(bills[i].SourceID, billID) {
+                        return &bills[i], nil
+                }
+        }
+        return nil, nil
+}
+
+// errEmptyBillID is returned by findBillByID when no ID was supplied.
+var errEmptyBillID = &billLookupError{message: "bill ID required"}
+
+// billLookupError is a simple error type used by findBillByID.
+type billLookupError struct{ message string }
+
+func (e *billLookupError) Error() string { return e.message }
+
+// buildTimelineForBill constructs the verified-event timeline for a single
+// Bill. Until the events table is wired (issue #19), the only verified event
+// is the publication of the Bill on Kenya Law Reports — every Bill carries a
+// source URL + publication date extracted from the Akoma Ntoso URL itself, so
+// this event is always evidence-backed. The function never invents events:
+// if the publication date is missing, an empty timeline is returned.
+func buildTimelineForBill(bill *kenya_law.BillCandidate) []billEventResponse {
+        if bill == nil {
+                return []billEventResponse{}
+        }
+        if bill.PublicationDate.IsZero() {
+                return []billEventResponse{}
+        }
+        note := "Inferred from Akoma Ntoso URL date component (publication date)."
+        return []billEventResponse{
+                {
+                        ID:                fmt.Sprintf("%s-publication", bill.SourceID),
+                        BillID:            bill.SourceID,
+                        EventType:         "publication",
+                        Date:              bill.PublicationDate.Format(time.RFC3339),
+                        DateIsApproximate: false,
+                        House:             bill.House,
+                        Description:       fmt.Sprintf("Bill published on Kenya Law Reports (%s).", bill.House),
+                        SourceURL:         bill.URL,
+                        Confidence:        "high",
+                        Note:              &note,
+                },
+        }
+}
+
+// handleBillTimeline returns the verified timeline for a Bill.
+//
+// Route: GET /api/v1/bills/{id}/timeline
+//
+// Behavior:
+//   - If events exist in the DB (future), they are returned.
+//   - Otherwise, the Bill's publication date is returned as the first event,
+//     sourced from the Akoma Ntoso URL on kenyalaw.org.
+//   - If the Bill cannot be found, returns 404.
+//   - If the adapter is unreachable, returns 503.
+func handleBillTimeline(w http.ResponseWriter, r *http.Request, adapter *kenya_law.Adapter, billID string) {
+        ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+        defer cancel()
+
+        bill, err := findBillByID(ctx, adapter, billID)
+        if err != nil {
+                if err == errEmptyBillID {
+                        writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+                        return
+                }
+                log.Printf("timeline handler: adapter error: %v", err)
+                writeError(w, http.StatusServiceUnavailable, "adapter_error", "failed to discover bills from Kenya Law")
+                return
+        }
+        if bill == nil {
+                writeError(w, http.StatusNotFound, "not_found", "bill not found: "+billID)
+                return
+        }
+
+        events := buildTimelineForBill(bill)
+        writeJSON(w, http.StatusOK, map[string]any{
+                "bill_id": bill.SourceID,
+                "events":  events,
+                "total":   len(events),
+                "source":  "new.kenyalaw.org",
+        })
 }
 
 // --- Search ---

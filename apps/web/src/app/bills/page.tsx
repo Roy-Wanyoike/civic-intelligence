@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { Filter } from 'lucide-react';
 import { mockBills } from '@/lib/mock-data';
-import { formatDate } from '@/lib/utils';
 import { FilterSelect } from '@/components/filter-select';
 import type { Metadata } from 'next';
 import type { Bill } from '@/lib/types';
