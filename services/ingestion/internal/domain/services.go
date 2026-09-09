@@ -191,3 +191,34 @@ func (SystemClock) Now() time.Time { return time.Now().UTC() }
 
 // Compile-time assertion.
 var _ Clock = SystemClock{}
+
+// InMemorySourceRegistry is a test implementation of SourceRegistry.
+type InMemorySourceRegistry struct {
+	sources []Source
+}
+
+func NewInMemorySourceRegistry() *InMemorySourceRegistry {
+	return &InMemorySourceRegistry{}
+}
+
+func (r *InMemorySourceRegistry) List(_ context.Context) ([]Source, error) {
+	return r.sources, nil
+}
+
+func (r *InMemorySourceRegistry) Get(_ context.Context, id string) (*Source, error) {
+	for i := range r.sources {
+		if r.sources[i].ID == id {
+			return &r.sources[i], nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *InMemorySourceRegistry) Register(_ context.Context, source Source) error {
+	r.sources = append(r.sources, source)
+	return nil
+}
+
+func (r *InMemorySourceRegistry) UpdateHealth(_ context.Context, id string, health string, success bool) error {
+	return nil
+}
