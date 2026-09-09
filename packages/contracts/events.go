@@ -25,6 +25,7 @@ const (
 	EventCommitteeUpdated        EventType = "committee.updated"
 	EventHansardPublished         EventType = "hansard.published"
 	EventCitationCreated         EventType = "citation.created"
+	EventEvidenceAttached        EventType = "evidence.attached"
 	EventAIExplanationGenerated  EventType = "ai.explanation.generated"
 	EventAIValidationFailed      EventType = "ai.validation.failed"
 	EventNotificationCreated     EventType = "notification.created"

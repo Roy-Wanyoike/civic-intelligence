@@ -135,7 +135,7 @@ func (h *FetchWorkerHandler) Handle(ctx context.Context, jobID string) error {
         }
 
         // Resolve the country adapter so we can normalise the item.
-        adapter, err := h.registry.AdapterFor(job.CountryCode())
+        adapter, err := h.registry.AdapterFor(job.CountryCode)
         if err != nil {
                 return err
         }

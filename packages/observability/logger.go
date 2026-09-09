@@ -1,76 +1,94 @@
-// Package observability provides cross-service logging, tracing and metrics
-// primitives. The domain layer of every service depends only on the Logger
-// interface defined here; the concrete zerolog implementation lives in
-// infrastructure, preserving the Dependency Rule.
+// Package observability provides shared logging + tracing + metrics helpers
+// for all Go services of the Civic Intelligence Platform.
 package observability
 
 import (
 	"context"
 	"io"
+	"log/slog"
 	"os"
-	"time"
+	"strings"
 )
 
-// Logger is the interface that every service's domain and application layers
-// depend on. It deliberately mirrors the subset of zerolog's API that we
-// actually use, so domain code never imports zerolog directly.
-type Logger interface {
-	// Debug logs at debug level.
-	Debug(msg string, fields ...Field)
-	// Info logs at info level.
-	Info(msg string, fields ...Field)
-	// Warn logs at warn level.
-	Warn(msg string, fields ...Field)
-	// Error logs at error level.
-	Error(msg string, err error, fields ...Field)
-	// With returns a child logger with the given fields attached.
-	With(fields ...Field) Logger
-	// WithContext returns a child logger that extracts trace/correlation IDs
-	// from the context.
-	WithContext(ctx context.Context) Logger
-}
-
-// Field is a structured log field. Concrete loggers serialise it according
-// to their backing implementation (zerolog, slog, etc.).
+// Field is a structured-logging key/value pair.
 type Field struct {
 	Key   string
 	Value any
 }
 
-// String, Int, Bool, Time, Dur and Err are convenience field constructors.
-func String(k, v string) Field  { return Field{Key: k, Value: v} }
-func Int(k string, v int) Field  { return Field{Key: k, Value: v} }
-func Int64(k string, v int64) Field { return Field{Key: k, Value: v} }
-func Bool(k string, v bool) Field { return Field{Key: k, Value: v} }
-func Time(k string, v time.Time) Field { return Field{Key: k, Value: v} }
-func Dur(k string, v time.Duration) Field { return Field{Key: k, Value: v} }
-func Err(err error) Field { return Field{Key: "err", Value: err} }
-func Any(k string, v any) Field { return Field{Key: k, Value: v} }
+// String creates a string Field.
+func String(key, val string) Field {
+	return Field{Key: key, Value: val}
+}
 
-// NopLogger is a no-op Logger useful for tests and default-zero values.
-type NopLogger struct{}
+// Int creates an int Field.
+func Int(key string, val int) Field {
+	return Field{Key: key, Value: val}
+}
 
-// Debug implements Logger.
-func (NopLogger) Debug(string, ...Field) {}
-// Info implements Logger.
-func (NopLogger) Info(string, ...Field) {}
-// Warn implements Logger.
-func (NopLogger) Warn(string, ...Field) {}
-// Error implements Logger.
-func (NopLogger) Error(string, error, ...Field) {}
-// With implements Logger.
-func (n NopLogger) With(...Field) Logger { return n }
-// WithContext implements Logger.
-func (n NopLogger) WithContext(context.Context) Logger { return n }
+// Logger is the structured logger interface used by all services.
+type Logger interface {
+	Debug(msg string, fields ...Field)
+	Info(msg string, fields ...Field)
+	Warn(msg string, fields ...Field)
+	Error(msg string, err error, fields ...Field)
+}
 
-// NewNop returns a no-op logger.
-func NewNop() Logger { return NopLogger{} }
-
-// NewLogger returns a zerolog-backed logger writing to the given writer. If
-// w is nil os.Stderr is used. The returned logger is safe for concurrent use.
-func NewLogger(w io.Writer, level string, service string) Logger {
-	if w == nil {
-		w = os.Stderr
+// NewLogger creates a logger writing to w at the given level. The service
+// name is included in every log line for filtering in multi-service logs.
+func NewLogger(w io.Writer, level, serviceName string) Logger {
+	var lvl slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		lvl = slog.LevelDebug
+	case "info", "":
+		lvl = slog.LevelInfo
+	case "warn", "warning":
+		lvl = slog.LevelWarn
+	case "error":
+		lvl = slog.LevelError
+	default:
+		lvl = slog.LevelInfo
 	}
-	return newZerologLogger(w, level, service)
+	handler := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: lvl})
+	return &slogLogger{logger: slog.New(handler).With("service", serviceName)}
+}
+
+type slogLogger struct {
+	logger *slog.Logger
+}
+
+func (l *slogLogger) Debug(msg string, fields ...Field) {
+	l.logger.Debug(msg, toArgs(fields)...)
+}
+
+func (l *slogLogger) Info(msg string, fields ...Field) {
+	l.logger.Info(msg, toArgs(fields)...)
+}
+
+func (l *slogLogger) Warn(msg string, fields ...Field) {
+	l.logger.Warn(msg, toArgs(fields)...)
+}
+
+func (l *slogLogger) Error(msg string, err error, fields ...Field) {
+	all := append([]Field{String("error", err.Error())}, fields...)
+	l.logger.Error(msg, toArgs(all)...)
+}
+
+func toArgs(fields []Field) []any {
+	args := make([]any, 0, len(fields)*2)
+	for _, f := range fields {
+		args = append(args, f.Key, f.Value)
+	}
+	return args
+}
+
+// DefaultLogger is the package-level logger used when no service-specific
+// logger is configured. Writes JSON to stdout at INFO level.
+var DefaultLogger = NewLogger(os.Stdout, "info", "civic")
+
+// WithContext returns a logger enriched with the correlation ID from ctx.
+func WithContext(ctx context.Context) Logger {
+	// TODO: extract correlation ID from context and add as a field
+	return DefaultLogger
 }
