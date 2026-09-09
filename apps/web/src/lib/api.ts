@@ -123,3 +123,79 @@ export async function followBill(billId: string): Promise<{ followed: boolean }>
   if (!resp.ok) throw new ApiError(resp.status, 'Follow failed');
   return { followed: true };
 }
+
+// ----- Subscriptions (issue #110 — Following) -----
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  entity_type: 'bill' | 'committee' | 'topic' | 'institution' | 'person';
+  entity_id: string;
+  created_at: string;
+}
+
+/**
+ * Follow an entity (Bill, committee, topic, institution, person).
+ * Requires an authenticated caller; the Bearer token is added by the
+ * browser's fetch integration if the user is signed in (issue #20).
+ */
+export async function createSubscription(params: {
+  entityType: string;
+  entityId: string;
+  token?: string;
+}): Promise<Subscription> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const resp = await fetch('/api/v1/subscriptions', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ entity_type: params.entityType, entity_id: params.entityId }),
+  });
+  if (!resp.ok) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'Follow failed', detail);
+  }
+  return resp.json();
+}
+
+/**
+ * List the caller's follows. Optional `entityType` filter narrows the result
+ * set to a single entity type (e.g. "bill").
+ */
+export async function listSubscriptions(params: {
+  entityType?: string;
+  token?: string;
+} = {}): Promise<{ items: Subscription[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.entityType) qs.set('entity_type', params.entityType);
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const resp = await fetch(`/api/v1/subscriptions?${qs.toString()}`, { headers });
+  if (!resp.ok) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'List subscriptions failed', detail);
+  }
+  return resp.json();
+}
+
+/**
+ * Unfollow an entity by subscription ID. Requires an authenticated caller.
+ */
+export async function deleteSubscription(params: {
+  id: string;
+  token?: string;
+}): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const resp = await fetch(`/api/v1/subscriptions/${params.id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!resp.ok && resp.status !== 204) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'Unfollow failed', detail);
+  }
+}
