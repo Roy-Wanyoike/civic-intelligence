@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-api
+  labels:
+    app: civic-api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: civic-api
+  template:
+    metadata:
+      labels:
+        app: civic-api
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}/api:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.services.api.port }}
+          env:
+            - name: DEV_MODE
+              value: {{ .Values.services.api.env.DEV_MODE | quote }}
+            - name: OIDC_ISSUER
+              value: {{ .Values.services.api.env.OIDC_ISSUER | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: {{ .Values.services.api.port }}
+          readinessProbe:
+            httpGet:
+              path: /api/v1/readyz
+              port: {{ .Values.services.api.port }}
