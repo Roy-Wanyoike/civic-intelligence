@@ -6,7 +6,16 @@
       "framework": "nextjs"
     },
     "ai": {
-      "root": "services/ai"
+      "root": "services/ai",
+      "build": {
+        "command": "pip install -r requirements.txt",
+        "outputDirectory": "."
+      }
+    }
+  },
+  "functions": {
+    "services/ai/api/index.py": {
+      "runtime": "@vercel/python@latest"
     }
   },
   "rewrites": [
