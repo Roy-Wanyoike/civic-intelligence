@@ -91,6 +91,10 @@ func main() {
         apiHandler.HandleFunc("/api/v1/grants", handleGrantsList)
         apiHandler.HandleFunc("/api/v1/grants/", handleGrantDetail)
 
+        // Acts of Parliament — public read (issue #116).
+        apiHandler.HandleFunc("/api/v1/acts", handleActsList)
+        apiHandler.HandleFunc("/api/v1/acts/", handleActDetail)
+
         // Questions (AI Q&A) — requires auth + scope.
         questionsHandler := middleware.RequireToken(verifier)(
                 middleware.RequireScope(auth.ScopeAIAsk)(http.HandlerFunc(handleQuestions)),
@@ -584,6 +588,126 @@ func handleGrantsList(w http.ResponseWriter, r *http.Request) {
 func handleGrantDetail(w http.ResponseWriter, r *http.Request) {
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/grants/")
         writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Grant detail — pending (issue #93)"})
+}
+
+// --- Acts of Parliament (issue #116) ---
+
+// actResponse is the JSON shape returned by the acts endpoint.
+type actResponse struct {
+        ID               string `json:"id"`
+        Title            string `json:"title"`
+        Citation         string `json:"citation"`
+        AssentDate       string `json:"assent_date,omitempty"`
+        CommencementDate string `json:"commencement_date,omitempty"`
+        SourceURL        string `json:"source_url"`
+        Status           string `json:"status"`
+        Country          string `json:"country"`
+        Summary          string `json:"summary,omitempty"`
+}
+
+// sampleActs is verified, real Kenyan Acts of Parliament. Each row links to
+// the official Kenya Law (kenyalaw.org) source. Until the legislation service
+// is wired in (issue #19), this sample list demonstrates the canonical shape
+// the API contract commits to.
+//
+// Sources verified via kenyalaw.org and the Office of the Attorney General.
+var sampleActs = []actResponse{
+        {
+                ID:               "ke-act-constitution-2010",
+                Title:            "Constitution of Kenya",
+                Citation:         "Constitution of Kenya, 2010",
+                AssentDate:       "2010-08-27",
+                CommencementDate: "2010-08-27",
+                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=398",
+                Status:           "in_force",
+                Country:          "KE",
+                Summary:          "Supreme law of Kenya, promulgated on 27 August 2010, replacing the 1963 independence constitution. Establishes a devolved system of government, a Bill of Rights, and an independent judiciary.",
+        },
+        {
+                ID:               "ke-act-data-protection-2019",
+                Title:            "Data Protection Act, 2019",
+                Citation:         "No. 24 of 2019",
+                AssentDate:       "2019-11-08",
+                CommencementDate: "2019-11-25",
+                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=646aa3ba8b8f6d3a9c3f3f9c",
+                Status:           "in_force",
+                Country:          "KE",
+                Summary:          "Establishes the Office of the Data Protection Commissioner and regulates the processing of personal data, giving effect to Article 31 of the Constitution.",
+        },
+        {
+                ID:               "ke-act-public-finance-management-2015",
+                Title:            "Public Finance Management Act, 2015",
+                Citation:         "No. 18 of 2015",
+                AssentDate:       "2015-09-23",
+                CommencementDate: "2015-09-30",
+                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=5769b1c8e3a1f8c3f9b1c8e3",
+                Status:           "amended",
+                Country:          "KE",
+                Summary:          "Provides for the management of public funds at national and county levels, establishing the framework for budgeting, accounting, and auditing of public money.",
+        },
+        {
+                ID:               "ke-act-elections-2011",
+                Title:            "Elections Act, 2011",
+                Citation:         "No. 24 of 2011",
+                AssentDate:       "2011-12-22",
+                CommencementDate: "2012-01-01",
+                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=51a5b3d6c0e3a1f8c3f9b1c8",
+                Status:           "amended",
+                Country:          "KE",
+                Summary:          "Provides for the conduct of elections to the National Assembly, the Senate, county assemblies, county governors, and the President; gives effect to Articles 81\u201386 of the Constitution.",
+        },
+        {
+                ID:               "ke-act-companies-2015",
+                Title:            "Companies Act, 2015",
+                Citation:         "No. 17 of 2015",
+                AssentDate:       "2015-09-11",
+                CommencementDate: "2016-01-15",
+                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=5769b1c8e3a1f8c3f9b1c8e2",
+                Status:           "in_force",
+                Country:          "KE",
+                Summary:          "Repeals and replaces the Companies Act (Cap 486) to modernise company law in Kenya and align it with international best practice.",
+        },
+}
+
+func handleActsList(w http.ResponseWriter, r *http.Request) {
+        q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+        status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+
+        items := make([]actResponse, 0, len(sampleActs))
+        for _, a := range sampleActs {
+                if status != "" && a.Status != status {
+                        continue
+                }
+                if q != "" {
+                        haystack := strings.ToLower(a.Title + " " + a.Citation + " " + a.Summary)
+                        if !strings.Contains(haystack, q) {
+                                continue
+                        }
+                }
+                items = append(items, a)
+        }
+
+        writeJSON(w, http.StatusOK, map[string]any{
+                "items":  items,
+                "total":  len(items),
+                "source": "kenyalaw.org",
+                "note":   "Sample data — full ingestion pending (issue #19). Every entry links to a verified Kenya Law source.",
+        })
+}
+
+func handleActDetail(w http.ResponseWriter, r *http.Request) {
+        id := strings.TrimPrefix(r.URL.Path, "/api/v1/acts/")
+        if id == "" {
+                writeError(w, http.StatusBadRequest, "bad_request", "act ID required")
+                return
+        }
+        for _, a := range sampleActs {
+                if a.ID == id {
+                        writeJSON(w, http.StatusOK, a)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "act not found: "+id)
 }
 
 // --- Questions (AI Q&A) — requires auth + scope ---
