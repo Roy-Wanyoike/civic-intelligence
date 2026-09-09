@@ -29,6 +29,7 @@ export interface Bill {
   sponsor_name: string | null;
   house_id: string | null;
   house_name: string | null;
+  house?: string; // API returns "house" directly (e.g., "National Assembly")
   committee_id: string | null;
   committee_name: string | null;
   status: string;
@@ -37,6 +38,8 @@ export interface Bill {
   purpose: string | null;
   description: string | null;
   country: string;
+  source_url?: string; // the official source URL (kenyalaw.org, parliament.go.ke)
+  publication_date?: string; // ISO date string
   created_at: string;
   updated_at: string;
   citation_count: number;
