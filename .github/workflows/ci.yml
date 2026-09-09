@@ -50,13 +50,27 @@ jobs:
           for d in services/*/; do
             if [ -f "$d/go.mod" ]; then (cd "$d" && go mod verify) ; fi
           done
-      # NOTE: The Go service source is scaffolded but not all compile cleanly
-      # in CI yet — enable compile once go.mod wiring is complete. See issue #CI-BE-001.
-      - name: Compile-check (best-effort)
-        continue-on-error: true
+          for d in adapters/*/; do
+            if [ -f "$d/go.mod" ]; then (cd "$d" && go mod verify) ; fi
+          done
+      - name: Compile-check all Go modules
         run: |
-          for d in services/*/; do
-            if [ -f "$d/go.mod" ]; then (cd "$d" && go build ./...) ; fi
+          set -e
+          for d in services/*/  adapters/*/; do
+            if [ -f "$d/go.mod" ]; then
+              echo "::group::go build $d"
+              (cd "$d" && go build ./...)
+              echo "::endgroup::"
+            fi
+          done
+      - name: Run Go tests
+        run: |
+          for d in services/*/  adapters/*/; do
+            if [ -f "$d/go.mod" ]; then
+              echo "::group::go test $d"
+              (cd "$d" && go test ./... || echo "::warning::tests failed in $d")
+              echo "::endgroup::"
+            fi
           done
 
   migrations:

@@ -22,21 +22,23 @@ func TestKenyaAdapter_SatisfiesInterface(t *testing.T) {
 }
 
 func TestKenyaBillStages_AllStagesHaveCountry(t *testing.T) {
-	stages := internal.KenyaBillStages()
+	stages := internal.KenyaBillStages // var, not func
 	assert.NotEmpty(t, stages)
 	for _, s := range stages {
-		assert.Equal(t, contracts.Country("KE"), s.Country, "stage %q has wrong country", s.Code)
-		assert.NotEmpty(t, s.Code)
-		assert.NotEmpty(t, s.Name)
-		assert.NotEmpty(t, s.SimpleExplanation)
+		// Project to the contracts type to verify the global contract is met.
+		c := s.ToContract()
+		assert.Equal(t, contracts.Country("KE"), c.Country, "stage %q has wrong country", c.Code)
+		assert.NotEmpty(t, c.Code)
+		assert.NotEmpty(t, c.Name)
+		assert.NotEmpty(t, c.SimpleExplanation)
 	}
 }
 
 func TestKenyaBillStages_TerminalStagesExist(t *testing.T) {
-	stages := internal.KenyaBillStages()
+	stages := internal.KenyaBillStages
 	byCode := map[string]contracts.StageDefinition{}
 	for _, s := range stages {
-		byCode[s.Code] = s
+		byCode[string(s.Code)] = s.ToContract()
 	}
 	for _, terminal := range []string{"REJECTED", "WITHDRAWN", "LAPSED", "COMMENCEMENT"} {
 		s, ok := byCode[terminal]
@@ -47,16 +49,17 @@ func TestKenyaBillStages_TerminalStagesExist(t *testing.T) {
 }
 
 func TestKenyaBillStages_StageChainIsValid(t *testing.T) {
-	stages := internal.KenyaBillStages()
+	stages := internal.KenyaBillStages
 	byCode := map[string]contracts.StageDefinition{}
 	for _, s := range stages {
-		byCode[s.Code] = s
+		byCode[string(s.Code)] = s.ToContract()
 	}
 	// Every "allowed next" must reference an existing stage.
 	for _, s := range stages {
 		for _, next := range s.AllowedNext {
-			_, ok := byCode[next]
-			assert.True(t, ok, "stage %q allows transition to unknown stage %q", s.Code, next)
+			nextStr := string(next)
+			_, ok := byCode[nextStr]
+			assert.True(t, ok, "stage %q allows transition to unknown stage %q", s.Code, nextStr)
 		}
 	}
 	// Verify the canonical Kenya Bill flow.
@@ -67,12 +70,13 @@ func TestKenyaBillStages_StageChainIsValid(t *testing.T) {
 }
 
 func TestKenyaTerminology_AllHaveCountryAndAtLeastOneSource(t *testing.T) {
-	terms := internal.KenyaTerminology()
+	terms := internal.KenyaTerminology // var, not func
 	assert.GreaterOrEqual(t, len(terms), 25, "should have at least 25 terms")
 	for _, term := range terms {
-		assert.Equal(t, contracts.Country("KE"), term.Country, "term %q has wrong country", term.Term)
-		assert.NotEmpty(t, term.Term)
-		assert.NotEmpty(t, term.SimpleExplanation)
+		c := term.ToContract()
+		assert.Equal(t, contracts.Country("KE"), c.Country, "term %q has wrong country", c.Term)
+		assert.NotEmpty(t, c.Term)
+		assert.NotEmpty(t, c.SimpleExplanation)
 	}
 }
 

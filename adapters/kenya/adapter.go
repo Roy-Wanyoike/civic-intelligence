@@ -15,15 +15,15 @@ package kenya
 import (
 	"context"
 
-	"github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
+	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/gazette"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/internal"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_law"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/gazette"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/parliament"
+	"github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 )
 
 // KenyaAdapter implements contracts.LegislativeSourceAdapter.
-// Compile-time assertion below guarantees interface compliance.
+// Compile-time assertion at the bottom guarantees interface compliance.
 type KenyaAdapter struct {
 	parliament *parliament.Adapter
 	kenyaLaw   *kenya_law.Adapter
@@ -64,7 +64,6 @@ func (a *KenyaAdapter) Discover(ctx context.Context) ([]contracts.SourceItem, er
 }
 
 func (a *KenyaAdapter) Fetch(ctx context.Context, item contracts.SourceItem) (*contracts.RawDocument, error) {
-	// Route by URL host or by item metadata.
 	switch item.DocumentType {
 	case "act", "regulation", "legal_notice":
 		return a.kenyaLaw.Fetch(ctx, item)
@@ -76,7 +75,6 @@ func (a *KenyaAdapter) Fetch(ctx context.Context, item contracts.SourceItem) (*c
 }
 
 func (a *KenyaAdapter) Parse(ctx context.Context, doc contracts.RawDocument) ([]contracts.ExtractedRecord, error) {
-	// Route by mime type + URL host.
 	return a.parliament.Parse(ctx, doc)
 }
 
@@ -84,18 +82,32 @@ func (a *KenyaAdapter) Parse(ctx context.Context, doc contracts.RawDocument) ([]
 // and committees. This is ADAPTER DATA — these strings are values, not
 // constants in the global domain model.
 func (a *KenyaAdapter) GetLegislativeStructure(ctx context.Context) (*contracts.LegislativeStructure, error) {
-	return internal.KenyaLegislativeStructure(), nil
+	s := internal.KenyaLegislativeStructure()
+	return &s, nil
 }
 
 // GetStages returns the Kenyan Bill stages per the 2010 Constitution and
-// Parliament's Standing Orders.
+// Parliament's Standing Orders. The internal package stores these as a richer
+// []KenyaStage type; we project them down to []contracts.StageDefinition
+// via each stage's ToContract() method.
 func (a *KenyaAdapter) GetStages(ctx context.Context) ([]contracts.StageDefinition, error) {
-	return internal.KenyaBillStages(), nil
+	stages := internal.KenyaBillStages
+	out := make([]contracts.StageDefinition, len(stages))
+	for i, s := range stages {
+		out[i] = s.ToContract()
+	}
+	return out, nil
 }
 
 // GetTerminology returns the Kenyan parliamentary terminology registry.
+// Same projection pattern as GetStages.
 func (a *KenyaAdapter) GetTerminology(ctx context.Context) ([]contracts.TermDefinition, error) {
-	return internal.KenyaTerminology(), nil
+	terms := internal.KenyaTerminology
+	out := make([]contracts.TermDefinition, len(terms))
+	for i, t := range terms {
+		out[i] = t.ToContract()
+	}
+	return out, nil
 }
 
 // Compile-time assertion: KenyaAdapter satisfies contracts.LegislativeSourceAdapter.

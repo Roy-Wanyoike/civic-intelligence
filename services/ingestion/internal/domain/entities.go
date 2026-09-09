@@ -11,7 +11,7 @@
 // anything else: it normalises raw bytes into contracts.SourceItem (via the
 // country adapter) and publishes events. The downstream services (legislation,
 // documents) decide what each item means in the platform.
-package ingestion
+package domain
 
 import "time"
 

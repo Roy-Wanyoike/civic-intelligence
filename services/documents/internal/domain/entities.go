@@ -2,7 +2,7 @@
 // Given a RawDocument produced by ingestion, the documents service extracts
 // pages, sections and chunks. It is country-agnostic: parsing is driven by
 // the document's MIME type, never by which country the document came from.
-package documents
+package domain
 
 import "time"
 

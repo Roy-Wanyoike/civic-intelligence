@@ -4,7 +4,7 @@
 // only make claims backed by cited source text. When two sources disagree
 // on a fact, the evidence service records a SourceConflict — it never
 // silently resolves.
-package evidence
+package domain
 
 import "time"
 

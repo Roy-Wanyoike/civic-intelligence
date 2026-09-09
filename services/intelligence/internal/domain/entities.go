@@ -8,7 +8,7 @@
 // service validates them via the CandidateFactValidator and publishes
 // accepted facts as events. The legislation service consumes accepted facts
 // and is the only entity allowed to mutate the canonical bill state.
-package intelligence
+package domain
 
 import "time"
 
