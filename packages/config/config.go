@@ -1,6 +1,6 @@
-// Package config provides a minimal environment-variable loader. It is a
-// thin shim over struct tags so that each service can define its own config
-// struct without depending on a third-party envconfig library.
+// Package config provides shared configuration loading for all Go services.
+// Each service defines its own config struct with `env:"NAME" default:"value"`
+// tags; this package loads from environment variables.
 package config
 
 import (
@@ -12,142 +12,127 @@ import (
 	"time"
 )
 
-// Load reads environment variables into the provided struct. Each exported
-// field of the struct may carry a tag of the form:
+// Load populates a config struct from environment variables using `env:"NAME"`
+// and `default:"value"` struct tags. Supported field types: string, int,
+// int64, bool, time.Duration.
 //
-//	type Server struct {
-//	    Port int    `env:"PORT" default:"8080"`
-//	    Host string `env:"HOST" default:"0.0.0.0"`
-//	    Timeout time.Duration `env:"TIMEOUT" default:"30s"`
+// Example struct:
+//
+//	type Config struct {
+//	    HTTPAddr        string        `env:"HTTP_ADDR" default:":8084"`
+//	    ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" default:"15s"`
 //	}
-//
-// Load returns an error if a field tagged `env:"X,required"` has no value
-// and no default. Only basic kinds (string, int, int64, bool, float64,
-// time.Duration) are supported; nested structs are descended into.
-func Load(dst any) error {
-	return loadInto(reflect.ValueOf(dst), "")
-}
-
-func loadInto(v reflect.Value, prefix string) error {
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return fmt.Errorf("config: destination must be non-nil pointer")
-		}
-		v = v.Elem()
+func Load(cfg interface{}) error {
+	v := reflect.ValueOf(cfg)
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return fmt.Errorf("config: Load requires a non-nil pointer")
 	}
-	if v.Kind() != reflect.Struct {
-		return fmt.Errorf("config: destination must be a struct, got %s", v.Kind())
-	}
+	v = v.Elem()
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		if !field.IsExported() {
-			continue
-		}
 		fv := v.Field(i)
-		tag := field.Tag.Get("env")
-		if tag == "" && fv.Kind() == reflect.Struct {
-			// descend into nested struct
-			if err := loadInto(fv, prefix); err != nil {
-				return err
-			}
+		if !fv.CanSet() {
 			continue
 		}
-		if tag == "" {
-			continue
-		}
-		parts := strings.Split(tag, ",")
-		envName := parts[0]
-		required := false
-		for _, p := range parts[1:] {
-			if p == "required" {
-				required = true
-			}
-		}
+		envName := field.Tag.Get("env")
 		defVal := field.Tag.Get("default")
-
-		raw, present := os.LookupEnv(envName)
-		if !present {
-			if defVal != "" {
-				raw = defVal
-			} else if required {
-				return fmt.Errorf("config: required env var %s not set", envName)
-			} else {
-				continue
-			}
+		var raw string
+		if envName != "" {
+			raw = os.Getenv(envName)
+		}
+		if raw == "" {
+			raw = defVal
+		}
+		if raw == "" {
+			continue
 		}
 		if err := setField(fv, raw); err != nil {
-			return fmt.Errorf("config: env %s: %w", envName, err)
+			return fmt.Errorf("config: field %s: %w", field.Name, err)
 		}
 	}
 	return nil
 }
 
-// setField assigns the raw string to the reflect.Value, parsing it according
-// to the field's kind.
 func setField(fv reflect.Value, raw string) error {
 	switch fv.Kind() {
 	case reflect.String:
 		fv.SetString(raw)
-	case reflect.Bool:
-		b, err := strconv.ParseBool(raw)
-		if err != nil {
-			return err
-		}
-		fv.SetBool(b)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		// Special case: time.Duration is also an int64 under the hood.
+	case reflect.Int, reflect.Int64:
 		if fv.Type() == reflect.TypeOf(time.Duration(0)) {
 			d, err := time.ParseDuration(raw)
 			if err != nil {
-				return err
+				return fmt.Errorf("parse duration %q: %w", raw, err)
 			}
 			fv.SetInt(int64(d))
 			return nil
 		}
 		n, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse int %q: %w", raw, err)
 		}
 		fv.SetInt(n)
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		n, err := strconv.ParseUint(raw, 10, 64)
+	case reflect.Bool:
+		b, err := strconv.ParseBool(raw)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse bool %q: %w", raw, err)
 		}
-		fv.SetUint(n)
-	case reflect.Float32, reflect.Float64:
-		f, err := strconv.ParseFloat(raw, 64)
-		if err != nil {
-			return err
-		}
-		fv.SetFloat(f)
+		fv.SetBool(b)
 	case reflect.Slice:
-		if fv.Type().Elem().Kind() != reflect.String {
-			return fmt.Errorf("unsupported slice element type %s", fv.Type().Elem())
+		if fv.Type().Elem().Kind() == reflect.String {
+			parts := strings.Split(raw, ",")
+			for i := range parts {
+				parts[i] = strings.TrimSpace(parts[i])
+			}
+			fv.Set(reflect.ValueOf(parts))
 		}
-		parts := splitCSV(raw)
-		out := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
-		for i, p := range parts {
-			out.Index(i).SetString(p)
-		}
-		fv.Set(out)
-	default:
-		return fmt.Errorf("unsupported field kind %s", fv.Kind())
 	}
 	return nil
 }
 
-// splitCSV splits a comma- or space-separated string, trimming each piece.
-func splitCSV(s string) []string {
-	if s == "" {
-		return nil
+// GetString reads a string env var with a fallback default.
+func GetString(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
 	}
-	s = strings.ReplaceAll(s, ",", " ")
-	parts := strings.Fields(s)
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		out = append(out, p)
+	return fallback
+}
+
+// GetInt reads an int env var with a fallback default.
+func GetInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
-	return out
+	return fallback
+}
+
+// GetDuration reads a duration env var with a fallback default.
+func GetDuration(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return fallback
+}
+
+// GetBool reads a boolean env var with a fallback default.
+func GetBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return fallback
+}
+
+// MustGetString reads a string env var or panics if missing.
+func MustGetString(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		panic(fmt.Sprintf("required env var %s is not set", key))
+	}
+	return v
 }

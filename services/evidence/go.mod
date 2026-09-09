@@ -1,15 +1,25 @@
 module github.com/Roy-Wanyoike/civic-intelligence/services/evidence
 
-go 1.22
+go 1.25.0
 
 require (
 	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts v0.0.0
-	github.com/Roy-Wanyoike/civic-intelligence/packages/events v0.0.0
 	github.com/Roy-Wanyoike/civic-intelligence/packages/observability v0.0.0
-	github.com/jackc/pgx/v5 v5.5.5
-	github.com/nats-io/nats.go v1.34.0
-	github.com/rs/zerolog v1.32.0
-	github.com/stretchr/testify v1.9.0
+	github.com/nats-io/nats.go v1.53.1
+	github.com/stretchr/testify v1.11.1
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/klauspost/compress v1.18.5 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
+	github.com/nats-io/nkeys v0.4.15 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace (
@@ -17,3 +27,7 @@ replace (
 	github.com/Roy-Wanyoike/civic-intelligence/packages/events => ../../packages/events
 	github.com/Roy-Wanyoike/civic-intelligence/packages/observability => ../../packages/observability
 )
+
+require github.com/Roy-Wanyoike/civic-intelligence/packages/config v0.0.0
+
+replace github.com/Roy-Wanyoike/civic-intelligence/packages/config => ../../packages/config

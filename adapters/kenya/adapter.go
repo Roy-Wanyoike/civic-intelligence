@@ -13,77 +13,107 @@
 package kenya
 
 import (
-	"context"
+        "context"
+        "strings"
 
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/gazette"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/internal"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_law"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/parliament"
-	"github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/gazette"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/internal"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_law"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/parliament"
+        "github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 )
 
 // KenyaAdapter implements contracts.LegislativeSourceAdapter.
 // Compile-time assertion at the bottom guarantees interface compliance.
 type KenyaAdapter struct {
-	parliament *parliament.Adapter
-	kenyaLaw   *kenya_law.Adapter
-	gazette    *gazette.Adapter
+        parliament *parliament.Adapter
+        kenyaLaw   *kenya_law.Adapter
+        gazette    *gazette.Adapter
 }
 
 // Dependencies holds the collaborators the adapter needs.
 type Dependencies struct {
-	HTTPClient parliament.HTTPClient
-	UserAgent  string
+        HTTPClient parliament.HTTPClient
+        UserAgent  string
 }
 
 // NewKenyaAdapter constructs a Kenya adapter.
 func NewKenyaAdapter(deps Dependencies) *KenyaAdapter {
-	if deps.UserAgent == "" {
-		deps.UserAgent = "CivicIntelligence/0.1 (+https://github.com/Roy-Wanyoike/civic-intelligence)"
-	}
-	return &KenyaAdapter{
-		parliament: parliament.NewAdapter(deps.HTTPClient, deps.UserAgent),
-		kenyaLaw:   kenya_law.NewAdapter(deps.HTTPClient, deps.UserAgent),
-		gazette:    gazette.NewAdapter(deps.HTTPClient, deps.UserAgent),
-	}
+        if deps.UserAgent == "" {
+                deps.UserAgent = "CivicIntelligence/0.1 (+https://github.com/Roy-Wanyoike/civic-intelligence)"
+        }
+        return &KenyaAdapter{
+                parliament: parliament.NewAdapter(deps.HTTPClient, deps.UserAgent),
+                kenyaLaw:   kenya_law.NewAdapter(deps.HTTPClient, deps.UserAgent),
+                gazette:    gazette.NewAdapter(deps.HTTPClient, deps.UserAgent),
+        }
+}
+
+// CountryCode returns "KE" — the ISO 3166-1 alpha-2 code for Kenya.
+func (a *KenyaAdapter) CountryCode() string { return "KE" }
+
+// Supports reports whether this adapter can handle the given URL. The Kenya
+// adapter handles URLs from parliament.go.ke, nationalassembly.go.ke,
+// senate.go.ke, kenyalaw.org, and the Kenya Gazette.
+func (a *KenyaAdapter) Supports(url string) bool {
+        for _, host := range []string{
+                "parliament.go.ke",
+                "nationalassembly.go.ke",
+                "senate.go.ke",
+                "kenyalaw.org",
+                "www.kenyalaw.org",
+                "gazettes.africa",
+        } {
+                if strings.Contains(url, host) {
+                        return true
+                }
+        }
+        return false
+}
+
+// NormalizeSourceItem converts raw Kenya-source metadata into the platform's
+// canonical SourceItem shape. Delegates to the internal normalizer which
+// knows Kenya-specific field names ("bill_no", "house_name", etc.).
+func (a *KenyaAdapter) NormalizeSourceItem(raw map[string]any) (contracts.SourceItem, error) {
+        return internal.NormalizeSourceItem(raw)
 }
 
 // Discover delegates to all three source adapters and merges results.
 func (a *KenyaAdapter) Discover(ctx context.Context) ([]contracts.SourceItem, error) {
-	var out []contracts.SourceItem
-	for _, src := range []interface {
-		Discover(ctx context.Context) ([]contracts.SourceItem, error)
-	}{a.parliament, a.kenyaLaw, a.gazette} {
-		items, err := src.Discover(ctx)
-		if err != nil {
-			continue // a single failing source does not abort the whole discovery
-		}
-		out = append(out, items...)
-	}
-	return out, nil
+        var out []contracts.SourceItem
+        for _, src := range []interface {
+                Discover(ctx context.Context) ([]contracts.SourceItem, error)
+        }{a.parliament, a.kenyaLaw, a.gazette} {
+                items, err := src.Discover(ctx)
+                if err != nil {
+                        continue // a single failing source does not abort the whole discovery
+                }
+                out = append(out, items...)
+        }
+        return out, nil
 }
 
 func (a *KenyaAdapter) Fetch(ctx context.Context, item contracts.SourceItem) (*contracts.RawDocument, error) {
-	switch item.DocumentType {
-	case "act", "regulation", "legal_notice":
-		return a.kenyaLaw.Fetch(ctx, item)
-	case "gazette_notice":
-		return a.gazette.Fetch(ctx, item)
-	default:
-		return a.parliament.Fetch(ctx, item)
-	}
+        switch item.DocumentType {
+        case "act", "regulation", "legal_notice":
+                return a.kenyaLaw.Fetch(ctx, item)
+        case "gazette_notice":
+                return a.gazette.Fetch(ctx, item)
+        default:
+                return a.parliament.Fetch(ctx, item)
+        }
 }
 
 func (a *KenyaAdapter) Parse(ctx context.Context, doc contracts.RawDocument) ([]contracts.ExtractedRecord, error) {
-	return a.parliament.Parse(ctx, doc)
+        return a.parliament.Parse(ctx, doc)
 }
 
 // GetLegislativeStructure returns Kenya's institutions, legislature, houses,
 // and committees. This is ADAPTER DATA — these strings are values, not
 // constants in the global domain model.
 func (a *KenyaAdapter) GetLegislativeStructure(ctx context.Context) (*contracts.LegislativeStructure, error) {
-	s := internal.KenyaLegislativeStructure()
-	return &s, nil
+        s := internal.KenyaLegislativeStructure()
+        return &s, nil
 }
 
 // GetStages returns the Kenyan Bill stages per the 2010 Constitution and
@@ -91,23 +121,23 @@ func (a *KenyaAdapter) GetLegislativeStructure(ctx context.Context) (*contracts.
 // []KenyaStage type; we project them down to []contracts.StageDefinition
 // via each stage's ToContract() method.
 func (a *KenyaAdapter) GetStages(ctx context.Context) ([]contracts.StageDefinition, error) {
-	stages := internal.KenyaBillStages
-	out := make([]contracts.StageDefinition, len(stages))
-	for i, s := range stages {
-		out[i] = s.ToContract()
-	}
-	return out, nil
+        stages := internal.KenyaBillStages
+        out := make([]contracts.StageDefinition, len(stages))
+        for i, s := range stages {
+                out[i] = s.ToContract()
+        }
+        return out, nil
 }
 
 // GetTerminology returns the Kenyan parliamentary terminology registry.
 // Same projection pattern as GetStages.
 func (a *KenyaAdapter) GetTerminology(ctx context.Context) ([]contracts.TermDefinition, error) {
-	terms := internal.KenyaTerminology
-	out := make([]contracts.TermDefinition, len(terms))
-	for i, t := range terms {
-		out[i] = t.ToContract()
-	}
-	return out, nil
+        terms := internal.KenyaTerminology
+        out := make([]contracts.TermDefinition, len(terms))
+        for i, t := range terms {
+                out[i] = t.ToContract()
+        }
+        return out, nil
 }
 
 // Compile-time assertion: KenyaAdapter satisfies contracts.LegislativeSourceAdapter.

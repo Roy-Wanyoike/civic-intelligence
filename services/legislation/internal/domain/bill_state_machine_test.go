@@ -12,8 +12,10 @@ import (
 // country-specific terminology. The Kenya adapter supplies the actual values.
 func testStages() []contracts.StageDefinition {
 	return []contracts.StageDefinition{
-		{Code: "STAGE_A", Name: "Stage A", AllowedNext: []string{"STAGE_B"}, Country: "TE"},
-		{Code: "STAGE_B", Name: "Stage B", AllowedNext: []string{"STAGE_C"}, Country: "TE"},
+		// Non-terminal stages explicitly list which terminals are reachable.
+		{Code: "STAGE_A", Name: "Stage A", AllowedNext: []string{"STAGE_B", "REJECTED", "WITHDRAWN"}, Country: "TE"},
+		{Code: "STAGE_B", Name: "Stage B", AllowedNext: []string{"STAGE_C", "REJECTED", "WITHDRAWN"}, Country: "TE"},
+		// Terminal stages: no outgoing transitions.
 		{Code: "STAGE_C", Name: "Stage C", AllowedNext: nil, IsTerminal: true, Country: "TE"},
 		{Code: "REJECTED", Name: "Rejected", AllowedNext: nil, IsTerminal: true, Country: "TE"},
 		{Code: "WITHDRAWN", Name: "Withdrawn", AllowedNext: nil, IsTerminal: true, Country: "TE"},

@@ -50,6 +50,7 @@ const (
 //     https://www.parliament.go.ke/the-senate
 func KenyaLegislativeStructure() contracts.LegislativeStructure {
 	return contracts.LegislativeStructure{
+		Country:     contracts.Country("KE"),
 		CountryCode: "KE",
 		CountryName: "Kenya",
 		Houses: []contracts.HouseDefinition{
