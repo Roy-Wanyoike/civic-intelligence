@@ -127,7 +127,22 @@ func main() {
         apiHandler.HandleFunc("/api/v1/subscriptions", makeSubscriptionsHandler(subscriptionStore))
         apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore))
 
+        // Notifications — requires auth (wired via middleware in the handler).
+        
+        
+
+        // Civic Feed — public.
+        apiHandler.HandleFunc("/api/v1/feed", makeCivicFeedHandler(kenyaLaw))
+
+        // Policies — public.
+        apiHandler.HandleFunc("/api/v1/policies", handlePoliciesList)
+
         // Apply OptionalAuth + rate limiting + metrics to the API routes.
+        // Notifications — in-memory store for now.
+        notifStore := NewNotificationStore()
+        apiHandler.Handle("/api/v1/notifications", makeNotificationsHandler(notifStore))
+        apiHandler.Handle("/api/v1/notifications/", makeNotificationDetailHandler(notifStore))
+
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
         mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(metered))
@@ -1126,4 +1141,79 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
         w.Header().Set("Content-Type", "application/json")
         w.WriteHeader(status)
         _ = json.NewEncoder(w).Encode(map[string]string{"error": code, "message": message})
+}
+
+
+// --- Civic Feed (#113) ---
+
+func makeCivicFeedHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+        // For now, return the most recent bills as feed items.
+        // In production, this would aggregate events from all civic domains.
+        ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+        defer cancel()
+
+        bills, err := adapter.DiscoverBills(ctx)
+        if err != nil {
+                writeJSON(w, http.StatusOK, map[string]any{"items": []any{}, "note": "feed unavailable"})
+                return
+        }
+
+        items := make([]map[string]any, 0, len(bills))
+        for i, b := range bills {
+                if i >= 20 {
+                        break
+                }
+                items = append(items, map[string]any{
+                        "kind":         "bill_published",
+                        "title":        b.Title,
+                        "house":        b.House,
+                        "date":         b.PublicationDate.Format("2006-01-02"),
+                        "source_url":   b.URL,
+                        "description":  "New Bill published on Kenya Law",
+                        "significance": "medium",
+                })
+        }
+
+                writeJSON(w, http.StatusOK, map[string]any{
+                        "items": items,
+                        "total": len(items),
+                        "source": "new.kenyalaw.org",
+                })
+        }
+}
+
+// --- Policies (#118) ---
+
+func handlePoliciesList(w http.ResponseWriter, r *http.Request) {
+        policies := []map[string]any{
+                {
+                        "id":             "ke-policy-digital-economy",
+                        "title":          "Digital Economy Strategy",
+                        "institution":    "Ministry of Information, Communication and Digital Economy",
+                        "published_date": "2023-03-15",
+                        "status":         "active",
+                        "source_url":     "https://www.ict.go.ke",
+                        "summary":        "Strategy for Kenya's digital transformation including digital identity, e-government, and digital economy growth.",
+                },
+                {
+                        "id":             "ke-policy-affordable-housing",
+                        "title":          "Affordable Housing Programme",
+                        "institution":    "Ministry of Lands, Public Works, Housing and Urban Development",
+                        "published_date": "2023-01-20",
+                        "status":         "active",
+                        "source_url":     "https://www.housing.go.ke",
+                        "summary":        "Government programme to deliver 500,000 affordable housing units.",
+                },
+                {
+                        "id":             "ke-policy-uhc",
+                        "title":          "Universal Health Coverage",
+                        "institution":    "Ministry of Health",
+                        "published_date": "2023-06-01",
+                        "status":         "active",
+                        "source_url":     "https://www.health.go.ke",
+                        "summary":        "Programme to provide affordable healthcare to all Kenyan citizens.",
+                },
+        }
+        writeJSON(w, http.StatusOK, map[string]any{"items": policies, "total": len(policies)})
 }

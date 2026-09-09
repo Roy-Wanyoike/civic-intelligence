@@ -30,10 +30,13 @@ export function Header() {
             <li><Link href="/following" className="hover:text-civic-leaf">Following</Link></li>
             <li><Link href="/loans" className="hover:text-civic-leaf">Loans</Link></li>
             <li><Link href="/grants" className="hover:text-civic-leaf">Grants</Link></li>
+            <li><Link href="/feed" className="hover:text-civic-leaf">Feed</Link></li>
             <li><Link href="/search" className="hover:text-civic-leaf">Search</Link></li>
+            <li><Link href="/ask" className="hover:text-civic-leaf">Ask Kenya</Link></li>
             <li><Link href="/briefing" className="hover:text-civic-leaf">Daily Brief</Link></li>
             <li><Link href="/committees" className="hover:text-civic-leaf">Committees</Link></li>
             <li><Link href="/people" className="hover:text-civic-leaf">People</Link></li>
+            <li><Link href="/countries" className="hover:text-civic-leaf">Countries</Link></li>
             <li><Link href="/about" className="hover:text-civic-leaf">About</Link></li>
           </ul>
         </nav>
