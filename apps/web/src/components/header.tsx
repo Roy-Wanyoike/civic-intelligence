@@ -27,6 +27,7 @@ export function Header() {
             <li><Link href="/bills" className="hover:text-civic-leaf">Bills</Link></li>
             <li><Link href="/acts" className="hover:text-civic-leaf">Acts</Link></li>
             <li><Link href="/trending" className="hover:text-civic-leaf">Trending</Link></li>
+            <li><Link href="/following" className="hover:text-civic-leaf">Following</Link></li>
             <li><Link href="/loans" className="hover:text-civic-leaf">Loans</Link></li>
             <li><Link href="/grants" className="hover:text-civic-leaf">Grants</Link></li>
             <li><Link href="/search" className="hover:text-civic-leaf">Search</Link></li>

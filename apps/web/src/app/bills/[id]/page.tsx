@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { FileText, GitCompare, History, MessageCircle, Bell } from 'lucide-react';
+import { FileText, GitCompare, History, MessageCircle } from 'lucide-react';
 import { mockBills, mockTimeline } from '@/lib/mock-data';
 import { TimelineView } from '@/components/timeline';
 import { BillAskPanel } from '@/components/bill-ask-panel';
+import { FollowButton } from '@/components/follow-button';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-static';
@@ -139,10 +140,9 @@ export default async function BillDetailPage({
             <p className="mt-2 text-sm text-civic-stone">
               Get notified when this Bill changes stage, is amended, or a new document is published.
             </p>
-            <button type="button" className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-civic-leaf px-3 py-2 text-sm font-semibold text-white hover:bg-civic-leaf/90" data-bill-id={bill.id}>
-              <Bell className="h-4 w-4" aria-hidden="true" />
-              Follow this Bill
-            </button>
+            <div className="mt-3">
+              <FollowButton entityType="bill" entityId={bill.id} label="Follow this Bill" />
+            </div>
           </div>
 
           <div className="rounded-lg border border-civic-border bg-civic-paper p-4 text-xs text-civic-stone">

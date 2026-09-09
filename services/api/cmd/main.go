@@ -29,6 +29,11 @@ type Config struct {
         OIDCJWKSURL     string        `env:"OIDC_JWKS_URL" default:"http://localhost:8081/realms/civic/protocol/openid-connect/certs"`
         DevMode         bool          `env:"DEV_MODE" default:"true"`
         ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" default:"15s"`
+
+        // AIServiceURL is the base URL of the Python AI service (FastAPI).
+        // Used by the bill summarizer, Q&A proxy, and impact-analysis endpoints.
+        // Defaults to the local dev address (port 8000).
+        AIServiceURL string `env:"AI_SERVICE_URL" default:"http://localhost:8000"`
 }
 
 func main() {
@@ -66,8 +71,10 @@ func main() {
         apiHandler := http.NewServeMux()
 
         // Bills — read is public; uses the Kenya Law adapter for real data.
+        // Sub-routes (/api/v1/bills/{id}/summary, /impact) proxy to the Python
+        // AI service when available and fall back to a structured stub otherwise.
         apiHandler.HandleFunc("/api/v1/bills", makeBillsHandler(kenyaLaw))
-        apiHandler.HandleFunc("/api/v1/bills/", makeBillDetailHandler(kenyaLaw))
+        apiHandler.HandleFunc("/api/v1/bills/", makeBillDetailHandler(kenyaLaw, cfg.AIServiceURL))
 
         // Trending — recently enacted + approaching final stage.
         apiHandler.HandleFunc("/api/v1/trending", makeTrendingHandler(kenyaLaw))
@@ -103,11 +110,19 @@ func main() {
         apiHandler.Handle("/api/v1/questions", questionsHandler)
         apiHandler.Handle("/api/v1/questions/stream", questionsHandler)
 
-        // Follow — requires auth.
+        // Follow (legacy single-shot endpoint, kept for backward compat).
         followHandler := middleware.RequireToken(verifier)(
                 middleware.RequireScope(auth.ScopeNotificationWrite)(http.HandlerFunc(handleFollow)),
         )
         apiHandler.Handle("/api/v1/follow", followHandler)
+
+        // Subscriptions — issue #110 (Following). Auth is enforced inside the
+        // handlers via OptionalAuth (set on the outer mux) + PrincipalFromRequest
+        // checks, mirroring how the bills/{id}/follow endpoint behaves. Each
+        // handler returns 401 explicitly when the caller is anonymous.
+        subscriptionStore := NewSubscriptionStore()
+        apiHandler.HandleFunc("/api/v1/subscriptions", makeSubscriptionsHandler(subscriptionStore))
+        apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore))
 
         // Apply OptionalAuth + rate limiting + metrics to the API routes.
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
@@ -221,7 +236,7 @@ func makeBillsHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
         }
 }
 
-func makeBillDetailHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
+func makeBillDetailHandler(adapter *kenya_law.Adapter, aiServiceURL string) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
                 defer cancel()
@@ -235,7 +250,7 @@ func makeBillDetailHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                         return
                 }
 
-                // Sub-routes: timeline, versions, etc.
+                // Sub-routes: timeline, versions, summary, etc.
                 if len(parts) == 2 && parts[1] != "" {
                         sub := parts[1]
                         switch {
@@ -247,6 +262,8 @@ func makeBillDetailHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                                 writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
                         case strings.HasPrefix(sub, "documents"):
                                 writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "documents": []any{}})
+                        case strings.HasPrefix(sub, "summary"):
+                                handleBillSummary(w, r, adapter, billID, aiServiceURL)
                         case strings.HasPrefix(sub, "follow"):
                                 handleFollow(w, r)
                         default:
@@ -499,6 +516,191 @@ func handleBillChanges(w http.ResponseWriter, r *http.Request, adapter *kenya_la
                 "note":    "Version comparison requires multiple Bill versions in the database",
                 "source":  "new.kenyalaw.org",
         })
+}
+
+// --- Bill Summary (#100) ---
+
+// billSummaryResponse is the JSON shape returned by /api/v1/bills/{id}/summary.
+// Every field maps directly to the Python AI service's BillSummary model so the
+// frontend's existing BillSummary type works unchanged. The fallback path
+// (when the AI service is unavailable) populates the same shape but flags every
+// claim as "could not be verified" — the architectural rule is that no claim
+// is ever surfaced without either a citation or an explicit unverifiable flag.
+type billSummaryResponse struct {
+        BillID                   string           `json:"bill_id"`
+        ShortTitle               string           `json:"short_title"`
+        OneLineSummary           string           `json:"one_line_summary"`
+        PlainLanguageExplanation string           `json:"plain_language_explanation"`
+        CurrentStageExplained    string           `json:"current_stage_explained"`
+        WhatItWouldDo            []string         `json:"what_it_would_do"`
+        WhoItAffects             []string         `json:"who_it_affects"`
+        WhatHappensNext          []string         `json:"what_happens_next"`
+        Citations                []map[string]any `json:"citations"`
+        Confidence               string           `json:"confidence"`
+        Validated                bool             `json:"validated"`
+        ValidationFailures       []string         `json:"validation_failures"`
+        Source                   string           `json:"source"`
+}
+
+// handleBillSummary returns an evidence-grounded plain-language summary of a
+// single Bill. It proxies to the Python AI service's
+// POST /v1/bills/{id}/summarize endpoint when available. If the AI service is
+// unreachable, it returns a structured stub derived from the Bill's metadata —
+// every claim is either backed by the source URL (publication metadata from
+// kenyalaw.org) or explicitly flagged as "could not be verified".
+//
+// Route: GET /api/v1/bills/{id}/summary
+func handleBillSummary(w http.ResponseWriter, r *http.Request, adapter *kenya_law.Adapter, billID, aiServiceURL string) {
+        if billID == "" {
+                writeError(w, http.StatusBadRequest, "bad_request", "bill ID required")
+                return
+        }
+
+        ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+        defer cancel()
+
+        bill, err := findBillByID(ctx, adapter, billID)
+        if err != nil {
+                log.Printf("summary handler: adapter error: %v", err)
+                writeError(w, http.StatusServiceUnavailable, "adapter_error", "failed to discover bills from Kenya Law")
+                return
+        }
+        if bill == nil {
+                writeError(w, http.StatusNotFound, "not_found", "bill not found: "+billID)
+                return
+        }
+
+        if aiServiceURL != "" {
+                if summary, ok := callAIBillSummary(ctx, aiServiceURL, bill); ok {
+                        summary.Source = "ai-service"
+                        writeJSON(w, http.StatusOK, summary)
+                        return
+                }
+                log.Printf("summary handler: AI service unavailable, falling back to structured stub for bill %s", billID)
+        }
+
+        // Fallback: structured stub. Every claim is evidence-backed by the
+        // kenyalaw.org source URL or explicitly flagged as unverifiable.
+        year := 0
+        if !bill.PublicationDate.IsZero() {
+                year = bill.PublicationDate.Year()
+        }
+        pubDateStr := ""
+        if !bill.PublicationDate.IsZero() {
+                pubDateStr = bill.PublicationDate.Format("2 January 2006")
+        }
+
+        oneLine := fmt.Sprintf("%s (House: %s, Year: %d)", bill.Title, bill.House, year)
+        explanation := fmt.Sprintf("This is a %s Bill titled %q.", bill.House, bill.Title)
+        if pubDateStr != "" {
+                explanation += fmt.Sprintf(" It was published on Kenya Law Reports on %s.", pubDateStr)
+        }
+        explanation += " The detailed plain-language explanation could not be generated because the AI summarization service is currently unavailable."
+
+        citation := map[string]any{
+                "document_id":  bill.SourceID,
+                "source_url":   bill.URL,
+                "source_type":  "kenya_law",
+                "snippet":      bill.Title,
+                "retrieved_at": time.Now().UTC().Format(time.RFC3339),
+        }
+
+        resp := billSummaryResponse{
+                BillID:                   bill.SourceID,
+                ShortTitle:               bill.Title,
+                OneLineSummary:           oneLine,
+                PlainLanguageExplanation: explanation,
+                CurrentStageExplained:    "Published on Kenya Law Reports. The next stage (First Reading) could not be verified — the parliamentary stage tracker was not consulted.",
+                WhatItWouldDo: []string{
+                        "Could not be verified — the AI summarization service is unavailable. Consult the source document for the Bill's substantive provisions.",
+                },
+                WhoItAffects: []string{
+                        "Could not be verified — the AI summarization service is unavailable.",
+                },
+                WhatHappensNext: []string{
+                        "Could not be verified — pending parliamentary stage data (issue #19).",
+                },
+                Citations:          []map[string]any{citation},
+                Confidence:         "low",
+                Validated:          false,
+                ValidationFailures: []string{"ai_service_unavailable", "no_full_text_extracted"},
+                Source:             "fallback",
+        }
+        writeJSON(w, http.StatusOK, resp)
+}
+
+// callAIBillSummary POSTs to the Python AI service's
+// /v1/bills/{id}/summarize endpoint and returns the parsed summary.
+// Returns (summary, false) on any error — callers fall back to the stub.
+func callAIBillSummary(ctx context.Context, aiServiceURL string, bill *kenya_law.BillCandidate) (billSummaryResponse, bool) {
+        year := 0
+        if !bill.PublicationDate.IsZero() {
+                year = bill.PublicationDate.Year()
+        }
+        // The AI service validates bill_id as UUID, but only uses it as a
+        // passthrough identifier — never for lookup. We generate a deterministic
+        // UUID v5 from the bill's source ID so the same Bill always maps to the
+        // same UUID across calls (useful for log correlation).
+        billUUID := billIDToUUID(bill.SourceID)
+
+        reqBody := map[string]any{
+                "title":         bill.Title,
+                "identifier":    bill.Slug,
+                "year":          year,
+                "sponsor":       nil,
+                "house":         bill.House,
+                "current_stage": "published",
+                "plain_text":    fmt.Sprintf("Bill: %s\nHouse: %s\nPublished: %s\nSource: %s\n", bill.Title, bill.House, bill.PublicationDate.Format("2006-01-02"), bill.URL),
+                "citations":     []any{},
+        }
+        bodyBytes, err := json.Marshal(reqBody)
+        if err != nil {
+                return billSummaryResponse{}, false
+        }
+
+        url := strings.TrimRight(aiServiceURL, "/") + "/v1/bills/" + billUUID + "/summarize"
+        req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+        if err != nil {
+                return billSummaryResponse{}, false
+        }
+        req.Header.Set("Content-Type", "application/json")
+        req.Header.Set("Accept", "application/json")
+
+        client := &http.Client{Timeout: 25 * time.Second}
+        resp, err := client.Do(req)
+        if err != nil {
+                return billSummaryResponse{}, false
+        }
+        defer resp.Body.Close()
+        if resp.StatusCode != http.StatusOK {
+                return billSummaryResponse{}, false
+        }
+
+        raw, err := io.ReadAll(resp.Body)
+        if err != nil {
+                return billSummaryResponse{}, false
+        }
+        var summary billSummaryResponse
+        if err := json.Unmarshal(raw, &summary); err != nil {
+                return billSummaryResponse{}, false
+        }
+        return summary, true
+}
+
+// billIDToUUID derives a deterministic UUID v5 (SHA-1 namespace) string from a
+// bill source ID. The Python AI service's path parameter is typed as UUID.
+func billIDToUUID(billID string) string {
+        var ns [16]byte
+        copy(ns[:], []byte("civic-intelligen"))
+        h := sha1.New()
+        h.Write(ns[:])
+        h.Write([]byte(billID))
+        sum := h.Sum(nil)
+        var b [16]byte
+        copy(b[:], sum[:16])
+        b[6] = (b[6] & 0x0f) | 0x50
+        b[8] = (b[8] & 0x3f) | 0x80
+        return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // --- Search ---
