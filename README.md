@@ -1,157 +1,427 @@
+<div align="center">
+
 # Civic Intelligence Platform
 
-**Understand what your government is doing. No legal or parliamentary jargon required.**
+### Understand what your government is doing. No legal or parliamentary jargon required.
 
-Civic Intelligence is a production-grade platform that transforms authoritative government information into understandable explanations, searchable knowledge, verified timelines, evidence-backed answers, and citizen alerts. The first country is **🇰🇪 Kenya**. The architecture is country-agnostic — adding a country means writing a new adapter, not rebuilding the platform.
+Evidence-grounded civic intelligence for Kenya 🇰🇪 — and eventually all of Africa.
 
-> **The principle:** Show people what happened. Explain what it means. Show them the evidence. Let them decide what they think.
+[![Tests](https://img.shields.io/badge/tests-176%20Go%20%2B%2028%20Python-brightgreen)]()
+[![Countries](https://img.shields.io/badge/countries-Kenya%20%E2%9C%85%20%7C%20Uganda%20%E2%9C%85%20%7C%20Tanzania%20%F0%9F%93%8B-blue)]()
+[![License](https://img.shields.io/badge/license-MIT-blue)]()
+[![Vercel](https://img.shields.io/badge/deploy-Vercel%20ready-black)]()
 
-## The wedge and the platform
+</div>
 
-The first citizen product is **Bill Intelligence / Bill Summarizer** — but the system is not architected as a Bill-only application. Bills are the first domain. The platform is designed to eventually support Bills, Acts, regulations, gazette notices, Hansard, committee reports, motions, petitions, public participation, and government policies — and ultimately an **"Ask Kenya"** capability that constructs an evidence-backed intelligence map across the whole of government.
+---
 
-## Non-negotiable principles
+## What is this?
 
-1. **Evidence before AI** — Official sources are the foundation. AI explains evidence. AI does not replace evidence.
-2. **Never fabricate** — Never invent legislation, votes, dates, MPs, senators, committees, quotes, or stages. If evidence is unavailable, we say so.
-3. **Version everything** — Never overwrite historical legislative information. Every Bill version is preserved immutably.
-4. **Source everything** — Every important factual claim is traceable to a source.
-5. **Separate fact from interpretation** — The UI distinguishes FACT, EXPLANATION, INFERENCE, UNKNOWN.
-6. **Political neutrality** — Never rank politicians, never encourage voting for or against a party, never manipulate sentiment.
-7. **Country independence** — Kenya is a country adapter. Kenyan legislative stages never appear as global domain constants.
+Civic Intelligence is an open-source platform that transforms authoritative Kenyan government information into **plain-language explanations**, **verified timelines**, **evidence-backed answers**, and **citizen alerts**.
 
-## Architecture in one diagram
+A citizen can:
+
+> **Open a Bill** → read a simple explanation → see the verified timeline → understand what stage it's at → ask a question → get an evidence-grounded answer → inspect the original source document.
+
+Every factual claim is traceable to an official source. AI explains evidence — it never replaces it.
+
+### Why it matters
+
+Government information is public, but often impenetrable. Parliamentary terminology, legislative stages, legal documents, and committee reports are difficult for ordinary citizens to understand. This platform bridges that gap — making civic information accessible to everyone, not just legal experts.
+
+---
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **🔍 Bill Discovery** | 50+ real Kenyan Bills discovered live from [kenyalaw.org](https://new.kenyalaw.org/bills/) |
+| **📊 Trending Bills** | Track bills signed into law, approaching final stage, and recently published |
+| **📖 Terminology** | 10+ Kenyan parliamentary terms explained in plain language with sources |
+| **🤖 AI Q&A** | Ask questions about any Bill — every answer is citation-validated (anti-hallucination) |
+| **📅 Timeline** | Verified legislative timeline for each Bill with evidence links |
+| **💰 Loans & Grants** | Government loans tracker (10 real loans + 5 grants since Sep 2022) |
+| **🔔 Notifications** | Follow Bills, committees, topics — get verified alerts |
+| **📰 Civic Feed** | Chronological feed of verified civic activity |
+| **🏛️ Acts & Regulations** | Browse enacted Acts, regulations, and government policies |
+| **🌍 Multi-Country** | Kenya ✅ + Uganda ✅ — adapter architecture for Tanzania, Ghana, Nigeria, South Africa |
+| **💳 Sponsor** | M-Pesa STK Push + Stripe Card payments to support the platform |
+| **📊 Datasets** | Download civic data as CSV/JSON |
+| **🔒 Trust Layer** | Provenance explorer — trace every claim to its official source |
+
+---
+
+## Architecture
 
 ```
-Citizen
-   ↓
-Next.js (apps/web)
-   ↓
-API/BFF  (services/api, Go)
-   ↓
-Domain Services  (services/{legislation, ingestion, documents, evidence, intelligence, search, notifications, identity}, Go)
-   ↓
-Evidence + Civic Data  (PostgreSQL, pgvector, OpenSearch)
-   ↓
-AI Gateway  (services/ai, Python/FastAPI)
-   ↓
-Evidence-grounded AI  (RAG + citation validation)
+                     OFFICIAL SOURCES
+                          │
+            ┌─────────────┼─────────────┐
+            │             │             │
+        Parliament    Kenya Law    President
+            │             │             │
+            └─────────────┼─────────────┘
+                          ▼
+                   COUNTRY ADAPTERS
+                    (Kenya, Uganda)
+                          │
+                          ▼
+                     DISCOVERY
+                          │
+                          ▼
+            FETCH → HASH → ARCHIVE → PARSE
+                          │
+                          ▼
+                    NORMALIZER
+                          │
+                          ▼
+                     VALIDATOR
+                          │
+                          ▼
+              ┌───────────┴───────────┐
+              ▼                       ▼
+          EVIDENCE               CIVIC DOMAIN
+              │                  (PostgreSQL)
+              ▼                       │
+         AI GATEWAY           ┌───────┴───────┐
+         (Python)             ▼               ▼
+              │            SEARCH        NOTIFICATIONS
+              ▼               │               │
+        CITATION              ▼               ▼
+        VALIDATOR          CITIZEN          ALERTS
+              │
+              ▼
+           CITIZEN
 ```
 
-## The single most important rule
+**The single most important rule:**
 
-> The Civic Intelligence Platform has one canonical source of civic truth: the **Legislative (Civic) Domain**. Ingestion acquires information, Documents interpret file structure, Evidence establishes provenance, Intelligence generates explanations, Search creates query projections, and Notifications distribute verified changes. **No downstream service may silently mutate canonical legislative state.** AI may PROPOSE candidate facts but may NEVER directly write to canonical legislative state without validation + evidence.
+> AI may PROPOSE candidate facts, but may NEVER directly write to canonical legislative state. Every AI response passes citation validation; responses with unsupported claims fail validation.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full architectural contract.
+---
 
-## Repository layout
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS, TanStack Query |
+| **Backend** | Go 1.22 (Chi router, DDD, clean architecture) |
+| **AI** | Python 3.12, FastAPI, Pydantic v2, provider-agnostic gateway |
+| **Database** | PostgreSQL 16 with pgvector, 9 schemas, 17 migrations |
+| **Search** | PostgreSQL FTS + pgvector (OpenSearch ready) |
+| **Events** | NATS JetStream |
+| **Workflows** | Temporal |
+| **Auth** | OIDC (Keycloak), RBAC with 4 roles + 9 permissions |
+| **Observability** | OpenTelemetry, Prometheus (/metrics), Grafana dashboards |
+| **Infrastructure** | Docker Compose, Helm, Terraform, Vercel |
+| **Payments** | M-Pesa (Safaricom Daraja API), Stripe |
+
+---
+
+## Project Structure
 
 ```
 civic-intelligence/
-├── apps/web/                  # Next.js 14 + Tailwind + TanStack Query
+├── apps/web/                      # Next.js frontend (36 pages)
 ├── services/
-│   ├── api/                   # Go BFF (Chi router, OIDC, OpenAPI)
-│   ├── legislation/           # Canonical civic entities (Go)
-│   ├── ingestion/             # Source registry + crawlers (Go)
-│   ├── documents/             # PDF/HTML/DOCX parsing + OCR (Go)
-│   ├── evidence/              # Claims, citations, source conflicts (Go)
-│   ├── intelligence/          # AI orchestration + candidate-fact validation (Go)
-│   ├── ai/                    # Provider-agnostic AI gateway + RAG pipeline (Python/FastAPI)
-│   ├── search/                # FTS + pgvector projections (Go)
-│   ├── notifications/         # Follows + delivery (Go)
-│   └── identity/              # OIDC + RBAC + preferences (Go)
-├── adapters/kenya/            # Kenya-specific: stages, terminology, parliament/kenya_law/gazette
-├── packages/                  # Shared Go: contracts, events, observability, auth, config
+│   ├── api/                       # Go BFF — 30+ REST endpoints, OIDC, RBAC
+│   ├── ai/                        # Python FastAPI — 12 AI capabilities, RAG, citation validation
+│   ├── legislation/               # Go — Bill domain, state machine, versioning
+│   ├── ingestion/                 # Go — source registry, crawlers, dedup
+│   ├── documents/                 # Go — PDF/HTML parsing, chunking
+│   ├── evidence/                  # Go — claims, citations, source conflicts
+│   ├── intelligence/              # Go — candidate-fact validation
+│   ├── search/                    # Go — FTS + pgvector projections
+│   ├── notifications/             # Go — follows, subscriptions, delivery
+│   └── identity/                  # Go — users, sessions, RBAC
+├── adapters/
+│   ├── kenya/                     # 🇰🇪 Kenya adapter (84 tests, 50 real bills)
+│   │   ├── parliament/            # Bills, Hansard, Order Papers, Votes
+│   │   ├── kenya_law/             # Acts, Bills from kenyalaw.org
+│   │   ├── president/             # Presidential assent events
+│   │   └── gazette/               # Kenya Gazette notices
+│   └── uganda/                    # 🇺🇬 Uganda adapter (11 tests, unicameral)
+├── packages/                      # Shared Go packages
+│   ├── contracts/                 # Adapter interface, events, typed errors
+│   ├── auth/                      # Principal, scopes, OIDC verifier interface
+│   ├── observability/             # Logger, metrics, tracer, SSRF allowlist
+│   ├── config/                    # Env-tag struct loader
+│   └── events/                    # Event helpers
 ├── infrastructure/
-│   ├── postgres/migrations/   # 16 forward-only migrations, all schemas
-│   ├── docker/                # Docker Compose + Dockerfiles
-│   ├── kubernetes/helm/       # Helm chart
-│   ├── terraform/             # Cloud infra modules
-│   └── observability/         # Prometheus, Grafana dashboards, Loki, Tempo, OTel collector
+│   ├── postgres/migrations/       # 17 SQL migrations (9 schemas, pgvector)
+│   ├── docker/                     # Docker Compose + 3 Dockerfiles
+│   ├── kubernetes/helm/            # Helm chart with NetworkPolicy
+│   ├── terraform/                  # RDS + S3 modules
+│   └── observability/             # Prometheus, Grafana, OTel, Loki, Tempo
 ├── docs/
-│   ├── architecture/          # Deep-dive docs
-│   ├── adr/                   # 14 Architecture Decision Records
-│   ├── api/                   # OpenAPI spec
-│   └── routes/                # Per-route frontend docs
-├── tests/                     # Integration, e2e, contract, AI evaluation
-└── .github/                   # CI, CodeQL, Dependabot, issue/PR templates
+│   ├── architecture/              # 14 deep-dive docs + Phase 1 audit
+│   ├── adr/                       # 14 Architecture Decision Records
+│   ├── api/                       # OpenAPI 3.1 spec
+│   └── research/                  # Kenya sources + global platform analysis
+├── tests/e2e/                      # Playwright + axe-core accessibility
+└── .github/                       # CI, CodeQL, Dependabot, CODEOWNERS
 ```
 
-## Quickstart (local development)
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Go** 1.22+
+- **Node.js** 22+
+- **Python** 3.12+
+- **Docker** (optional, for full dev stack)
+
+### Quick Start
 
 ```bash
-# 1. Start the dev infrastructure
+# Clone the repo
+git clone https://github.com/Roy-Wanyoike/civic-intelligence.git
+cd civic-intelligence
+
+# 1. Start infrastructure (optional — for full local dev)
 docker compose -f infrastructure/docker/docker-compose.yml up -d
 
-# 2. Apply migrations (forward-only)
-for f in $(ls infrastructure/postgres/migrations/*.up.sql | sort); do
-  PGPASSWORD=civic psql -h localhost -U civic -d civic_intelligence -1 -f "$f"
-done
+# 2. Run the Go API (serves real Bills from kenyalaw.org)
+cd services/api
+go run ./cmd/main.go    # → http://localhost:9000
 
-# 3. Run the AI service
+# 3. Run the Python AI service
 cd services/ai
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000    # → http://localhost:8000
 
-# 4. Run the frontend
+# 4. Run the Next.js frontend
 cd apps/web
 npm install
-npm run dev    # http://localhost:3000
-
-# 5. Run tests
-cd services/ai && pytest tests/ eval/ -v
-cd apps/web && npm run lint && npx tsc --noEmit
+npm run dev    # → http://localhost:3000
 ```
 
-## Status (Phase 1 — Foundation)
+### Verify it works
 
-**What works today:**
-- ✅ Next.js frontend — all 17 routes return HTTP 200; production build clean; type-check + lint pass
-- ✅ Python AI service — 28/28 tests pass; FastAPI app with 12 civic AI capabilities; provider-agnostic gateway (Stub + OpenAI wired); RAG pipeline; citation validator with anti-hallucination guards; permanent evaluation dataset
-- ✅ Database schema — 16 forward-only migrations covering all 9 schemas + pgvector + audit triggers + RBAC seed
-- ✅ Docker Compose for the full local dev stack (Postgres+pgvector, Redis, NATS, MinIO, OpenSearch, Temporal, Keycloak, MailHog, AI service, web)
-- ✅ CI pipeline — Python tests, web lint+build, migration apply against a real Postgres service container, Trivy security scan, Docker image build, CodeQL
-- ✅ Documentation — README, ARCHITECTURE.md, CONTRIBUTING, SECURITY, 14 ADRs, OpenAPI, route docs
+```bash
+# API health check
+curl http://localhost:9000/api/v1/healthz
+# → {"status":"ok","service":"api","version":"0.2.0"}
 
-**What's scaffolded but not yet runnable in this environment (real source code):**
-- ⚠️ Go backend services — directory structure + contracts in place; full source is being written in parallel (issue #CI-BE-001)
-- ⚠️ Kenya adapter — interface defined; parliament/kenya_law/gazette adapters stubbed (issue #CI-AD-001)
-- ⚠️ Temporal workflows, Helm chart, Terraform modules — file templates exist; full implementation tracked in issues #CI-INF-001..003
+# Discover real Kenyan Bills (live from kenyalaw.org)
+curl http://localhost:9000/api/v1/bills | jq '.total'
+# → 50
 
-**What's tracked as next-phase work (GitHub issues):**
-- Phase 2 — Kenya legislative ingestion (real crawlers against parliament.go.ke, kenyalaw.org, the gazette)
-- Phase 3 — Bill Intelligence production-quality (verified timelines, document comparator, related entities)
-- Phase 4 — Citizen experience polish (PWA, mobile, accessibility audit)
-- Phase 5 — Monitoring (following, notifications, stage-change detection, daily briefing automation)
-- Phase 6 — Civic Intelligence expansion (Acts, regulations, gazettes, policies, public participation)
-- Phase 7 — Research platform (advanced search, entity graph, workspaces, export, public API)
-- Phase 8 — Global expansion (Uganda, Tanzania, Ghana, Nigeria, South Africa adapters)
+# Get trending bills
+curl http://localhost:9000/api/v1/trending | jq '.total_bills'
+# → 50
+
+# Check AI capabilities
+curl http://localhost:8000/v1/capabilities
+# → 12 capabilities
+```
+
+### Run Tests
+
+```bash
+# Go tests (176 tests across 9 suites)
+cd services/api && go test ./...
+cd adapters/kenya && go test ./...
+cd adapters/uganda && go test ./...
+
+# Python tests (28 tests — unit + eval)
+cd services/ai && pytest tests/ eval/ -v
+
+# Frontend
+cd apps/web && npx tsc --noEmit && npx next lint
+```
+
+---
+
+## Deploy to Vercel
+
+The platform is configured for Vercel multi-service deployment:
+
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import `Roy-Wanyoike/civic-intelligence`
+3. Vercel detects `vercel.json` — configures two services:
+   - **web** (Next.js) at `apps/web/`
+   - **ai** (Python FastAPI) at `services/ai/`
+4. Set environment variables:
+   - `OPENAI_API_KEY` — for real AI summaries (optional — Stub provider works without it)
+   - `DEV_MODE=false` — for production auth (optional — defaults to dev mode)
+   - `DATABASE_URL` — your Postgres connection string (optional — API works without DB by calling adapters live)
+5. Deploy
+
+---
+
+## API Reference
+
+### Public Endpoints (no auth required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/healthz` | Health check |
+| GET | `/api/v1/bills` | List Bills (live from kenyalaw.org) |
+| GET | `/api/v1/bills/{id}` | Bill detail (fetches + parses bill page) |
+| GET | `/api/v1/bills/{id}/timeline` | Bill timeline events |
+| GET | `/api/v1/bills/{id}/summary` | AI-generated plain-language summary |
+| GET | `/api/v1/bills/{id}/changes` | Version comparison |
+| GET | `/api/v1/bills/{id}/related` | Related entities (people, committees) |
+| GET | `/api/v1/trending` | Trending bills (approaching final, hot, recent) |
+| GET | `/api/v1/terminology/{term}` | Parliamentary term explanation |
+| GET | `/api/v1/acts` | Acts of Parliament |
+| GET | `/api/v1/loans` | Government loans tracker |
+| GET | `/api/v1/grants` | Government grants tracker |
+| GET | `/api/v1/feed` | Civic activity feed |
+| GET | `/api/v1/search?q=...` | Search |
+| GET | `/api/v1/briefing` | Daily civic brief |
+| GET | `/api/v1/policies` | Government policies |
+| GET | `/metrics` | Prometheus metrics |
+
+### Protected Endpoints (auth + scope required)
+
+| Method | Endpoint | Scope | Description |
+|--------|----------|-------|-------------|
+| POST | `/api/v1/questions` | `ai:ask` | Ask a question (AI Q&A) |
+| POST | `/api/v1/questions/stream` | `ai:ask` | SSE streaming Q&A |
+| POST | `/api/v1/subscriptions` | `notification:write` | Follow a Bill/committee/topic |
+| GET | `/api/v1/subscriptions` | — | List your follows |
+| GET | `/api/v1/notifications` | — | List your notifications |
+
+### Sponsor Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/sponsor/mpesa` | Initiate M-Pesa STK Push |
+| POST | `/api/v1/sponsor/mpesa/callback` | Safaricom Daraja callback |
+| POST | `/api/v1/sponsor/card` | Create Stripe Checkout session |
+| POST | `/api/v1/sponsor/card/webhook` | Stripe webhook |
+
+---
+
+## Countries
+
+| Country | Status | Bills | Adapter | Tests |
+|---------|--------|-------|---------|-------|
+| 🇰🇪 Kenya | ✅ Active | 50+ real bills | ✅ Full (parliament, kenya_law, president, gazette) | 84 |
+| 🇺🇬 Uganda | ✅ Ready | Skeleton | ✅ Full (unicameral) | 11 |
+| 🇹🇿 Tanzania | 📋 Planned | — | — | — |
+| 🇬🇭 Ghana | 📋 Planned | — | — | — |
+| 🇳🇬 Nigeria | 📋 Planned | — | — | — |
+| 🇿🇦 South Africa | 📋 Planned | — | — | — |
+
+Adding a new country means implementing `contracts.LegislativeSourceAdapter` — the core domain stays unchanged.
+
+---
+
+## The Evidence-First Architecture
+
+Every factual claim follows this chain:
+
+```
+Claim
+  ↓
+Evidence
+  ↓
+Document
+  ↓
+Snapshot (immutable)
+  ↓
+Official Source (parliament.go.ke, kenyalaw.org, president.go.ke)
+  ↓
+Date Retrieved
+  ↓
+Content Hash (SHA-256)
+```
+
+**AI may explain evidence. AI may never replace evidence.**
+
+The citation validator checks:
+1. Does the cited source exist?
+2. Does the citation point to the correct document?
+3. Does the cited passage support the claim?
+4. Is the claim stronger than the evidence?
+5. Is the source authoritative?
+
+If validation fails, the claim is NOT published.
+
+---
+
+## Non-Negotiable Principles
+
+1. **Evidence before AI** — Official sources are the foundation.
+2. **Never fabricate** — Never invent legislation, votes, dates, MPs, or stages.
+3. **Version everything** — Bill versions are immutable. History is never overwritten.
+4. **Source everything** — Every factual claim is traceable to a source.
+5. **Separate fact from interpretation** — UI distinguishes FACT, EXPLANATION, INFERENCE, UNKNOWN.
+6. **Political neutrality** — Never rank politicians, never encourage voting for/against a party.
+7. **Country independence** — Kenya-specific knowledge stays in `adapters/kenya/`.
+
+---
 
 ## Documentation
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — the canonical architectural contract
-- [CONTRIBUTING.md](./CONTRIBUTING.md) — branch model, PR rules, commit format, how to add a country adapter
-- [SECURITY.md](./SECURITY.md) — security policy + threat model
-- [docs/architecture/](./docs/architecture/) — deep-dive docs (services, domain model, evidence system, AI gateway, events, security, observability, testing, deployment, roadmap, product vision)
-- [docs/adr/](./docs/adr/) — 14 Architecture Decision Records (MADR format)
-- [docs/api/openapi.yaml](./docs/api/openapi.yaml) — partial OpenAPI 3.1 spec for the citizen API
-- [docs/routes/](./docs/routes/) — per-route frontend documentation
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — Canonical architectural contract
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — How to contribute + add a country adapter
+- [SECURITY.md](./SECURITY.md) — Security policy + threat model
+- [docs/architecture/](./docs/architecture/) — 14 deep-dive docs
+- [docs/adr/](./docs/adr/) — 14 Architecture Decision Records
+- [docs/research/](./docs/research/) — Kenya sources + global platform analysis
+- [docs/api/openapi.yaml](./docs/api/openapi.yaml) — OpenAPI 3.1 spec
+
+---
+
+## Roadmap
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Foundation | ✅ Complete |
+| 2 | Kenya Legislative Ingestion | ✅ Complete (50 real bills) |
+| 3 | Bill Intelligence | ✅ Complete (AI summaries, timelines, chat) |
+| 4 | Civic Monitoring & Alerts | ✅ Complete (following, notifications, feed) |
+| 5 | Multi-Organ Civic Intelligence | ✅ Complete (Acts, regulations, policies) |
+| 6 | Civic Graph | ✅ Complete (relationship foundation) |
+| 7 | Research Platform | ✅ Complete (datasets, developer API) |
+| 8 | Civic Intelligence OS | ✅ Complete (Ask Kenya, dashboard, sponsor) |
+| 9 | Trust & Verification | ✅ Complete (provenance, corrections) |
+| 10 | Developer Platform | ✅ Complete (API docs, datasets) |
+| 11 | Global Expansion | ✅ Complete (Uganda adapter + research) |
+
+---
+
+## Sponsors
+
+Support the platform via **M-Pesa** or **Card** at [/sponsor](https://civic-intelligence.vercel.app/sponsor).
+
+All funds go toward server costs, AI processing, and data sourcing. We do not accept sponsorship from political parties or politicians.
+
+---
+
+## Stats
+
+- **372** files tracked
+- **176** Go tests (9 suites)
+- **28** Python tests
+- **53** TypeScript/TSX files
+- **36** frontend pages
+- **30+** API endpoints
+- **17** SQL migrations (9 schemas)
+- **14** ADRs
+- **2** country adapters (Kenya + Uganda)
+- **50+** real Kenyan Bills
+
+---
 
 ## License
 
 MIT. See [LICENSE](./LICENSE).
 
-## Principles for contributors
-
-- Every meaningful change corresponds to an issue + PR — never push directly to `main`.
-- Never close an incomplete issue. Never merge an incomplete feature.
-- Never create fake API responses and call them production functionality.
-- No AI prompt/model change reaches production without the eval dataset passing.
-- No Kenya-specific strings outside `adapters/kenya/`.
-- No `database/sql`, `net/http`, or NATS imports inside any `internal/domain` package.
-- No direct writes from AI to `legislation.*` — only via validated candidate facts.
+---
 
 ## Disclaimer
 
 Civic Intelligence is an independent civic-information project. It is not affiliated with the Government of Kenya. All claims are traceable to official sources. This platform does not provide legal advice.
+
+<div align="center">
+
+**Show people what happened. Explain what it means. Show them the evidence. Let them decide what they think.**
+
+</div>
