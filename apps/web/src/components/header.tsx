@@ -36,7 +36,9 @@ export function Header() {
             <li><Link href="/briefing" className="hover:text-civic-leaf">Daily Brief</Link></li>
             <li><Link href="/committees" className="hover:text-civic-leaf">Committees</Link></li>
             <li><Link href="/people" className="hover:text-civic-leaf">People</Link></li>
+            <li><Link href="/datasets" className="hover:text-civic-leaf">Datasets</Link></li>
             <li><Link href="/countries" className="hover:text-civic-leaf">Countries</Link></li>
+            <li><Link href="/dashboard" className="hover:text-civic-leaf">Dashboard</Link></li>
             <li><Link href="/sponsor" className="hover:text-civic-leaf">Sponsor</Link></li>
             <li><Link href="/about" className="hover:text-civic-leaf">About</Link></li>
           </ul>
