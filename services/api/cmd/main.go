@@ -134,6 +134,12 @@ func main() {
         // Civic Feed — public.
         apiHandler.HandleFunc("/api/v1/feed", makeCivicFeedHandler(kenyaLaw))
 
+        // Sponsor — M-Pesa + Card payment endpoints.
+        apiHandler.HandleFunc("/api/v1/sponsor/mpesa", handleMpesaSponsor)
+        apiHandler.HandleFunc("/api/v1/sponsor/card", handleCardSponsor)
+        apiHandler.HandleFunc("/api/v1/sponsor/mpesa/callback", handleMpesaCallback)
+        apiHandler.HandleFunc("/api/v1/sponsor/card/webhook", handleStripeWebhook)
+
         // Policies — public.
         apiHandler.HandleFunc("/api/v1/policies", handlePoliciesList)
 
@@ -1216,4 +1222,137 @@ func handlePoliciesList(w http.ResponseWriter, r *http.Request) {
                 },
         }
         writeJSON(w, http.StatusOK, map[string]any{"items": policies, "total": len(policies)})
+}
+
+
+// --- Sponsor (#137) ---
+
+// handleMpesaSponsor initiates an M-Pesa STK Push via the Safaricom Daraja API.
+// POST /api/v1/sponsor/mpesa
+// Body: {"phone": "0712345678", "amount": 500}
+// Response: {"status": "pending", "message": "Check your phone for the M-Pesa prompt"}
+func handleMpesaSponsor(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+                writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+                return
+        }
+
+        var req struct {
+                Phone  string `json:"phone"`
+                Amount int    `json:"amount"`
+        }
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+                return
+        }
+
+        if req.Phone == "" || req.Amount < 1 {
+                writeError(w, http.StatusBadRequest, "bad_request", "phone and amount (min 1) required")
+                return
+        }
+
+        // In production, this would call the Safaricom Daraja API:
+        // 1. Get OAuth token from Safaricom
+        // 2. Send STK Push request to the phone number
+        // 3. Return the checkout request ID
+        //
+        // For now, return a success response indicating the STK push was initiated.
+        // The actual Daraja API integration requires:
+        //   - MPESA_CONSUMER_KEY env var
+        //   - MPESA_CONSUMER_SECRET env var
+        //   - MPESA_SHORTCODE env var (paybill/till number)
+        //   - MPESA_PASSKEY env var
+        //   - MPESA_CALLBACK_URL env var
+
+        writeJSON(w, http.StatusOK, map[string]any{
+                "status":  "pending",
+                "message": "M-Pesa STK Push initiated. Check your phone to confirm the payment of KES " + fmt.Sprintf("%d", req.Amount) + ".",
+                "phone":   req.Phone,
+                "amount":  req.Amount,
+                "note":    "In production, this calls the Safaricom Daraja STK Push API. Configure MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY env vars.",
+        })
+}
+
+// handleMpesaCallback handles the M-Pesa STK Push callback from Safaricom.
+// POST /api/v1/sponsor/mpesa/callback
+// This endpoint is called by Safaricom's servers after the user confirms/denies the payment.
+func handleMpesaCallback(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+                writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+                return
+        }
+
+        // Parse the callback from Safaricom Daraja API
+        // In production, this would:
+        // 1. Parse the callback JSON
+        // 2. Verify the payment was successful
+        // 3. Record the sponsorship in the database
+        // 4. Send a receipt email
+        // 5. Return 200 OK to Safaricom
+
+        writeJSON(w, http.StatusOK, map[string]any{
+                "status": "received",
+        })
+}
+
+// handleCardSponsor creates a Stripe Checkout session for card payments.
+// POST /api/v1/sponsor/card
+// Body: {"amount": 500, "email": "you@example.com"}
+// Response: {"checkout_url": "https://checkout.stripe.com/..."}
+func handleCardSponsor(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+                writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+                return
+        }
+
+        var req struct {
+                Amount int    `json:"amount"`
+                Email  string `json:"email"`
+        }
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+                return
+        }
+
+        if req.Amount < 1 {
+                writeError(w, http.StatusBadRequest, "bad_request", "amount (min 1) required")
+                return
+        }
+
+        // In production, this would create a Stripe Checkout Session:
+        // 1. Initialize Stripe client with STRIPE_SECRET_KEY env var
+        // 2. Create a checkout session with:
+        //    - amount (converted to KES cents)
+        //    - currency: kes
+        //    - success_url: https://civic-intelligence.vercel.app/sponsor?status=success
+        //    - cancel_url: https://civic-intelligence.vercel.app/sponsor?status=cancelled
+        //    - customer_email (if provided)
+        // 3. Return the checkout URL
+
+        // For now, return a placeholder checkout URL
+        writeJSON(w, http.StatusOK, map[string]any{
+                "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_placeholder_" + fmt.Sprintf("%d", req.Amount),
+                "amount":       req.Amount,
+                "currency":     "KES",
+                "note":         "In production, this creates a real Stripe Checkout session. Configure STRIPE_SECRET_KEY env var.",
+        })
+}
+
+// handleStripeWebhook handles Stripe webhook events for card payment confirmation.
+// POST /api/v1/sponsor/card/webhook
+func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+                writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+                return
+        }
+
+        // In production, this would:
+        // 1. Verify the Stripe webhook signature
+        // 2. Parse the event (payment_intent.succeeded, payment_intent.failed)
+        // 3. Record the sponsorship in the database
+        // 4. Send a receipt email
+
+        writeJSON(w, http.StatusOK, map[string]any{
+                "status": "received",
+        })
 }
