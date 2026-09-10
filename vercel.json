@@ -6,12 +6,12 @@
       "framework": "nextjs"
     },
     "ai": {
-      "root": "services/ai"
-    }
-  },
-  "functions": {
-    "services/ai/api/index.py": {
-      "runtime": "@vercel/python@latest"
+      "root": "services/ai",
+      "functions": {
+        "api/index.py": {
+          "runtime": "@vercel/python@latest"
+        }
+      }
     }
   },
   "rewrites": [
