@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Ask Kenya',
-  description: 'Ask a question about Kenyan civic activity.',
+  description: 'Ask any question about Kenyan civic activity. Every answer is evidence-grounded.',
 };
 
 export default function AskPage() {
@@ -11,7 +12,7 @@ export default function AskPage() {
       <h1 className="font-serif text-3xl font-semibold text-civic-forest">Ask Kenya</h1>
       <p className="mt-2 text-sm text-civic-stone">
         Ask any question about Kenyan legislation, regulations, or government activity.
-        Every answer is evidence-grounded.
+        Every answer is evidence-grounded and citation-validated.
       </p>
       <div className="mt-8">
         <form action="/search" className="flex gap-2">
@@ -28,10 +29,18 @@ export default function AskPage() {
         </form>
       </div>
       <div className="mt-6 flex flex-wrap gap-2">
-        {['What is happening with the Housing Bill?', 'What did the President sign today?', 'What laws affect small businesses?', 'What changed in data protection?'].map(q => (
-          <a key={q} href={`/search?q=${encodeURIComponent(q)}`} className="rounded-full bg-civic-mist px-3 py-1 text-sm text-civic-stone hover:bg-civic-leaf/10 hover:text-civic-leaf">
+        {[
+          'What is happening with the Housing Bill?',
+          'What did the President sign today?',
+          'What laws affect small businesses?',
+          'What changed in data protection?',
+          'What is Parliament doing about AI?',
+          'What regulations affect tenants?',
+          'What government loans were taken in 2024?',
+        ].map(q => (
+          <Link key={q} href={`/search?q=${encodeURIComponent(q)}`} className="rounded-full bg-civic-mist px-3 py-1 text-sm text-civic-stone hover:bg-civic-leaf/10 hover:text-civic-leaf">
             {q}
-          </a>
+          </Link>
         ))}
       </div>
     </div>
