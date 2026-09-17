@@ -69,3 +69,41 @@ body {
   header, footer, nav, .no-print { display: none !important; }
   main { padding: 0 !important; }
 }
+
+/* Mobile responsive fixes — ensure no horizontal overflow */
+@media (max-width: 640px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    overflow-x: hidden;
+  }
+  main {
+    width: 100%;
+    max-width: 100%;
+  }
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* Ensure touch targets are at least 44px on mobile */
+@media (max-width: 768px) {
+  button,
+  a[role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
