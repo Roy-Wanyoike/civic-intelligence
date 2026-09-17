@@ -9,9 +9,12 @@
 package main
 
 import (
+        "context"
         "net/http"
         "strings"
         "time"
+
+        "github.com/Roy-Wanyoike/civic-intelligence/services/legislation"
 )
 
 // PostAssentEventResponse is the JSON representation of a post-assent event.
@@ -43,29 +46,42 @@ type ActAuditResponse struct {
         Disclaimer         string   `json:"disclaimer"`
 }
 
-// samplePostAssentEvents is a placeholder for the in-memory store. In
-// production these come from the legislation service's ActRepository.
-var samplePostAssentEvents = map[string][]PostAssentEventResponse{
-        "ke-act-data-protection-2019": {
-                {
-                        ID:          "ev-dpa-1",
-                        ActID:       "ke-act-data-protection-2019",
-                        EventType:   "COMMENCEMENT",
-                        EventDate:   time.Date(2019, 11, 25, 0, 0, 0, 0, time.UTC),
-                        Title:       "Commencement Notice",
-                        Description: "The Data Protection Act, 2019 commenced on 25 November 2019.",
-                        SourceURL:   "https://www.kenyalaw.org/kl/index.php?id=4639",
-                },
-                {
-                        ID:          "ev-dpa-2",
-                        ActID:       "ke-act-data-protection-2019",
-                        EventType:   "REGULATION",
-                        EventDate:   time.Date(2021, 2, 12, 0, 0, 0, 0, time.UTC),
-                        Title:       "Data Protection (General) Regulations, 2021",
-                        Description: "Regulations issued under section 71 of the Act.",
-                        SourceURL:   "https://www.kenyalaw.org/kl/index.php?id=10675",
-                },
-        },
+// samplePostAssentEvents is a cached map built from actRepo at startup.
+// It is keyed by Act ID and contains the same events the repository
+// exposes via ListPostAssentEvents. The handlers query actRepo directly;
+// this map is kept for any legacy callers and as a stable in-process
+// snapshot for tests that want a deterministic view of seed events.
+var samplePostAssentEvents = buildSamplePostAssentEvents()
+
+func buildSamplePostAssentEvents() map[string][]PostAssentEventResponse {
+        acts, err := actRepo.ListActs(context.Background(), legislation.ActFilter{})
+        if err != nil {
+                return map[string][]PostAssentEventResponse{}
+        }
+        out := map[string][]PostAssentEventResponse{}
+        for _, a := range acts {
+                events, _ := actRepo.ListPostAssentEvents(context.Background(), legislation.ID(a.ID))
+                resps := make([]PostAssentEventResponse, 0, len(events))
+                for _, e := range events {
+                        resps = append(resps, toPostAssentEventResponse(e))
+                }
+                out[string(a.ID)] = resps
+        }
+        return out
+}
+
+// toPostAssentEventResponse converts a domain PostAssentEvent into the JSON
+// response shape.
+func toPostAssentEventResponse(e legislation.PostAssentEvent) PostAssentEventResponse {
+        return PostAssentEventResponse{
+                ID:          string(e.ID),
+                ActID:       string(e.ActID),
+                EventType:   string(e.EventType),
+                EventDate:   e.EventDate,
+                Title:       e.Title,
+                Description: e.Description,
+                SourceURL:   e.SourceURL,
+        }
 }
 
 // makeActRouter routes /api/v1/acts/{id} and sub-resources to the
@@ -116,20 +132,19 @@ func makeActAuditHandler() http.HandlerFunc {
                 w.Header().Set("Content-Type", "application/json")
                 path := strings.TrimPrefix(r.URL.Path, "/api/v1/acts/")
                 id := strings.TrimSuffix(path, "/audit")
-                // Find the act in sampleActs.
-                var found *actResponse
-                for i := range sampleActs {
-                        if sampleActs[i].ID == id {
-                                found = &sampleActs[i]
-                                break
-                        }
-                }
-                if found == nil {
+                // Query the repository for the act.
+                a, err := actRepo.GetAct(r.Context(), legislation.ID(id))
+                if err != nil {
                         writeError(w, http.StatusNotFound, "not_found", "act not found: "+id)
                         return
                 }
-                events := samplePostAssentEvents[id]
-                audit := buildAudit(*found, events)
+                // Query the repository for the act's post-assent events.
+                domainEvents, _ := actRepo.ListPostAssentEvents(r.Context(), legislation.ID(id))
+                events := make([]PostAssentEventResponse, 0, len(domainEvents))
+                for _, e := range domainEvents {
+                        events = append(events, toPostAssentEventResponse(e))
+                }
+                audit := buildAudit(toActResponse(*a), events)
                 writeJSON(w, http.StatusOK, audit)
         }
 }
@@ -144,9 +159,11 @@ func makeActEventsHandler() http.HandlerFunc {
                 w.Header().Set("Content-Type", "application/json")
                 path := strings.TrimPrefix(r.URL.Path, "/api/v1/acts/")
                 id := strings.TrimSuffix(path, "/events")
-                events := samplePostAssentEvents[id]
-                if events == nil {
-                        events = []PostAssentEventResponse{}
+                // Query the repository for the act's post-assent events.
+                domainEvents, _ := actRepo.ListPostAssentEvents(r.Context(), legislation.ID(id))
+                events := make([]PostAssentEventResponse, 0, len(domainEvents))
+                for _, e := range domainEvents {
+                        events = append(events, toPostAssentEventResponse(e))
                 }
                 writeJSON(w, http.StatusOK, map[string]any{
                         "act_id":     id,
@@ -204,17 +221,13 @@ func makeLineageHandler() http.HandlerFunc {
                 w.Header().Set("Content-Type", "application/json")
                 path := strings.TrimPrefix(r.URL.Path, "/api/v1/acts/")
                 id := strings.TrimSuffix(path, "/lineage")
-                var found *actResponse
-                for i := range sampleActs {
-                        if sampleActs[i].ID == id {
-                                found = &sampleActs[i]
-                                break
-                        }
-                }
-                if found == nil {
+                // Query the repository for the act.
+                a, err := actRepo.GetAct(r.Context(), legislation.ID(id))
+                if err != nil {
                         writeError(w, http.StatusNotFound, "not_found", "act not found: "+id)
                         return
                 }
+                found := toActResponse(*a)
                 writeJSON(w, http.StatusOK, map[string]any{
                         "act_id": id,
                         "lineage": []map[string]any{

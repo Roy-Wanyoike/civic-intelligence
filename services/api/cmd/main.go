@@ -17,11 +17,13 @@ import (
         "time"
 
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_law"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_seed"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/auth"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/config"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/observability"
         "github.com/Roy-Wanyoike/civic-intelligence/services/api/internal/middleware"
         "github.com/Roy-Wanyoike/civic-intelligence/services/api/internal/oidc"
+        "github.com/Roy-Wanyoike/civic-intelligence/services/legislation"
 )
 
 // Config holds the API service's runtime configuration.
@@ -1060,86 +1062,93 @@ type actResponse struct {
         Summary          string `json:"summary,omitempty"`
 }
 
-// sampleActs is verified, real Kenyan Acts of Parliament. Each row links to
-// the official Kenya Law (kenyalaw.org) source. Until the legislation service
-// is wired in (issue #19), this sample list demonstrates the canonical shape
-// the API contract commits to.
-//
-// Sources verified via kenyalaw.org and the Office of the Attorney General.
-var sampleActs = []actResponse{
-        {
-                ID:               "ke-act-constitution-2010",
-                Title:            "Constitution of Kenya",
-                Citation:         "Constitution of Kenya, 2010",
-                AssentDate:       "2010-08-27",
-                CommencementDate: "2010-08-27",
-                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=398",
-                Status:           "in_force",
-                Country:          "KE",
-                Summary:          "Supreme law of Kenya, promulgated on 27 August 2010, replacing the 1963 independence constitution. Establishes a devolved system of government, a Bill of Rights, and an independent judiciary.",
-        },
-        {
-                ID:               "ke-act-data-protection-2019",
-                Title:            "Data Protection Act, 2019",
-                Citation:         "No. 24 of 2019",
-                AssentDate:       "2019-11-08",
-                CommencementDate: "2019-11-25",
-                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=646aa3ba8b8f6d3a9c3f3f9c",
-                Status:           "in_force",
-                Country:          "KE",
-                Summary:          "Establishes the Office of the Data Protection Commissioner and regulates the processing of personal data, giving effect to Article 31 of the Constitution.",
-        },
-        {
-                ID:               "ke-act-public-finance-management-2015",
-                Title:            "Public Finance Management Act, 2015",
-                Citation:         "No. 18 of 2015",
-                AssentDate:       "2015-09-23",
-                CommencementDate: "2015-09-30",
-                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=5769b1c8e3a1f8c3f9b1c8e3",
-                Status:           "amended",
-                Country:          "KE",
-                Summary:          "Provides for the management of public funds at national and county levels, establishing the framework for budgeting, accounting, and auditing of public money.",
-        },
-        {
-                ID:               "ke-act-elections-2011",
-                Title:            "Elections Act, 2011",
-                Citation:         "No. 24 of 2011",
-                AssentDate:       "2011-12-22",
-                CommencementDate: "2012-01-01",
-                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=51a5b3d6c0e3a1f8c3f9b1c8",
-                Status:           "amended",
-                Country:          "KE",
-                Summary:          "Provides for the conduct of elections to the National Assembly, the Senate, county assemblies, county governors, and the President; gives effect to Articles 81\u201386 of the Constitution.",
-        },
-        {
-                ID:               "ke-act-companies-2015",
-                Title:            "Companies Act, 2015",
-                Citation:         "No. 17 of 2015",
-                AssentDate:       "2015-09-11",
-                CommencementDate: "2016-01-15",
-                SourceURL:        "https://www.kenyalaw.org/kl/index.php?id=5769b1c8e3a1f8c3f9b1c8e2",
-                Status:           "in_force",
-                Country:          "KE",
-                Summary:          "Repeals and replaces the Companies Act (Cap 486) to modernise company law in Kenya and align it with international best practice.",
-        },
+// actRepo is the in-memory ActRepository, seeded with verified Kenyan
+// Acts of Parliament from adapters/kenya/kenya_seed (issue #202). The
+// legislation service's Wire() constructs the repository and seeds it;
+// handlers query it directly instead of relying on hardcoded arrays.
+var actRepo = buildActRepo()
+
+// buildActRepo constructs the ActRepository from the Kenya seed data.
+// The seed DTOs are mapped into the legislation service's domain.Act /
+// PostAssentEvent types via kenya_seed.MapActs / MapPostAssentEvents,
+// then handed to legislation.Wire() which builds the in-memory repo and
+// populates it.
+func buildActRepo() legislation.ActRepository {
+        now := legislation.Now()
+        acts := kenya_seed.MapActs(kenya_seed.KenyaActs, now)
+        events := kenya_seed.MapPostAssentEvents(kenya_seed.KenyaPostAssentEvents, now)
+        return legislation.Wire(acts, events)
+}
+
+// sampleActs is a cached slice built from actRepo at startup. It is kept
+// for backward compatibility with the existing API contract test
+// (TestActsList_HasThreeToFive) and as a convenient in-process lookup.
+// The authoritative source is actRepo — handlers query it directly.
+var sampleActs = buildSampleActs()
+
+func buildSampleActs() []actResponse {
+        acts, err := actRepo.ListActs(context.Background(), legislation.ActFilter{})
+        if err != nil {
+                return []actResponse{}
+        }
+        out := make([]actResponse, 0, len(acts))
+        for _, a := range acts {
+                out = append(out, toActResponse(a))
+        }
+        return out
+}
+
+// toActResponse converts a domain Act into the JSON response shape. Field
+// mapping:
+//   - actResponse.Title    ← Act.ActName
+//   - actResponse.Citation  ← Act.ActNumber
+//   - actResponse.Status    ← string(Act.Status)        // "in_force", "amended", ...
+//   - actResponse.Country   ← string(Act.CountryID)      // "KE"
+//   - actResponse.Summary   ← Act.Description
+func toActResponse(a legislation.Act) actResponse {
+        resp := actResponse{
+                ID:        string(a.ID),
+                Title:     a.ActName,
+                Citation:  a.ActNumber,
+                SourceURL: a.SourceURL,
+                Status:    string(a.Status),
+                Country:   string(a.CountryID),
+                Summary:   a.Description,
+        }
+        if !a.AssentedAt.IsZero() {
+                resp.AssentDate = a.AssentedAt.Format("2006-01-02")
+        }
+        if a.CommencementDate != nil {
+                resp.CommencementDate = a.CommencementDate.Format("2006-01-02")
+        }
+        return resp
 }
 
 func handleActsList(w http.ResponseWriter, r *http.Request) {
         q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
         status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
 
-        items := make([]actResponse, 0, len(sampleActs))
-        for _, a := range sampleActs {
-                if status != "" && a.Status != status {
+        // Query the repository for all acts. Search + status filtering is
+        // applied in-memory to preserve the existing API contract.
+        acts, err := actRepo.ListActs(r.Context(), legislation.ActFilter{})
+        if err != nil {
+                writeError(w, http.StatusInternalServerError, "internal_error", "failed to list acts")
+                return
+        }
+
+        items := make([]actResponse, 0, len(acts))
+        for _, a := range acts {
+                resp := toActResponse(a)
+                if status != "" && resp.Status != status {
                         continue
                 }
                 if q != "" {
-                        haystack := strings.ToLower(a.Title + " " + a.Citation + " " + a.Summary)
+                        haystack := strings.ToLower(resp.Title + " " + resp.Citation + " " + resp.Summary)
                         if !strings.Contains(haystack, q) {
                                 continue
                         }
                 }
-                items = append(items, a)
+                items = append(items, resp)
         }
 
         writeJSON(w, http.StatusOK, map[string]any{
@@ -1156,13 +1165,12 @@ func handleActDetail(w http.ResponseWriter, r *http.Request) {
                 writeError(w, http.StatusBadRequest, "bad_request", "act ID required")
                 return
         }
-        for _, a := range sampleActs {
-                if a.ID == id {
-                        writeJSON(w, http.StatusOK, a)
-                        return
-                }
+        a, err := actRepo.GetAct(r.Context(), legislation.ID(id))
+        if err != nil {
+                writeError(w, http.StatusNotFound, "not_found", "act not found: "+id)
+                return
         }
-        writeError(w, http.StatusNotFound, "not_found", "act not found: "+id)
+        writeJSON(w, http.StatusOK, toActResponse(*a))
 }
 
 // --- Questions (AI Q&A) — requires auth + scope ---
