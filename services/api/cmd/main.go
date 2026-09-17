@@ -161,6 +161,12 @@ func main() {
         apiHandler.HandleFunc("/api/v1/sources", makeTrustSourcesListHandler(trustStore))
         apiHandler.HandleFunc("/api/v1/sources/", makeTrustSourceHandler(trustStore))
 
+        // Corrections (issue #166) — public submit, admin-only list + detail.
+        // Auth is enforced inside the handlers via OptionalAuth + scope checks.
+        correctionStore := NewCorrectionStore()
+        apiHandler.HandleFunc("/api/v1/corrections", makeCorrectionsHandler(correctionStore))
+        apiHandler.HandleFunc("/api/v1/corrections/", makeCorrectionDetailHandler(correctionStore))
+
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
         mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(metered))
