@@ -140,6 +140,9 @@ func main() {
         apiHandler.HandleFunc("/api/v1/sponsor/mpesa/callback", handleMpesaCallback)
         apiHandler.HandleFunc("/api/v1/sponsor/card/webhook", handleStripeWebhook)
 
+        // Data refresh — triggers adapter re-discovery (called by cron)
+        apiHandler.HandleFunc("/api/v1/refresh", makeRefreshHandler(kenyaLaw))
+
         // Policies — public.
         apiHandler.HandleFunc("/api/v1/policies", handlePoliciesList)
 
@@ -1381,4 +1384,37 @@ func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
         writeJSON(w, http.StatusOK, map[string]any{
                 "status": "received",
         })
+}
+
+
+// --- Data Refresh (#181) ---
+
+// makeRefreshHandler triggers re-discovery of Bills from kenyalaw.org.
+// This endpoint is called by a cron job (hourly) to keep data fresh.
+// POST /api/v1/refresh
+func makeRefreshHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+                if r.Method != http.MethodPost {
+                        writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
+                        return
+                }
+
+                ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+                defer cancel()
+
+                bills, err := adapter.DiscoverBills(ctx)
+                if err != nil {
+                        log.Printf("refresh: adapter error: %v", err)
+                        writeError(w, http.StatusServiceUnavailable, "adapter_error", "failed to refresh bills")
+                        return
+                }
+
+                log.Printf("refresh: discovered %d bills from kenyalaw.org", len(bills))
+                writeJSON(w, http.StatusOK, map[string]any{
+                        "status":     "refreshed",
+                        "bills_found": len(bills),
+                        "source":     "new.kenyalaw.org",
+                        "refreshed_at": time.Now().UTC().Format(time.RFC3339),
+                })
+        }
 }
