@@ -23,6 +23,7 @@ const exploreLinks = [
   { href: '/trending', label: 'Trending' },
   { href: '/loans', label: 'Loans' },
   { href: '/grants', label: 'Grants' },
+  { href: '/debt', label: 'Public Debt' },
   { href: '/acts', label: 'Acts' },
   { href: '/regulations', label: 'Regulations' },
   { href: '/policies', label: 'Policies' },

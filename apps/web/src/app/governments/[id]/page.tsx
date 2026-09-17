@@ -4,6 +4,7 @@ import { ArrowLeft, Landmark, Calendar, ExternalLink } from 'lucide-react';
 import type { Metadata } from 'next';
 import { getAdministration } from '@/lib/government-api';
 import { RealityBadge } from '@/components/reality-labels';
+import { GovernmentDebtSection } from '@/components/government-debt-section';
 
 function formatDate(d?: string): string {
   if (!d) return 'Present';
@@ -160,6 +161,8 @@ export default async function AdministrationDetailPage({
           <li>It does not modify or reinterpret constitutional text.</li>
         </ul>
       </section>
+
+      <GovernmentDebtSection administrationId={admin.id} />
     </div>
   );
 }

@@ -188,6 +188,11 @@ func main() {
         apiHandler.HandleFunc("/api/v1/constitution", makeConstitutionHandler())
         apiHandler.HandleFunc("/api/v1/transitions", makeTransitionsHandler())
 
+        // Public Debt & Borrowing Intelligence (issue #195). The platform
+        // NEVER attributes sovereign borrowing personally to a president.
+        apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter())
+        apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter())
+
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
         mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(metered))
