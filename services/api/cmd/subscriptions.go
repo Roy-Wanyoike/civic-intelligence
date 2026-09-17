@@ -36,6 +36,7 @@ const (
 	EntityTopic       = "topic"
 	EntityInstitution = "institution"
 	EntityPerson      = "person"
+	EntityAct         = "act"
 )
 
 // validEntityTypes is the allow-list of entity types that may be followed.
@@ -45,6 +46,7 @@ var validEntityTypes = map[string]bool{
 	EntityTopic:       true,
 	EntityInstitution: true,
 	EntityPerson:      true,
+	EntityAct:         true,
 }
 
 // FollowRecord mirrors a row in notifications.follows.
@@ -211,7 +213,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request, store *Subscription
 	}
 	if !validEntityTypes[req.EntityType] {
 		writeError(w, http.StatusBadRequest, "bad_request",
-			"invalid entity_type; must be one of: bill, committee, topic, institution, person")
+			"invalid entity_type; must be one of: bill, committee, topic, institution, person, act")
 		return
 	}
 	if req.EntityID == "" {

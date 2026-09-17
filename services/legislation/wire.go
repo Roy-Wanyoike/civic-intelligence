@@ -50,6 +50,12 @@ type (
         PostAssentEventType     = domain.PostAssentEventType
         PresidentialAssentEvent = domain.PresidentialAssentEvent
 
+        // Audit-domain type aliases (issue #215). The platform NEVER hardcodes
+        // "everything is confirmed" — every audit dimension is sourced from the
+        // Act's authoritative fields and post-assent events via AuditForAct.
+        LegislativeLifecycleAudit = domain.LegislativeLifecycleAudit
+        ActAuditStatus            = domain.ActAuditStatus
+
         // Debt-domain type aliases (issue #203).
         FiscalYear               = domain.FiscalYear
         BorrowingAgreement       = domain.BorrowingAgreement
@@ -112,6 +118,39 @@ const (
         PurposeOther         = domain.PurposeOther
         PurposeUnknown       = domain.PurposeUnknown
 )
+
+// Audit-domain enum constants (issue #215). Re-exported so the API layer can
+// compare audit statuses without importing internal/domain (which is
+// restricted to packages rooted at services/legislation). Because
+// ActAuditStatus is a type alias (above), the constants are assignable
+// directly to fields typed as legislation.ActAuditStatus.
+const (
+        ActAuditAssentConfirmed        = domain.ActAuditAssentConfirmed
+        ActAuditPublicationConfirmed   = domain.ActAuditPublicationConfirmed
+        ActAuditCommencementConfirmed  = domain.ActAuditCommencementConfirmed
+        ActAuditImplementationTracked  = domain.ActAuditImplementationTracked
+        ActAuditRegulationsTracked     = domain.ActAuditRegulationsTracked
+        ActAuditJudicialHistoryTracked = domain.ActAuditJudicialHistoryTracked
+        ActAuditAmendmentsTracked      = domain.ActAuditAmendmentsTracked
+        ActAuditRepealStatusTracked    = domain.ActAuditRepealStatusTracked
+        ActAuditComplete               = domain.ActAuditComplete
+        ActAuditPartiallyTracked       = domain.ActAuditPartiallyTracked
+        ActAuditDataGap                = domain.ActAuditDataGap
+        ActAuditConflictingSources     = domain.ActAuditConflictingSources
+        ActAuditNotVerified            = domain.ActAuditNotVerified
+)
+
+// AuditForAct is re-exported from the domain (issue #215). It inspects an Act
+// and returns its full post-assent lifecycle audit. The platform NEVER
+// hardcodes "everything is confirmed" — every dimension (assent, publication,
+// commencement, regulations, judicial history, amendments, repeal) is sourced
+// from the Act's authoritative fields and post-assent events.
+//
+// "No commencement notice found" does NOT mean "the Act never commenced".
+// Instead, the audit returns ActAuditNotVerified for commencement.
+func AuditForAct(act Act, events []PostAssentEvent) LegislativeLifecycleAudit {
+        return domain.AuditForAct(act, events)
+}
 
 // SeedAct is a country-supplied seed record for an Act. The caller (typically
 // the API service) sources these from the country adapter and passes them to
