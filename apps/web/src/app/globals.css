@@ -2,13 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * CSS variables mirror src/lib/design-tokens.ts.
+ * Keep these in sync when you change a token — Tailwind config imports
+ * the same tokens, so utility classes (`bg-civic-forest` etc.) follow
+ * the same source of truth automatically.
+ */
 :root {
-  --background: 245 247 246;
-  --foreground: 11 31 23;
-  --muted: 82 96 107;
-  --primary: 21 120 74;
-  --accent: 212 160 23;
-  --border: 200 211 204;
+  --background: 245 247 246;   /* colors.mist   #f5f7f6 */
+  --foreground: 11 31 23;      /* colors.ink    #0b1f17 */
+  --muted: 82 96 107;          /* colors.stone #52606b */
+  --primary: 21 120 74;        /* colors.leaf  #15784a */
+  --accent: 212 160 23;        /* colors.acacia #d4a017 */
+  --border: 200 211 204;       /* colors.border #c8d3cc */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -57,7 +63,7 @@ body {
 .pill-high { background-color: rgb(var(--primary)); color: white; }
 .pill-medium { background-color: rgb(var(--accent)); color: rgb(var(--foreground)); }
 .pill-low { background-color: rgb(var(--muted)); color: white; }
-.pill-unknown { background-color: #6b7280; color: white; }
+.pill-unknown { background-color: rgb(var(--muted)); color: white; }
 
 @media print {
   header, footer, nav, .no-print { display: none !important; }

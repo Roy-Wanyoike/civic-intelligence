@@ -3,6 +3,7 @@ import './globals.css';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { Providers } from '@/components/providers';
+import { colors } from '@/lib/design-tokens';
 
 export const metadata: Metadata = {
   title: {
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0c3b2e',
+  themeColor: colors.forest,
 };
 
 export default function RootLayout({

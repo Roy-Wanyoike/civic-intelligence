@@ -1,21 +1,24 @@
 import type { Config } from 'tailwindcss';
+import { colors } from './src/lib/design-tokens';
 
 const config: Config = {
   content: ['./src/**/*.{ts,tsx,mdx}'],
   theme: {
     extend: {
       colors: {
-        // Kenya-inspired but politically neutral palette.
-        // Independence green + acacia + savanna gold, kept muted for accessibility.
+        // Single source of truth lives in src/lib/design-tokens.ts.
+        // Kenya-inspired but politically neutral palette: independence green
+        // + acacia + savanna gold, kept muted for accessibility.
         civic: {
-          ink: '#0b1f17',
-          forest: '#0c3b2e',
-          leaf: '#15784a',
-          acacia: '#d4a017',
-          clay: '#9c4221',
-          stone: '#52606b',
-          mist: '#f5f7f6',
-          paper: '#ffffff',
+          ink: colors.ink,
+          forest: colors.forest,
+          leaf: colors.leaf,
+          acacia: colors.acacia,
+          clay: colors.clay,
+          stone: colors.stone,
+          mist: colors.mist,
+          paper: colors.paper,
+          border: colors.border,
         },
       },
       fontFamily: {
