@@ -11,7 +11,7 @@ export async function POST() {
     });
     const data = await resp.json();
     return NextResponse.json(data, { status: resp.status });
-  } catch (error) {
+  } catch {
     // If the Go API is not running, return a graceful response
     return NextResponse.json({
       status: 'skipped',

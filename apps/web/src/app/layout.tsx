@@ -3,6 +3,7 @@ import './globals.css';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { Providers } from '@/components/providers';
+import { ThemeProvider } from '@/components/theme-provider';
 import { colors } from '@/lib/design-tokens';
 
 export const metadata: Metadata = {
@@ -40,11 +41,13 @@ export default function RootLayout({
       <body>
         <a href="#main" className="skip-link">Skip to content</a>
         <Providers>
-          <Header />
-          <main id="main" className="min-h-[60vh]">
-            {children}
-          </main>
-          <Footer />
+          <ThemeProvider>
+            <Header />
+            <main id="main" className="min-h-[60vh]">
+              {children}
+            </main>
+            <Footer />
+          </ThemeProvider>
         </Providers>
       </body>
     </html>
