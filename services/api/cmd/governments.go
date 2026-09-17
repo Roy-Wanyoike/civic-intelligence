@@ -1,14 +1,21 @@
 // Package main provides government API endpoints.
 //
-// Endpoints:
+// Endpoints (registered in main.go):
 //
-//	GET /api/v1/governments            -- list administrations
-//	GET /api/v1/governments/{id}        -- get an administration
-//	GET /api/v1/governments/{id}/terms  -- list presidential terms for an administration
-//	GET /api/v1/constitution            -- get the constitution metadata
-//	GET /api/v1/constitution/articles    -- list constitution articles
-//	GET /api/v1/constitution/articles/{id} -- get a single article
-//	GET /api/v1/transitions              -- list government transitions
+//	GET /api/v1/governments       -- list administrations
+//	GET /api/v1/governments/{id}  -- get an administration (also handles the
+//	                                 /terms sub-resource internally; there is
+//	                                 no separately registered /terms route)
+//	GET /api/v1/constitution      -- get the constitution metadata
+//	GET /api/v1/transitions       -- list government transitions
+//
+// The following endpoints are NOT registered, even though earlier versions of
+// this file documented them:
+//
+//	GET /api/v1/governments/{id}/terms        -- handled internally by the
+//	                                            governments/{id} detail handler
+//	GET /api/v1/constitution/articles         -- not registered
+//	GET /api/v1/constitution/articles/{id}    -- not registered
 package main
 
 import (
