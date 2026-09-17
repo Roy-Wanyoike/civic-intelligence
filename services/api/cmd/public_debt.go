@@ -1,14 +1,18 @@
 // Package main — public debt & borrowing intelligence API endpoints.
 // Spec: Public Debt & Borrowing Intelligence, sections 21-22.
 //
-// Endpoints:
+// Endpoints (routed by makeDebtRouter via /api/v1/debt and /api/v1/debt/):
 //
-//      GET /api/v1/debt                    -- national debt dashboard
-//      GET /api/v1/debt/loans              -- borrowing register
-//      GET /api/v1/debt/creditors          -- creditor intelligence
-//      GET /api/v1/debt/timeline           -- debt stock timeline
-//      GET /api/v1/debt/governments/{id}    -- government debt summary
-//      GET /api/v1/debt/legislatures/{id}  -- legislature debt view (placeholder)
+//	GET /api/v1/debt                    -- national debt dashboard
+//	GET /api/v1/debt/loans              -- borrowing register
+//	GET /api/v1/debt/timeline           -- debt stock timeline
+//	GET /api/v1/debt/governments/{id}   -- government debt summary
+//
+// The following endpoints are NOT routed, even though earlier versions of this
+// file documented them:
+//
+//	GET /api/v1/debt/creditors          -- not implemented
+//	GET /api/v1/debt/legislatures/{id}  -- not implemented (placeholder)
 package main
 
 import (
