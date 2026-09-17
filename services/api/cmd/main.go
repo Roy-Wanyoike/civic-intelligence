@@ -140,7 +140,10 @@ func main() {
         // handlers via OptionalAuth (set on the outer mux) + PrincipalFromRequest
         // checks, mirroring how the bills/{id}/follow endpoint behaves. Each
         // handler returns 401 explicitly when the caller is anonymous.
-        subscriptionStore := NewSubscriptionStore()
+        // subscriptionStore is the package-level in-memory store (defined next
+        // to actRepo) so the /api/v1/acts/{id}/follow endpoint (issue #216) can
+        // write real subscriptions through the same store used by
+        // /api/v1/subscriptions.
         apiHandler.HandleFunc("/api/v1/subscriptions", makeSubscriptionsHandler(subscriptionStore))
         apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore))
 
@@ -1082,6 +1085,14 @@ type actResponse struct {
 // legislation service's Wire() constructs the repository and seeds it;
 // handlers query it directly instead of relying on hardcoded arrays.
 var actRepo = buildActRepo()
+
+// subscriptionStore is the in-memory SubscriptionStore (issue #110). It is
+// promoted to a package-level var so that BOTH /api/v1/subscriptions (issue
+// #110) AND /api/v1/acts/{id}/follow (issue #216 — flagship Follow-a-Law
+// experience) can write real subscription records through the same store.
+// In production this is replaced by notifications.follows in Postgres
+// (migration 014_notifications.up.sql).
+var subscriptionStore = NewSubscriptionStore()
 
 // buildActRepo constructs the ActRepository from the Kenya seed data.
 // The seed DTOs are mapped into the legislation service's domain.Act /
