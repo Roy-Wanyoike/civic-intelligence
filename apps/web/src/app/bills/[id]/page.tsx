@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { FileText, GitCompare, History, MessageCircle, Bell, ChevronDown } from 'lucide-react';
+import { FileText, GitCompare, History, MessageCircle, Bell } from 'lucide-react';
 import { mockBills, mockTimeline } from '@/lib/mock-data';
-import { formatDate } from '@/lib/utils';
 import { TimelineView } from '@/components/timeline';
 import { BillAskPanel } from '@/components/bill-ask-panel';
 import type { Metadata } from 'next';
