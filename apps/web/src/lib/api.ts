@@ -36,8 +36,13 @@ async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return (await resp.json()) as T;
 }
 
-// postJSON is exported for clients that need to POST JSON bodies (e.g. the
-// scenarios comparison + run endpoints).
+// getJSON_ is the exported form of the internal helper, so other client
+// modules (e.g. government-api, scenarios-api) can reuse the same fetch
+// + error-handling logic.
+export { getJSON as getJSON_ };
+
+// postJSON is exported for clients that need to POST JSON bodies
+// (e.g. scenarios comparison + run endpoints, follow-a-law).
 export async function postJSON<T>(url: string, body?: unknown): Promise<T> {
   const init: RequestInit = {
     method: 'POST',
@@ -46,9 +51,6 @@ export async function postJSON<T>(url: string, body?: unknown): Promise<T> {
   if (body !== undefined) init.body = JSON.stringify(body);
   return getJSON<T>(url, init);
 }
-
-// getJSON_ is exported for clients in this file that need the raw helper.
-export { getJSON as getJSON_ };
 
 // ----- Bills -----
 

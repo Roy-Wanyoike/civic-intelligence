@@ -103,8 +103,10 @@ func main() {
         apiHandler.HandleFunc("/api/v1/grants/", handleGrantDetail)
 
         // Acts of Parliament — public read (issue #116).
+        // Single router handles /acts, /acts/{id}, and the post-assent
+        // sub-resources /acts/{id}/{audit,events,follow,lineage} (issue #193).
         apiHandler.HandleFunc("/api/v1/acts", handleActsList)
-        apiHandler.HandleFunc("/api/v1/acts/", handleActDetail)
+        apiHandler.HandleFunc("/api/v1/acts/", makeActRouter())
 
         // Questions (AI Q&A) — requires auth + scope.
         questionsHandler := middleware.RequireToken(verifier)(
