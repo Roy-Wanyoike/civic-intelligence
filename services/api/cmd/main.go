@@ -181,6 +181,13 @@ func main() {
         apiHandler.HandleFunc("/api/v1/scenarios/compare", makeScenarioCompareHandler())
         apiHandler.HandleFunc("/api/v1/scenarios/", makeScenarioDetailHandler())
 
+        // Constitution + Government (issue #192). The Constitution is
+        // authoritative source material — the platform never reinterprets it.
+        apiHandler.HandleFunc("/api/v1/governments", makeGovernmentsListHandler())
+        apiHandler.HandleFunc("/api/v1/governments/", makeGovernmentDetailHandler())
+        apiHandler.HandleFunc("/api/v1/constitution", makeConstitutionHandler())
+        apiHandler.HandleFunc("/api/v1/transitions", makeTransitionsHandler())
+
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
         mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(metered))
