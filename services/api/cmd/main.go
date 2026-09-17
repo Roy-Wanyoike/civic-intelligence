@@ -105,8 +105,12 @@ func main() {
         // Acts of Parliament — public read (issue #116).
         // Single router handles /acts, /acts/{id}, and the post-assent
         // sub-resources /acts/{id}/{audit,events,follow,lineage} (issue #193).
+        // The follow sub-resource writes to the same SubscriptionStore that
+        // backs /api/v1/subscriptions (issue #216), so the store is created
+        // here and shared by both routes.
+        subscriptionStore := NewSubscriptionStore()
         apiHandler.HandleFunc("/api/v1/acts", handleActsList)
-        apiHandler.HandleFunc("/api/v1/acts/", makeActRouter())
+        apiHandler.HandleFunc("/api/v1/acts/", makeActRouter(subscriptionStore))
 
         // Questions (AI Q&A) — requires auth + scope.
         questionsHandler := middleware.RequireToken(verifier)(
@@ -125,7 +129,6 @@ func main() {
         // handlers via OptionalAuth (set on the outer mux) + PrincipalFromRequest
         // checks, mirroring how the bills/{id}/follow endpoint behaves. Each
         // handler returns 401 explicitly when the caller is anonymous.
-        subscriptionStore := NewSubscriptionStore()
         apiHandler.HandleFunc("/api/v1/subscriptions", makeSubscriptionsHandler(subscriptionStore))
         apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore))
 

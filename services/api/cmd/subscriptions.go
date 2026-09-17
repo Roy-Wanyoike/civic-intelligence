@@ -10,9 +10,10 @@
 // frontend does not change.
 //
 // Endpoints:
-//   POST   /api/v1/subscriptions      — follow an entity (requires auth)
-//   GET    /api/v1/subscriptions      — list the caller's follows (requires auth)
-//   DELETE /api/v1/subscriptions/{id} — unfollow (requires auth)
+//
+//	POST   /api/v1/subscriptions      — follow an entity (requires auth)
+//	GET    /api/v1/subscriptions      — list the caller's follows (requires auth)
+//	DELETE /api/v1/subscriptions/{id} — unfollow (requires auth)
 package main
 
 import (
@@ -56,24 +57,47 @@ type FollowRecord struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// Subscription is a follow with explicit event-type monitors. Unlike a
+// FollowRecord (which tracks an entity as a whole), a Subscription tracks
+// specific categories of events on that entity (e.g. COMMENCEMENT,
+// REGULATIONS, AMENDMENTS). This is what the "Follow a Law" experience
+// (issue #193) creates when a user opts in to notifications for an Act.
+//
+// Mirrors notifications.subscriptions in the canonical SQL schema. Until the
+// identity service + Postgres connection are wired, this lives in-memory
+// alongside the FollowRecord store; the HTTP contract is intentionally stable
+// so the frontend does not change when persistence swaps over.
+type Subscription struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Target    string    `json:"target"`   // opaque, e.g. "act:ke-act-data-protection-2019"
+	Monitors  []string  `json:"monitors"` // event categories (e.g. COMMENCEMENT, REGULATIONS)
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // followRequest is the JSON body for POST /api/v1/subscriptions.
 type followRequest struct {
 	EntityType string `json:"entity_type"`
 	EntityID   string `json:"entity_id"`
 }
 
-// SubscriptionStore is an in-memory store of follows keyed by follow ID.
-// In production this is replaced by notifications.follows in Postgres.
+// SubscriptionStore is an in-memory store of follows and act subscriptions.
+// In production the follows map is replaced by notifications.follows in
+// Postgres and the subscriptions map by notifications.subscriptions.
 //
 // All methods are safe for concurrent use.
 type SubscriptionStore struct {
-	mu      sync.RWMutex
-	follows map[string]FollowRecord // follow_id → record
+	mu            sync.RWMutex
+	follows       map[string]FollowRecord // follow_id → record
+	subscriptions map[string]Subscription // subscription_id → record
 }
 
 // NewSubscriptionStore returns an empty in-memory store.
 func NewSubscriptionStore() *SubscriptionStore {
-	return &SubscriptionStore{follows: make(map[string]FollowRecord)}
+	return &SubscriptionStore{
+		follows:       make(map[string]FollowRecord),
+		subscriptions: make(map[string]Subscription),
+	}
 }
 
 // Follow creates a follow record for the given user + entity. If the user
@@ -159,6 +183,52 @@ func (s *SubscriptionStore) IsFollowing(userID, entityType, entityID string) boo
 	return false
 }
 
+// CreateSubscription creates a new act subscription with the given target and
+// event-type monitors. Target is an opaque string like "act:ke-act-...".
+// If the user already has a subscription for the same target, the existing
+// record is returned (idempotent — matches the UNIQUE (user_id, target)
+// constraint the canonical notifications.subscriptions schema will enforce).
+//
+// The monitors slice is stored verbatim; callers are responsible for
+// validating the monitor categories against the platform allow-list.
+func (s *SubscriptionStore) CreateSubscription(userID, target string, monitors []string) (Subscription, error) {
+	if userID == "" {
+		return Subscription{}, errors.New("user_id required")
+	}
+	if target == "" {
+		return Subscription{}, errors.New("target required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Idempotent: return existing subscription if same user + target.
+	for _, sub := range s.subscriptions {
+		if sub.UserID == userID && sub.Target == target {
+			return sub, nil
+		}
+	}
+
+	rec := Subscription{
+		ID:        newSubscriptionID(),
+		UserID:    userID,
+		Target:    target,
+		Monitors:  monitors,
+		CreatedAt: time.Now().UTC(),
+	}
+	s.subscriptions[rec.ID] = rec
+	return rec, nil
+}
+
+// GetSubscription returns the subscription with the given ID, or false if
+// not found. Used by tests + future GET /api/v1/subscriptions/{id} handler.
+func (s *SubscriptionStore) GetSubscription(id string) (Subscription, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rec, ok := s.subscriptions[id]
+	return rec, ok
+}
+
 // newFollowID generates a 16-byte hex ID. In production this is a UUID from
 // uuid_generate_v4() in Postgres.
 func newFollowID() string {
@@ -168,6 +238,17 @@ func newFollowID() string {
 		return time.Now().UTC().Format("20060102150405.000000000")
 	}
 	return "flw_" + hex.EncodeToString(b)
+}
+
+// newSubscriptionID generates a 16-byte hex ID prefixed with "sub_". Mirrors
+// newFollowID but is namespaced separately so logs/UI can distinguish
+// FollowRecord IDs from Subscription IDs at a glance.
+func newSubscriptionID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return time.Now().UTC().Format("20060102150405.000000000")
+	}
+	return "sub_" + hex.EncodeToString(b)
 }
 
 // --- HTTP handlers ---
