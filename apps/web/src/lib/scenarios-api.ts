@@ -2,7 +2,7 @@
 // reality_layer tag so the UI can never confuse simulated output with
 // observed civic fact.
 
-import { ApiError, getJSON_ as getJSON, postJSON } from './api';
+import { getJSON_ as getJSON, postJSON } from './api';
 
 export interface ScenarioAssumption {
   id: string;

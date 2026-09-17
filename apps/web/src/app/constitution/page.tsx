@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Scale, ExternalLink, BookOpen } from 'lucide-react';
 import type { Metadata } from 'next';
 import { getConstitution } from '@/lib/government-api';
