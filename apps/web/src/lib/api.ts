@@ -199,3 +199,156 @@ export async function deleteSubscription(params: {
     throw new ApiError(resp.status, 'Unfollow failed', detail);
   }
 }
+
+// ----- Trust + Provenance (issue #165) -----
+
+export type AuthorityLevel =
+  | 'PRIMARY_OFFICIAL'
+  | 'OFFICIAL_REPOSITORY'
+  | 'SECONDARY_VERIFIED'
+  | 'UNVERIFIED';
+
+export type VerificationState =
+  | 'UNVERIFIED'
+  | 'DISCOVERED'
+  | 'EXTRACTED'
+  | 'VALIDATING'
+  | 'VERIFIED'
+  | 'CONFLICTED'
+  | 'CORRECTED'
+  | 'SUPERSEDED'
+  | 'REJECTED';
+
+export interface TrustSource {
+  id: string;
+  institution_id: string;
+  country: string;
+  source_type: string;
+  authority_level: AuthorityLevel;
+  official_url: string;
+  domain: string;
+  status: 'active' | 'degraded' | 'retired' | 'blocked';
+  verification_method?: string;
+  last_verified_at?: string;
+  health_status: 'healthy' | 'degraded' | 'down' | 'unknown';
+  created_at: string;
+  last_check?: SourceCheck;
+}
+
+export interface SourceCheck {
+  id: string;
+  source_id: string;
+  checked_at: string;
+  http_status: number;
+  latency_ms: number;
+  tls_valid: boolean;
+  content_hash?: string;
+  changed: boolean;
+}
+
+export interface Claim {
+  id: string;
+  subject: string;
+  predicate: string;
+  object: string;
+  claim_type: 'FACT' | 'EXPLANATION' | 'INFERENCE' | 'UNKNOWN';
+  text: string;
+  confidence: number;
+  verification_state: VerificationState;
+  created_at: string;
+  valid_from?: string;
+  valid_to?: string;
+}
+
+export interface Evidence {
+  id: string;
+  claim_id: string;
+  document_id?: string;
+  snapshot_id?: string;
+  page_number?: number;
+  section?: string;
+  paragraph?: string;
+  text_span?: string;
+  source_url: string;
+  retrieved_at: string;
+  content_hash?: string;
+  source?: TrustSource;
+}
+
+export interface ClaimWithEvidence {
+  claim: Claim;
+  evidence: Evidence[];
+}
+
+export interface ProvenanceResponse {
+  entity_type: string;
+  entity_id: string;
+  claims: ClaimWithEvidence[];
+  total: number;
+}
+
+export interface Contradiction {
+  id: string;
+  claim_a_id: string;
+  claim_b_id: string;
+  source_a_id?: string;
+  source_b_id?: string;
+  detected_at: string;
+  status: 'detected' | 'under_review' | 'resolved' | 'dismissed';
+  resolution?: string;
+  reviewer_id?: string;
+  resolved_at?: string;
+  claim_a?: Claim;
+  claim_b?: Claim;
+  source_a?: TrustSource;
+  source_b?: TrustSource;
+}
+
+/**
+ * Fetch the full evidence chain for an entity (issue #165).
+ * Returns every claim whose subject is `{entity_type}:{entity_id}`, each
+ * with its evidence list and (where resolvable) the source row.
+ */
+export async function getProvenance(
+  entityType: string,
+  entityId: string,
+): Promise<ProvenanceResponse> {
+  return getJSON(`/api/v1/provenance/${entityType}/${encodeURIComponent(entityId)}`);
+}
+
+/** GET /api/v1/evidence/{id} — evidence detail with hydrated source. */
+export async function getEvidence(id: string): Promise<Evidence> {
+  return getJSON(`/api/v1/evidence/${encodeURIComponent(id)}`);
+}
+
+/** GET /api/v1/claims/{id}/evidence — a single claim plus its evidence list. */
+export async function getClaimEvidence(
+  id: string,
+): Promise<{ claim: Claim; evidence: Evidence[]; total: number }> {
+  return getJSON(`/api/v1/claims/${encodeURIComponent(id)}/evidence`);
+}
+
+/** GET /api/v1/contradictions — list active source conflicts. */
+export async function listContradictions(
+  status?: 'detected' | 'under_review' | 'resolved' | 'dismissed',
+): Promise<{ items: Contradiction[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (status) qs.set('status', status);
+  return getJSON(`/api/v1/contradictions${qs.size ? `?${qs.toString()}` : ''}`);
+}
+
+/** GET /api/v1/sources — list trust sources with optional ?authority= and ?country= filters. */
+export async function listTrustSources(opts: {
+  authority?: AuthorityLevel;
+  country?: string;
+} = {}): Promise<{ items: TrustSource[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (opts.authority) qs.set('authority', opts.authority);
+  if (opts.country) qs.set('country', opts.country.toUpperCase());
+  return getJSON(`/api/v1/sources${qs.size ? `?${qs.toString()}` : ''}`);
+}
+
+/** GET /api/v1/sources/{id} — source detail with health + last check. */
+export async function getTrustSource(id: string): Promise<TrustSource> {
+  return getJSON(`/api/v1/sources/${encodeURIComponent(id)}`);
+}

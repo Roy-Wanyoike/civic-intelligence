@@ -149,6 +149,18 @@ func main() {
         apiHandler.Handle("/api/v1/notifications", makeNotificationsHandler(notifStore))
         apiHandler.Handle("/api/v1/notifications/", makeNotificationDetailHandler(notifStore))
 
+        // Trust + Provenance (issue #165) — in-memory trust store seeded
+        // with sample Kenyan sources, claims, evidence, and one active
+        // contradiction so the /trust page has something concrete to render.
+        trustStore := NewTrustStore()
+        trustStore.SeedSampleTrustData()
+        apiHandler.HandleFunc("/api/v1/provenance/", makeProvenanceHandler(trustStore))
+        apiHandler.HandleFunc("/api/v1/evidence/", makeEvidenceHandler(trustStore))
+        apiHandler.HandleFunc("/api/v1/claims/", makeClaimEvidenceHandler(trustStore))
+        apiHandler.HandleFunc("/api/v1/contradictions", makeContradictionsHandler(trustStore))
+        apiHandler.HandleFunc("/api/v1/sources", makeTrustSourcesListHandler(trustStore))
+        apiHandler.HandleFunc("/api/v1/sources/", makeTrustSourceHandler(trustStore))
+
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
         mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(metered))
