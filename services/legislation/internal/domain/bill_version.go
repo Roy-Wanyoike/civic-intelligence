@@ -75,6 +75,11 @@ type Act struct {
         AssentedAt       time.Time
         SourceDocumentID string
 
+        // Description is a short human-readable summary of the Act, used for
+        // API display and search indexing. It is descriptive only — the
+        // canonical legal text lives in the ActVersion snapshots.
+        Description string
+
         // Post-assent lifecycle fields (Spec section 15).
         PublicationDate        *time.Time
         CommencementNoticeID   *ID
