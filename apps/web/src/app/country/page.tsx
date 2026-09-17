@@ -10,7 +10,7 @@ export default function CountryPage() {
   const countries = [
     { code: 'KE', name: 'Kenya', active: true },
     { code: 'UG', name: 'Uganda', active: false },
-    { code: 'TZ', name: 'Tanzania', active: false },
+    { code: 'TZ', name: 'Tanzania', active: true },
     { code: 'GH', name: 'Ghana', active: false },
     { code: 'NG', name: 'Nigeria', active: false },
     { code: 'ZA', name: 'South Africa', active: false },
