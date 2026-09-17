@@ -365,6 +365,18 @@ func snapshotToTrendPoint(s legislation.PublicDebtSnapshot) DebtTrendPointRespon
 
 // summaryFromDomain converts a domain.GovernmentDebtSummary to the JSON
 // response shape.
+//
+// The Disclaimer field is composed of TWO parts:
+//  1. The per-administration disclaimer that the domain layer attaches to
+//     the summary (s.Disclaimer). This is the admin-specific context.
+//  2. The canonical NO_POLITICAL_PERFORMANCE_SCORE constant re-exported by
+//     the legislation package (Spec section 37). This guarantees every
+//     per-administration summary carries the platform-wide promise to never
+//     compute a "best borrower" / "worst borrower" / debt score ranking,
+//     even if the per-admin text drifts.
+//
+// The canonical text is APPENDED (not replaced) so the per-admin context is
+// preserved. Issue #222.
 func summaryFromDomain(s legislation.GovernmentDebtSummary) GovernmentDebtSummaryResponse {
         return GovernmentDebtSummaryResponse{
                 AdministrationID: string(s.AdministrationID),
@@ -377,8 +389,21 @@ func summaryFromDomain(s legislation.GovernmentDebtSummary) GovernmentDebtSummar
                 DomesticDebt:     s.DomesticDebt,
                 Currency:         s.Currency,
                 SourceURLs:       s.SourceURLs,
-                Disclaimer:       s.Disclaimer,
+                Disclaimer:       appendCanonicalDisclaimer(s.Disclaimer),
         }
+}
+
+// appendCanonicalDisclaimer joins the per-administration disclaimer with the
+// canonical NO_POLITICAL_PERFORMANCE_SCORE constant. The two are separated
+// by a blank line so downstream renderers (terminal, web) display them as
+// distinct paragraphs. The canonical constant is appended verbatim — no
+// rephrasing, no truncation — so future spec edits to the constant propagate
+// automatically.
+func appendCanonicalDisclaimer(perAdmin string) string {
+        if perAdmin == "" {
+                return legislation.NO_POLITICAL_PERFORMANCE_SCORE
+        }
+        return perAdmin + "\n\n" + legislation.NO_POLITICAL_PERFORMANCE_SCORE
 }
 
 func ptrFloat(f float64) *float64 { return &f }
