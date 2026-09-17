@@ -11,36 +11,130 @@ import {
   Bell,
   User,
   Heart,
+  FileText,
+  Landmark,
+  Users,
+  TrendingUp,
+  Sparkles,
+  BookOpen,
+  DollarSign,
+  BarChart3,
+  Database,
+  Globe,
+  FileSearch,
+  Radio,
+  ShieldCheck,
+  FileBarChart,
+  Newspaper,
+  Bookmark,
+  BellRing,
+  Code2,
+  Info,
+  HeartHandshake,
+  LayoutDashboard,
+  Scale as ScaleIcon,
 } from 'lucide-react';
 import { ThemeToggle } from './theme-toggle';
 
 /**
- * Explore dropdown — secondary destinations grouped under one primary slot
- * so the top-level nav stays sparse and breathable.
+ * Mega-menu navigation — every platform page is reachable from the navbar.
+ *
+ * Pages are organized into 6 thematic groups so the menu stays scannable
+ * despite surfacing 30+ destinations:
+ *
+ *   Legislation   — Bills, Acts, Regulations, Policies, Committees
+ *   Government    — Constitution, Governments, Institutions, People, Participation
+ *   Finance       — Public Debt, Loans, Grants
+ *   Intelligence  — What Changed, Feed, Trending, Research, Trust, Reports
+ *   Scenarios     — What If?
+ *   Resources     — Briefing, Gazette, Datasets, Dashboard, Topics,
+ *                   Developers, About, Sponsor
  */
-const exploreLinks = [
-  { href: '/bills', label: 'Bills' },
-  { href: '/trending', label: 'Trending' },
-  { href: '/loans', label: 'Loans' },
-  { href: '/grants', label: 'Grants' },
-  { href: '/debt', label: 'Public Debt' },
-  { href: '/acts', label: 'Acts' },
-  { href: '/regulations', label: 'Regulations' },
-  { href: '/policies', label: 'Policies' },
-  { href: '/constitution', label: 'Constitution' },
-  { href: '/governments', label: 'Governments' },
-  { href: '/what-changed', label: 'What Changed' },
-  { href: '/scenarios', label: 'What If?' },
-  { href: '/feed', label: 'Feed' },
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/datasets', label: 'Datasets' },
-  { href: '/developers', label: 'Developers' },
-] as const;
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof FileText;
+  description?: string;
+}
+
+interface NavGroup {
+  title: string;
+  icon: typeof FileText;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: 'Legislation',
+    icon: FileText,
+    items: [
+      { href: '/bills', label: 'Bills', icon: FileText, description: 'Active and historical Bills before Parliament' },
+      { href: '/acts', label: 'Acts', icon: ScaleIcon, description: 'Enacted Acts of Parliament with full lifecycle' },
+      { href: '/regulations', label: 'Regulations', icon: FileSearch, description: 'Subordinate legislation and Legal Notices' },
+      { href: '/policies', label: 'Policies', icon: FileBarChart, description: 'Government policy documents' },
+      { href: '/committees', label: 'Committees', icon: Users, description: 'Parliamentary standing and select committees' },
+    ],
+  },
+  {
+    title: 'Government',
+    icon: Landmark,
+    items: [
+      { href: '/constitution', label: 'Constitution', icon: BookOpen, description: 'The Constitution of Kenya, Article by Article' },
+      { href: '/governments', label: 'Governments', icon: Landmark, description: 'Presidential administrations and terms' },
+      { href: '/institutions', label: 'Institutions', icon: Landmark, description: 'Government institutions and agencies' },
+      { href: '/people', label: 'People', icon: Users, description: 'MPs, senators, and civic persons' },
+      { href: '/participation', label: 'Participation', icon: Users, description: 'Public participation opportunities' },
+    ],
+  },
+  {
+    title: 'Finance',
+    icon: DollarSign,
+    items: [
+      { href: '/debt', label: 'Public Debt', icon: BarChart3, description: 'National debt dashboard with trends' },
+      { href: '/loans', label: 'Loans', icon: DollarSign, description: 'Sovereign loans tracker' },
+      { href: '/grants', label: 'Grants', icon: HeartHandshake, description: 'Grants received by the government' },
+    ],
+  },
+  {
+    title: 'Intelligence',
+    icon: TrendingUp,
+    items: [
+      { href: '/what-changed', label: 'What Changed', icon: Radio, description: 'Proactive civic change feed' },
+      { href: '/feed', label: 'Feed', icon: Newspaper, description: 'Full civic activity feed' },
+      { href: '/trending', label: 'Trending', icon: TrendingUp, description: 'Trending Bills and topics' },
+      { href: '/research', label: 'Research', icon: FileSearch, description: 'Research missions and reports' },
+      { href: '/trust', label: 'Trust', icon: ShieldCheck, description: 'Trust and verification network' },
+      { href: '/report', label: 'Reports', icon: FileBarChart, description: 'Generated civic reports' },
+    ],
+  },
+  {
+    title: 'Scenarios',
+    icon: Sparkles,
+    items: [
+      { href: '/scenarios', label: 'What If?', icon: Sparkles, description: 'Explore hypothetical civic scenarios — HYPOTHETICAL, not observed fact' },
+    ],
+  },
+  {
+    title: 'Resources',
+    icon: Database,
+    items: [
+      { href: '/briefing', label: 'Daily Briefing', icon: Newspaper, description: 'Today\'s civic brief' },
+      { href: '/gazette', label: 'Kenya Gazette', icon: FileText, description: 'Official gazette notices' },
+      { href: '/datasets', label: 'Datasets', icon: Database, description: 'Downloadable civic datasets' },
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, description: 'Your civic dashboard' },
+      { href: '/topics', label: 'Topics', icon: BookOpen, description: 'Browse by topic' },
+      { href: '/developers', label: 'Developers', icon: Code2, description: 'API docs and developer platform' },
+      { href: '/about', label: 'About', icon: Info, description: 'About Civic Intelligence' },
+      { href: '/sponsor', label: 'Sponsor', icon: Heart, description: 'Support the platform' },
+    ],
+  },
+];
 
 const primaryNav = [
   { href: '/', label: 'Home' },
   { href: '/ask', label: 'Ask' },
-  { href: '/topics', label: 'Topics' },
+  { href: '/briefing', label: 'Briefing' },
   { href: '/countries', label: 'Countries' },
 ] as const;
 
@@ -94,14 +188,14 @@ export function Header() {
           aria-label="Civic Intelligence — home"
         >
           <Scale className="h-7 w-7" aria-hidden="true" />
-          <span className="font-serif text-lg font-semibold tracking-tight">
+          <span className="hidden font-serif text-lg font-semibold tracking-tight sm:inline">
             Civic Intelligence
           </span>
         </Link>
 
         {/* Primary nav (center) — capped at 5 top-level items */}
         <nav aria-label="Primary" className="hidden lg:block">
-          <ul className="flex items-center gap-8 text-sm font-medium text-civic-ink">
+          <ul className="flex items-center gap-7 text-sm font-medium text-civic-ink">
             <li>
               <Link
                 href="/"
@@ -110,6 +204,23 @@ export function Header() {
                 Home
               </Link>
             </li>
+            <li>
+              <Link
+                href="/ask"
+                className="inline-flex items-center py-3 hover:text-civic-leaf"
+              >
+                Ask
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/briefing"
+                className="inline-flex items-center py-3 hover:text-civic-leaf"
+              >
+                Briefing
+              </Link>
+            </li>
+            {/* Mega-menu Explore */}
             <li ref={exploreRef} className="relative">
               <button
                 type="button"
@@ -129,37 +240,55 @@ export function Header() {
               {exploreOpen && (
                 <div
                   role="menu"
-                  className="absolute left-0 top-full mt-1 w-64 origin-top-left rounded-lg border border-civic-border bg-civic-paper py-2 shadow-lg"
+                  aria-label="Explore all sections"
+                  className="absolute left-1/2 top-full z-50 mt-1 w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 origin-top rounded-xl border border-civic-border bg-civic-paper shadow-2xl"
                 >
-                  <ul className="grid gap-0.5">
-                    {exploreLinks.map((link) => (
-                      <li key={link.href}>
-                        <Link
-                          href={link.href}
-                          onClick={() => setExploreOpen(false)}
-                          role="menuitem"
-                          className="block px-4 py-2 text-sm text-civic-ink hover:bg-civic-mist hover:text-civic-leaf"
-                        >
-                          {link.label}
-                        </Link>
-                      </li>
+                  <div className="grid grid-cols-3 gap-x-6 gap-y-1 p-5">
+                    {navGroups.map((group) => (
+                      <div key={group.title} className="space-y-1">
+                        <div className="flex items-center gap-1.5 px-2 pb-1 pt-2">
+                          <group.icon className="h-3.5 w-3.5 text-civic-leaf" aria-hidden="true" />
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-civic-stone">
+                            {group.title}
+                          </span>
+                        </div>
+                        <ul className="space-y-0.5">
+                          {group.items.map((item) => (
+                            <li key={item.href}>
+                              <Link
+                                href={item.href}
+                                onClick={() => setExploreOpen(false)}
+                                role="menuitem"
+                                className="group flex items-start gap-2.5 rounded-md px-2 py-1.5 text-sm text-civic-ink transition hover:bg-civic-mist hover:text-civic-leaf"
+                              >
+                                <item.icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-civic-stone group-hover:text-civic-leaf" aria-hidden="true" />
+                                <span className="min-w-0">
+                                  <span className="block font-medium">{item.label}</span>
+                                  {item.description && (
+                                    <span className="block truncate text-[11px] text-civic-stone">
+                                      {item.description}
+                                    </span>
+                                  )}
+                                </span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
             </li>
-            {primaryNav
-              .filter((item) => item.label !== 'Home')
-              .map((item) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className="inline-flex items-center py-3 hover:text-civic-leaf"
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
+            <li>
+              <Link
+                href="/countries"
+                className="inline-flex items-center gap-1 py-3 hover:text-civic-leaf"
+              >
+                <Globe className="h-4 w-4" aria-hidden="true" />
+                Countries
+              </Link>
+            </li>
           </ul>
         </nav>
 
@@ -200,19 +329,21 @@ export function Header() {
             </Link>
           </form>
 
-          {/* Sponsor */}
+          {/* Following / Bookmarks */}
           <Link
-            href="/sponsor"
-            className="hidden items-center gap-1.5 rounded-full bg-civic-forest px-4 py-2.5 text-sm font-medium text-civic-paper hover:bg-civic-leaf sm:inline-flex"
+            href="/following"
+            aria-label="Following"
+            title="Following"
+            className="hidden h-9 w-9 items-center justify-center rounded-full text-civic-forest hover:bg-civic-mist sm:inline-flex"
           >
-            <Heart className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden md:inline">Sponsor</span>
+            <Bookmark className="h-5 w-5" aria-hidden="true" />
           </Link>
 
           {/* Notifications */}
           <Link
             href="/notifications"
             aria-label="Notifications"
+            title="Notifications"
             className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-civic-forest hover:bg-civic-mist"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
@@ -221,13 +352,13 @@ export function Header() {
           {/* Dark/Light theme toggle */}
           <ThemeToggle />
 
-          {/* Account */}
+          {/* Sponsor */}
           <Link
-            href="/following"
-            aria-label="Account"
-            className="hidden h-9 w-9 items-center justify-center rounded-full text-civic-forest hover:bg-civic-mist sm:inline-flex"
+            href="/sponsor"
+            className="hidden items-center gap-1.5 rounded-full bg-civic-forest px-4 py-2.5 text-sm font-medium text-civic-paper hover:bg-civic-leaf sm:inline-flex"
           >
-            <User className="h-5 w-5" aria-hidden="true" />
+            <Heart className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden md:inline">Sponsor</span>
           </Link>
 
           {/* Hamburger (mobile) */}
@@ -271,6 +402,7 @@ export function Header() {
               </button>
             </div>
             <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-4 py-4">
+              {/* Primary nav */}
               <ul className="space-y-1">
                 {primaryNav.map((item) => (
                   <li key={item.href}>
@@ -284,22 +416,31 @@ export function Header() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-6 px-3 text-xs font-semibold uppercase tracking-wider text-civic-stone">
-                Explore
-              </p>
-              <ul className="mt-2 space-y-1">
-                {exploreLinks.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      onClick={() => setMobileOpen(false)}
-                      className="block rounded-md px-3 py-2.5 text-sm text-civic-ink hover:bg-civic-mist hover:text-civic-leaf"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              {/* Grouped explore links */}
+              {navGroups.map((group) => (
+                <div key={group.title} className="mt-5">
+                  <div className="flex items-center gap-1.5 px-3 pb-1">
+                    <group.icon className="h-3.5 w-3.5 text-civic-leaf" aria-hidden="true" />
+                    <span className="text-xs font-semibold uppercase tracking-wider text-civic-stone">
+                      {group.title}
+                    </span>
+                  </div>
+                  <ul className="mt-1 space-y-0.5">
+                    {group.items.map((item) => (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-civic-ink hover:bg-civic-mist hover:text-civic-leaf"
+                        >
+                          <item.icon className="h-4 w-4 flex-shrink-0 text-civic-stone" aria-hidden="true" />
+                          {item.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </nav>
             <div className="space-y-2 border-t border-civic-border px-4 py-4">
               <Link
@@ -316,7 +457,7 @@ export function Header() {
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center justify-center gap-2 rounded-md border border-civic-border px-4 py-3 text-sm text-civic-ink hover:bg-civic-mist"
                 >
-                  <Bell className="h-4 w-4" aria-hidden="true" />
+                  <BellRing className="h-4 w-4" aria-hidden="true" />
                   Alerts
                 </Link>
                 <Link
