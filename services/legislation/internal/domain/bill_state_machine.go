@@ -1,97 +1,65 @@
 package domain
 
 import (
-        "fmt"
-
         "github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 )
 
 // BillStateMachine validates stage transitions for a Bill. The allowed
 // transitions are COUNTRY-SPECIFIC — supplied by the adapter via
-// StageDefinition.AllowedNext. This struct contains ZERO Kenya-specific
-// knowledge. If you find the string "Second Reading" here, that's a bug.
+// StageDefinition.AllowedNext / AllowedTransitions. This struct contains
+// ZERO Kenya-specific knowledge. If you find the string "Second Reading"
+// here, that's a bug.
+//
+// Issue #227: this struct is now a thin wrapper around the canonical
+// StageGraphValidator (in bill_version.go). The duplicate validation logic
+// that previously lived here has been removed — BillStateMachine simply
+// delegates ValidateTransition / IsTerminal / Stages to the canonical
+// implementation. New callers should prefer NewStageGraphValidator
+// directly (it returns typed errors and rejects duplicate stage codes);
+// BillStateMachine is retained for backward compatibility with existing
+// callers that pass duplicate codes and expect no error from the
+// constructor.
 type BillStateMachine struct {
-        stages map[string]contracts.StageDefinition // code -> definition
+        inner *StageGraphValidator
 }
 
-// NewBillStateMachine builds a state machine from a country's stage definitions.
-// The legislation service constructs one per country at startup, using data
-// supplied by the country adapter.
+// NewBillStateMachine builds a state machine from a country's stage
+// definitions. The legislation service constructs one per country at
+// startup, using data supplied by the country adapter.
+//
+// Unlike NewStageGraphValidator, this constructor DOES NOT return an error
+// on duplicate stage codes — it silently keeps the last definition with
+// each code. This preserves the historical behavior expected by existing
+// callers. New callers should prefer NewStageGraphValidator, which rejects
+// duplicates.
 func NewBillStateMachine(stages []contracts.StageDefinition) *BillStateMachine {
         m := make(map[string]contracts.StageDefinition, len(stages))
         for _, s := range stages {
                 m[s.Code] = s
         }
-        return &BillStateMachine{stages: m}
+        return &BillStateMachine{inner: &StageGraphValidator{stages: m}}
 }
 
-// ValidateTransition returns nil if from → to is a valid transition for this
-// country, or an error explaining why it is not.
-//
-// Rules:
-//   - "from" must be a known stage (unless it's the empty string, meaning the
-//     Bill has no stage yet — i.e., it's brand new).
-//   - "to" must be a known stage.
-//   - "to" must be in "from".AllowedNext (or AllowedTransitions — same field,
-//     different name used by the richer validator).
-//   - If "from" is terminal, no transitions are allowed.
-//
-// Note: terminal stages are NOT automatically reachable from any stage. The
-// adapter's AllowedNext must explicitly list which terminals are reachable
-// from each stage (e.g., SECOND_READING → REJECTED is valid because the
-// adapter lists REJECTED in SECOND_READING's AllowedNext).
+// ValidateTransition delegates to the canonical StageGraphValidator. See
+// that type's docstring for the full validation rules.
 func (sm *BillStateMachine) ValidateTransition(from, to string) error {
-        if to == "" {
-                return fmt.Errorf("invalid transition: target stage is empty")
-        }
-        target, ok := sm.stages[to]
-        if !ok {
-                return fmt.Errorf("invalid transition: unknown target stage %q", to)
-        }
-        _ = target // target exists; reachability is determined by AllowedNext only
-
-        // Brand-new Bill: only non-terminal stages are valid initial stages.
-        if from == "" {
-                if target.IsTerminal {
-                        return fmt.Errorf("invalid transition: cannot start a Bill at terminal stage %q", to)
-                }
-                return nil
-        }
-
-        source, ok := sm.stages[from]
-        if !ok {
-                return fmt.Errorf("invalid transition: unknown source stage %q", from)
-        }
-        if source.IsTerminal {
-                return fmt.Errorf("invalid transition: source stage %q is terminal — no transitions allowed", from)
-        }
-
-        // Allowed if explicitly listed in AllowedNext OR AllowedTransitions.
-        for _, next := range source.AllowedNext {
-                if next == to {
-                        return nil
-                }
-        }
-        for _, next := range source.AllowedTransitions {
-                if next == to {
-                        return nil
-                }
-        }
-        return fmt.Errorf("invalid transition: %q -> %q is not allowed (allowed: %v)", from, to, source.AllowedNext)
+        return sm.inner.ValidateTransition(from, to)
 }
 
-// IsTerminal reports whether the given stage code is terminal for this country.
+// IsTerminal reports whether the given stage code is terminal for this
+// country. Delegates to the canonical StageGraphValidator.
 func (sm *BillStateMachine) IsTerminal(stage string) bool {
-        s, ok := sm.stages[stage]
+        s, ok := sm.inner.stages[stage]
         return ok && s.IsTerminal
 }
 
 // Stages returns all stage definitions for this country. Used to seed the
-// bill_stages table at startup.
+// bill_stages table at startup. Delegates to the canonical
+// StageGraphValidator.
 func (sm *BillStateMachine) Stages() []contracts.StageDefinition {
-        out := make([]contracts.StageDefinition, 0, len(sm.stages))
-        for _, s := range sm.stages {
-                out = append(out, s)
-        }
-        return out
+        return sm.inner.Stages()
 }
+
+// Compile-time assertion that BillStateMachine still satisfies the
+// BillStageTransitionValidator interface even after delegation.
+var _ BillStageTransitionValidator = (*BillStateMachine)(nil)

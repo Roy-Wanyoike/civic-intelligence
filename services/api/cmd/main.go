@@ -198,9 +198,13 @@ func main() {
 
         // Constitution + Government (issue #192). The Constitution is
         // authoritative source material — the platform never reinterprets it.
+        // Constitution chapters + articles (issue #212) are seeded from the
+        // kenya_seed package and exposed via the /articles sub-resources.
         apiHandler.HandleFunc("/api/v1/governments", makeGovernmentsListHandler())
         apiHandler.HandleFunc("/api/v1/governments/", makeGovernmentDetailHandler())
         apiHandler.HandleFunc("/api/v1/constitution", makeConstitutionHandler())
+        apiHandler.HandleFunc("/api/v1/constitution/articles", makeConstitutionArticlesHandler())
+        apiHandler.HandleFunc("/api/v1/constitution/articles/", makeConstitutionArticleDetailHandler())
         apiHandler.HandleFunc("/api/v1/transitions", makeTransitionsHandler())
 
         // Public Debt & Borrowing Intelligence (issue #195, #203). The platform

@@ -48,22 +48,22 @@ type Constitution struct {
 
 // ConstitutionChapter groups related articles. Spec §1.
 type ConstitutionChapter struct {
-        ID             ID
-        ConstitutionID ID
-        Number         int
-        Title          string
-        Articles       []ConstitutionArticle
+        ID             ID                     `json:"id"`
+        ConstitutionID ID                     `json:"constitution_id"`
+        Number         int                    `json:"number"`
+        Title          string                 `json:"title"`
+        Articles       []ConstitutionArticle  `json:"articles"`
 }
 
 // ConstitutionArticle is a single article of the constitution. Spec §1.
 type ConstitutionArticle struct {
-        ID             ID
-        ChapterID      ID
-        Number         string // e.g. "Article 1", "Article 10"
-        Title          string
-        Text           string
-        SourceURL      string
-        CrossReferences []ConstitutionCrossReference
+        ID              ID                            `json:"id"`
+        ChapterID       ID                            `json:"chapter_id"`
+        Number          string                        `json:"number"` // e.g. "Article 1", "Article 10"
+        Title           string                        `json:"title"`
+        Text            string                        `json:"text"`
+        SourceURL       string                        `json:"source_url"`
+        CrossReferences []ConstitutionCrossReference `json:"cross_references"`
 }
 
 // ConstitutionCrossReferenceType classifies a cross-reference. Spec §6.
