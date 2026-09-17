@@ -239,6 +239,13 @@ func makeBillsHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                 ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
                 defer cancel()
 
+                // Country subdomain support: read X-Civic-Country header
+                // set by Next.js middleware (ke.civicintelligence.com → KE)
+                country := r.Header.Get("X-Civic-Country")
+                if country == "" {
+                        country = "KE" // default
+                }
+
                 bills, err := adapter.DiscoverBills(ctx)
                 if err != nil {
                         log.Printf("bills handler: adapter error: %v", err)
@@ -274,6 +281,7 @@ func makeBillsHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                         "page":      1,
                         "page_size": len(items),
                         "source":    "new.kenyalaw.org",
+                        "country":   country,
                 })
         }
 }

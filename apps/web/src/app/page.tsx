@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, FileText, Search, Sparkles, BookOpen, ShieldCheck, TrendingUp } from 'lucide-react';
 import { mockBills } from '@/lib/mock-data';
+import { TrendingCarousel } from '@/components/trending-carousel';
 
 export default function HomePage() {
   const billsToWatch = mockBills.filter(b => b.status !== 'enacted').slice(0, 4);
@@ -191,19 +192,24 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Trending + CTA */}
+      {/* Trending Carousel + CTA */}
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
         <div className="grid gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="h-6 w-6 text-civic-leaf" aria-hidden="true" />
               <h2 className="font-serif text-2xl font-semibold text-civic-forest">
-                Trending
+                Trending This Month
               </h2>
             </div>
-            <p className="mt-1 text-sm text-civic-stone">
-              Bills signed into law, approaching final stage, and recently published.
-            </p>
+            <TrendingCarousel bills={billsToWatch.map(b => ({
+              id: b.id,
+              title: b.title,
+              house: b.house_name ?? 'Parliament',
+              year: b.year,
+              source_url: b.id,
+              current_stage: b.current_stage ?? undefined,
+            }))} />
             <Link
               href="/trending"
               className="mt-6 inline-flex items-center gap-2 rounded-lg border border-civic-border bg-civic-paper px-5 py-3 text-sm font-semibold text-civic-ink transition hover:border-civic-leaf hover:text-civic-leaf"

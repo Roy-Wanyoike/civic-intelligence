@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { TrendingUp, FileSignature, Clock } from 'lucide-react';
 import type { Metadata } from 'next';
+import { TrendingCarousel } from '@/components/trending-carousel';
 
 export const metadata: Metadata = {
   title: 'Trending Bills',
@@ -60,6 +61,13 @@ export default async function TrendingPage() {
           Source: {data.source} · {data.total_bills} total bills tracked.
         </p>
       </header>
+
+      {/* Trending Carousel — this month's hot bills */}
+      {data.hot && data.hot.length > 0 && (
+        <section className="mb-10">
+          <TrendingCarousel bills={data.hot} />
+        </section>
+      )}
 
       {/* Approaching Final Stage */}
       <section className="mb-10">
