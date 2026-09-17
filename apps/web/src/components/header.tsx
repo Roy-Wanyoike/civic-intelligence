@@ -27,6 +27,7 @@ const exploreLinks = [
   { href: '/regulations', label: 'Regulations' },
   { href: '/policies', label: 'Policies' },
   { href: '/what-changed', label: 'What Changed' },
+  { href: '/scenarios', label: 'What If?' },
   { href: '/feed', label: 'Feed' },
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/datasets', label: 'Datasets' },
