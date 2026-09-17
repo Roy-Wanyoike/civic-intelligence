@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getTimeline } from '@/lib/scenarios-api';
-import { RealityBadge, RealityDisclaimer, TimelineLabel } from '@/components/reality-labels';
+import { RealityDisclaimer, TimelineLabel } from '@/components/reality-labels';
 
 export default async function TimelinePage({
   params,
