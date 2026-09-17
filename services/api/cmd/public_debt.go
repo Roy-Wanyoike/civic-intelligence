@@ -3,21 +3,35 @@
 //
 // Endpoints (routed by makeDebtRouter via /api/v1/debt and /api/v1/debt/):
 //
-//	GET /api/v1/debt                    -- national debt dashboard
-//	GET /api/v1/debt/loans              -- borrowing register
-//	GET /api/v1/debt/timeline           -- debt stock timeline
-//	GET /api/v1/debt/governments/{id}   -- government debt summary
+//      GET /api/v1/debt                    -- national debt dashboard
+//      GET /api/v1/debt/loans              -- borrowing register
+//      GET /api/v1/debt/timeline           -- debt stock timeline
+//      GET /api/v1/debt/governments/{id}   -- government debt summary
 //
 // The following endpoints are NOT routed, even though earlier versions of this
 // file documented them:
 //
-//	GET /api/v1/debt/creditors          -- not implemented
-//	GET /api/v1/debt/legislatures/{id}  -- not implemented (placeholder)
+//      GET /api/v1/debt/creditors          -- not implemented
+//      GET /api/v1/debt/legislatures/{id}  -- not implemented (placeholder)
 //
 // Issue #203: handlers consume a legislation.DebtRepository (constructed by
 // legislation.WireDebtRepository and seeded by kenya_seed.SeedDebt). The
 // hardcoded sampleDebtTrend + sampleGovernmentDebtSummaries that previously
 // lived in this file have been moved to adapters/kenya/kenya_seed.
+//
+// Issue #220: /debt/loans now returns seeded BorrowingAgreement records
+// (sourced from public press releases: IMF, World Bank, AfDB, China Exim
+// Bank, Eurobond prospectuses). The previous empty-list behaviour was a
+// regression — the handler was returning the slice from
+// ListBorrowingAgreements before the seeder populated any agreements.
+//
+// Issue #221: each agreement in the /debt/loans response is run through
+// legislation.ValidateAttribution(agreement, administrations). If validation
+// fails (unknown administration, missing contract date, or contract date
+// outside the attributed administration's window), an attribution_warning
+// field is attached to the response item. The platform does NOT reject
+// invalid agreements — it surfaces the uncertainty for human review (Spec
+// section 28).
 package main
 
 import (
@@ -70,6 +84,36 @@ type GovernmentDebtSummaryResponse struct {
         Currency         string   `json:"currency"`
         SourceURLs       []string `json:"source_urls"`
         Disclaimer       string   `json:"disclaimer"`
+}
+
+// BorrowingAgreementResponse is the JSON shape returned for each item in
+// the GET /api/v1/debt/loans response. It is a strict subset of the
+// domain.BorrowingAgreement struct plus an AttributionWarning field.
+//
+// AttributionWarning (issue #221) is non-empty when
+// legislation.ValidateAttribution fails for the agreement. The platform
+// surfaces the warning instead of hiding the record — Spec section 28
+// (the platform never silently resolves conflicts; it surfaces them for
+// human review).
+type BorrowingAgreementResponse struct {
+        ID                          string  `json:"id"`
+        CountryCode                 string  `json:"country_code"`
+        GovernmentAdministrationID  string  `json:"government_administration_id"`
+        PresidentialTermID          *string `json:"presidential_term_id,omitempty"`
+        Borrower                    string  `json:"borrower"`
+        CreditorID                  string  `json:"creditor_id"`
+        CreditorName                string  `json:"creditor_name"`
+        CreditorCategory            string  `json:"creditor_category"`
+        InstrumentType              string  `json:"instrument_type"`
+        DomesticOrExternal          string  `json:"domestic_or_external"`
+        OriginalAmount              float64 `json:"original_amount"`
+        OriginalCurrency            string  `json:"original_currency"`
+        Purpose                     string  `json:"purpose,omitempty"`
+        Sector                      string  `json:"sector,omitempty"`
+        ContractDate                *string `json:"contract_date,omitempty"`
+        Status                      string  `json:"status"`
+        SourceURL                   string  `json:"source_url"`
+        AttributionWarning          string  `json:"attribution_warning,omitempty"`
 }
 
 // debtDisclaimerDashboard is the canonical disclaimer attached to the
@@ -165,13 +209,19 @@ func makeDebtTimelineHandler(repo legislation.DebtRepository) http.HandlerFunc {
 }
 
 // makeDebtLoansHandler handles GET /api/v1/debt/loans.
-// Returns the borrowing register. Until the fiscal service is wired up,
-// returns an empty list with a clear disclaimer.
+// Returns the borrowing register sourced from legislation.DebtRepository.
 //
-// Issue #203: the handler now consults the repository via
-// ListBorrowingAgreements. If the seeder has not populated any agreements
-// (which is the current state — loan-level ingestion is pending issue
-// #93), the response is still well-formed: count=0, agreements=[].
+// Issue #220: the handler previously returned an empty list because the
+// seed data contained no BorrowingAgreement records. The Kenya seed now
+// populates 10 sample agreements sourced from public press releases
+// (IMF, World Bank, AfDB, China Exim Bank, Eurobond prospectuses).
+//
+// Issue #221: each agreement is run through legislation.ValidateAttribution
+// against governmentData.admins. If validation fails — the agreement's
+// GovernmentAdministrationID does not correspond to the administration in
+// power on ContractDate — an attribution_warning field is attached to the
+// response item. The platform surfaces the warning rather than hiding the
+// record (Spec section 28).
 func makeDebtLoansHandler(repo legislation.DebtRepository) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 if r.Method != http.MethodGet {
@@ -187,16 +237,68 @@ func makeDebtLoansHandler(repo legislation.DebtRepository) http.HandlerFunc {
                                 "borrowing agreements could not be loaded")
                         return
                 }
+                // governmentData.admins is the KenyaAdministrations slice seeded at
+                // package init from kenya_seed. legislation.Administration is a type
+                // alias for government.Administration, so no conversion is required.
+                admins := governmentData.admins
+                items := make([]BorrowingAgreementResponse, 0, len(agreements))
+                for _, a := range agreements {
+                        items = append(items, borrowingAgreementResponse(a, admins))
+                }
                 writeJSON(w, http.StatusOK, map[string]any{
-                        "borrowing_agreements": agreements,
-                        "count":                len(agreements),
+                        "borrowing_agreements": items,
+                        "count":                len(items),
                         "disclaimer": `Each borrowing agreement is sourced from authoritative material
 (Treasury External Public Debt Register, IMF, World Bank, AfDB press releases).
 The platform distinguishes CONTRACTED_DURING, DISBURSED_DURING, REPAID_DURING,
 OUTSTANDING_DURING, and REFINANCED_DURING to prevent misleading historical
-attribution. Loan-level ingestion is pending (issue #93).`,
+attribution. Loan-level ingestion is pending (issue #93). When attribution
+cannot be verified against the administration in power on the contract date,
+the per-item attribution_warning field surfaces the discrepancy rather than
+suppressing the record.`,
                 })
         }
+}
+
+// borrowingAgreementResponse converts a domain BorrowingAgreement to its
+// JSON response shape and runs attribution validation (issue #221).
+//
+// The converter NEVER rejects an agreement — even when attribution fails,
+// the record is returned with an attribution_warning so the user can see
+// the raw data and the validation verdict side by side. Spec section 28:
+// the platform surfaces uncertainty; it never silently discards data.
+func borrowingAgreementResponse(a legislation.BorrowingAgreement, admins []legislation.Administration) BorrowingAgreementResponse {
+        resp := BorrowingAgreementResponse{
+                ID:                          string(a.ID),
+                CountryCode:                 a.CountryCode,
+                GovernmentAdministrationID:  string(a.GovernmentAdministrationID),
+                Borrower:                    a.Borrower,
+                CreditorID:                  string(a.CreditorID),
+                CreditorName:                a.CreditorName,
+                CreditorCategory:            string(a.CreditorCategory),
+                InstrumentType:              a.InstrumentType,
+                DomesticOrExternal:          string(a.DomesticOrExternal),
+                OriginalAmount:              a.OriginalAmount,
+                OriginalCurrency:            a.OriginalCurrency,
+                Purpose:                     a.Purpose,
+                Sector:                      a.Sector,
+                Status:                      a.Status,
+                SourceURL:                   a.SourceURL,
+        }
+        if a.PresidentialTermID != nil {
+                s := string(*a.PresidentialTermID)
+                resp.PresidentialTermID = &s
+        }
+        if a.ContractDate != nil {
+                s := a.ContractDate.UTC().Format("2006-01-02")
+                resp.ContractDate = &s
+        }
+        // Issue #221: validate the agreement's attribution. We do NOT reject
+        // invalid attribution — the platform reports uncertainty, never hides data.
+        if err := legislation.ValidateAttribution(a, admins); err != nil {
+                resp.AttributionWarning = err.Error()
+        }
+        return resp
 }
 
 // makeGovernmentDebtHandler handles GET /api/v1/debt/governments/{id}.
