@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { ArrowRight, FileText, Search, Sparkles, BookOpen, ShieldCheck, TrendingUp } from 'lucide-react';
+import { ArrowRight, FileText, Search, Sparkles, BookOpen, ShieldCheck, TrendingUp, HelpCircle } from 'lucide-react';
 import { mockBills } from '@/lib/mock-data';
 import { TrendingCarousel } from '@/components/trending-carousel';
 import { ConstitutionSpotlight } from '@/components/constitution-spotlight';
+import { RealityBadge } from '@/components/reality-labels';
 
 export default function HomePage() {
   const billsToWatch = mockBills.filter(b => b.status !== 'enacted').slice(0, 4);
@@ -238,6 +239,73 @@ export default function HomePage() {
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* What If? — restrained scenario entry point (Phase 18 §35) */}
+      <section className="border-t border-civic-border bg-violet-50">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-6 w-6 text-violet-700" aria-hidden="true" />
+                <h2 className="font-serif text-2xl font-semibold text-civic-forest">
+                  Explore a &ldquo;What If?&rdquo;
+                </h2>
+                <RealityBadge kind="HYPOTHETICAL" size="md" />
+              </div>
+              <p className="mt-2 max-w-2xl text-sm text-stone-700">
+                Explore hypothetical civic scenarios — what could happen if a
+                proposal becomes law, if implementation is delayed, or if
+                funding changes. Every scenario is clearly labelled{' '}
+                <strong>HYPOTHETICAL</strong>; every result is labelled{' '}
+                <strong>SIMULATED</strong>. Reality is observed; scenarios are
+                constructed; assumptions are explicit; evidence remains
+                traceable.
+              </p>
+            </div>
+            <Link
+              href="/scenarios"
+              className="hidden flex-shrink-0 items-center gap-2 rounded-lg bg-violet-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-800 sm:inline-flex"
+            >
+              Explore scenarios
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-lg border border-violet-200 bg-white p-4">
+              <h3 className="font-serif text-base font-semibold text-violet-900">
+                Policy scenarios
+              </h3>
+              <p className="mt-1 text-xs text-stone-700">
+                What could happen if a proposed policy is implemented?
+              </p>
+            </div>
+            <div className="rounded-lg border border-violet-200 bg-white p-4">
+              <h3 className="font-serif text-base font-semibold text-violet-900">
+                Historical counterfactuals
+              </h3>
+              <p className="mt-1 text-xs text-stone-700">
+                What would the timeline look like under a different documented
+                historical condition?
+              </p>
+            </div>
+            <div className="rounded-lg border border-violet-200 bg-white p-4">
+              <h3 className="font-serif text-base font-semibold text-violet-900">
+                Comparative scenarios
+              </h3>
+              <p className="mt-1 text-xs text-stone-700">
+                Compare scenarios side-by-side without political rankings.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/scenarios"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-violet-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-800 sm:hidden"
+          >
+            Explore scenarios
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
         </div>
       </section>
     </div>
