@@ -29,7 +29,7 @@ export default function SponsorPage() {
             <h2 className="font-serif text-lg font-semibold text-civic-ink">M-Pesa</h2>
           </div>
           <p className="mt-2 text-sm text-civic-stone">
-            Pay via Safaricom M-Pesa STK Push. You'll receive a prompt on your phone to confirm.
+            Pay via Safaricom M-Pesa STK Push. You&apos;ll receive a prompt on your phone to confirm.
           </p>
           <MpesaSponsorForm />
         </div>
