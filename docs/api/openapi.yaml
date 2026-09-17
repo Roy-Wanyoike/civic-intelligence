@@ -20,12 +20,35 @@ servers:
 tags:
   - name: meta
   - name: bills
+  - name: acts
+  - name: policies
+  - name: terminology
   - name: search
+  - name: feed
   - name: briefing
+  - name: trending
+  - name: what-changed
   - name: people
   - name: committees
   - name: institutions
+  - name: constitution
+  - name: governments
+  - name: transitions
+  - name: scenarios
+  - name: debt
+  - name: loans
+  - name: grants
+  - name: trust
+  - name: evidence
+  - name: claims
+  - name: contradictions
+  - name: sources
+  - name: corrections
+  - name: subscriptions
+  - name: notifications
   - name: qa
+  - name: sponsor
+  - name: operational
 
 paths:
   /healthz:
@@ -108,6 +131,30 @@ paths:
                 type: object
                 properties:
                   versions: { type: array, items: { $ref: '#/components/schemas/BillVersion' } }
+
+  /bills/{id}/changes:
+    get:
+      tags: [bills]
+      summary: Get the change log between Bill versions
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Change log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        version: { type: integer }
+                        changed_at: { type: string, format: date-time }
+                        summary: { type: string }
+                        diff_url: { type: string }
 
   /bills/{id}/summary:
     get:
@@ -213,6 +260,1022 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
         '200': { description: Institution, content: { application/json: { schema: { $ref: '#/components/schemas/Institution' } } } }
+
+  /trending:
+    get:
+      tags: [trending]
+      summary: Trending Bills and topics (recently enacted + approaching final stage)
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, default: 10, minimum: 1, maximum: 50 } }
+      responses:
+        '200':
+          description: Trending items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/SearchResult' } }
+
+  /terminology:
+    get:
+      tags: [terminology]
+      summary: List all parliamentary terms with plain-language explanations
+      responses:
+        '200':
+          description: Parliamentary terms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  terms:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        term: { type: string }
+                        explanation: { type: string }
+                        source_url: { type: string, nullable: true }
+
+  /terminology/{term}:
+    get:
+      tags: [terminology]
+      summary: Get a single parliamentary term with its plain-language explanation
+      parameters:
+        - { in: path, name: term, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The term
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  term: { type: string }
+                  explanation: { type: string }
+                  source_url: { type: string, nullable: true }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /feed:
+    get:
+      tags: [feed]
+      summary: Civic activity feed
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1, minimum: 1 } }
+        - { in: query, name: page_size, schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
+      responses:
+        '200':
+          description: Feed items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/SearchResult' } }
+                  total: { type: integer }
+
+  /what-changed:
+    get:
+      tags: [what-changed]
+      summary: Proactive civic change feed (diffs since the caller's last visit)
+      parameters:
+        - { in: query, name: since, schema: { type: string, format: date-time } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: page_size, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Changes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/SearchResult' } }
+
+  # ---- Legislation: Acts + post-assent lifecycle (issue #116, #193) ----
+
+  /acts:
+    get:
+      tags: [acts]
+      summary: List Acts of Parliament
+      parameters:
+        - { in: query, name: page,        schema: { type: integer, default: 1, minimum: 1 } }
+        - { in: query, name: page_size,   schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
+        - { in: query, name: status,      schema: { type: string, enum: [in_force, amended, repealed, not_commenced] } }
+        - { in: query, name: q,           schema: { type: string } }
+      responses:
+        '200':
+          description: Page of Acts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Act' } }
+                  total: { type: integer }
+                  page: { type: integer }
+                  page_size: { type: integer }
+
+  /acts/{id}:
+    get:
+      tags: [acts]
+      summary: Get an Act of Parliament
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The Act
+          content: { application/json: { schema: { $ref: '#/components/schemas/Act' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /acts/{id}/audit:
+    get:
+      tags: [acts]
+      summary: Full lifecycle audit for an Act (assent, publication, commencement, regulations, amendments, court, repeal)
+      description: |
+        Missing records are reported as `NOT_VERIFIED`, never as "never happened".
+        The platform does not infer absence (Spec section 16, 43).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Lifecycle audit
+          content: { application/json: { schema: { $ref: '#/components/schemas/ActAudit' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /acts/{id}/events:
+    get:
+      tags: [acts]
+      summary: Post-assent events (commencement, regulations, amendments, court challenges, judicial decisions)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Post-assent events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  act_id: { type: string }
+                  events: { type: array, items: { $ref: '#/components/schemas/PostAssentEvent' } }
+                  count: { type: integer }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /acts/{id}/follow:
+    post:
+      tags: [acts]
+      summary: Follow a Law — flagship experience (issue #193)
+      description: |
+        Creates a real persisted subscription. The caller receives notifications
+        when authoritative evidence indicates this Act changed (commencement,
+        regulations, implementation, amendments, court cases, government notices,
+        institutional actions, related Bills).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Followed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  followed: { type: boolean }
+                  act_id: { type: string }
+                  subscription_id: { type: string }
+                  monitors: { type: array, items: { type: string } }
+                  disclaimer: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /acts/{id}/lineage:
+    get:
+      tags: [acts]
+      summary: Full legal lineage for an Act
+      description: |
+        Bill → Parliamentary journey → Presidential Assent → Act publication →
+        Commencement → Regulations → Amendments → Court decisions → Current status.
+        Each step is independently sourced. Missing steps are `NOT_VERIFIED`,
+        never inferred (Spec section 20).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Lineage chain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  act_id: { type: string }
+                  lineage:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        step: { type: string }
+                        title: { type: string }
+                        description: { type: string }
+                        status: { type: string, enum: [VERIFIED, NOT_VERIFIED] }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /policies:
+    get:
+      tags: [policies]
+      summary: List government policy documents
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: page_size, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Policy documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Policy' } }
+                  total: { type: integer }
+
+  # ---- Constitution + Government + Transitions ----
+
+  /constitution:
+    get:
+      tags: [constitution]
+      summary: Get the Constitution metadata
+      description: |
+        The Constitution is authoritative source material. The platform does
+        NOT reinterpret constitutional text. Response carries
+        `reality_layer: "FACT"`.
+      responses:
+        '200':
+          description: Constitution metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  constitution: { $ref: '#/components/schemas/Constitution' }
+                  reality_layer: { type: string, enum: [FACT] }
+                  disclaimer: { type: string }
+
+  /governments:
+    get:
+      tags: [governments]
+      summary: List administrations (most recent first)
+      responses:
+        '200':
+          description: Administrations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  administrations: { type: array, items: { $ref: '#/components/schemas/Administration' } }
+                  count: { type: integer }
+
+  /governments/{id}:
+    get:
+      tags: [governments]
+      summary: Get an administration with its president and terms
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Administration detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  administration: { $ref: '#/components/schemas/Administration' }
+                  president: { $ref: '#/components/schemas/President' }
+                  terms: { type: array, items: { $ref: '#/components/schemas/PresidentialTerm' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /governments/{id}/terms:
+    get:
+      tags: [governments]
+      summary: List the presidential terms for an administration
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Terms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  administration_id: { type: string }
+                  terms: { type: array, items: { $ref: '#/components/schemas/PresidentialTerm' } }
+                  count: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /transitions:
+    get:
+      tags: [transitions]
+      summary: List government transitions (outgoing → incoming president)
+      responses:
+        '200':
+          description: Transitions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transitions: { type: array, items: { $ref: '#/components/schemas/GovernmentTransition' } }
+                  count: { type: integer }
+
+  # ---- Scenarios (Phase 18 simulation) ----
+
+  /scenarios:
+    get:
+      tags: [scenarios]
+      summary: List scenarios
+      description: |
+        Every response carries an explicit `reality_layer` tag so HYPOTHETICAL
+        outputs cannot be confused with observed civic facts.
+      responses:
+        '200':
+          description: Scenarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenarios: { type: array, items: { $ref: '#/components/schemas/Scenario' } }
+                  count: { type: integer }
+                  disclaimer: { type: string }
+    post:
+      tags: [scenarios]
+      summary: Create a scenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Scenario' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Scenario' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /scenarios/compare:
+    post:
+      tags: [scenarios]
+      summary: Compare two or more scenarios side by side
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scenario_ids]
+              properties:
+                scenario_ids: { type: array, items: { type: string }, minItems: 2 }
+      responses:
+        '200':
+          description: Comparison
+          content: { application/json: { schema: { $ref: '#/components/schemas/ScenarioComparison' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /scenarios/{id}:
+    get:
+      tags: [scenarios]
+      summary: Get a scenario
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Scenario detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenario: { $ref: '#/components/schemas/Scenario' }
+                  reality_layer: { type: string, enum: [FACT, OBSERVED, HYPOTHETICAL, MODELED, UNKNOWN] }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [scenarios]
+      summary: Validate / Run / Replay a scenario (selected via `action` query param)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - in: query
+          name: action
+          required: true
+          schema: { type: string, enum: [validate, run, replay] }
+        - { in: query, name: seed, schema: { type: integer, description: 'Run reproducibility seed' } }
+      responses:
+        '200':
+          description: Action result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run: { $ref: '#/components/schemas/SimulationRun' }
+                  reality_layer: { type: string, enum: [MODELED, HYPOTHETICAL] }
+                  disclaimer: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /scenarios/{id}/assumptions:
+    get:
+      tags: [scenarios]
+      summary: Get a scenario's assumptions
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Assumptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assumptions: { type: array, items: { $ref: '#/components/schemas/ScenarioAssumption' } }
+                  count: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /scenarios/{id}/evidence:
+    get:
+      tags: [scenarios]
+      summary: Get a scenario's source evidence + baseline evidence + assumption evidence count
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  source_evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceRef' } }
+                  baseline_evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceRef' } }
+                  assumption_evidence_count: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /scenarios/{id}/results:
+    get:
+      tags: [scenarios]
+      summary: Get a scenario's completed run results
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        run_id: { type: string }
+                        completed_at: { type: string, format: date-time }
+                        duration: { type: string }
+                        summary: { type: object }
+                  count: { type: integer }
+                  reality_layer: { type: string, enum: [MODELED] }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /scenarios/{id}/timeline:
+    get:
+      tags: [scenarios]
+      summary: Get a scenario's timeline (OBSERVED / ASSUMED / MODELED / UNKNOWN labels)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp: { type: string, format: date }
+                        label: { type: string, enum: [OBSERVED, ASSUMED, MODELED, UNKNOWN] }
+                        title: { type: string }
+                        description: { type: string }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /scenarios/{id}/methodology:
+    get:
+      tags: [scenarios]
+      summary: Get a scenario's methodology + declared model limitations (Gate E)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Methodology
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenario_id: { type: string }
+                  methodology: { $ref: '#/components/schemas/Methodology' }
+                  model_id: { type: string }
+                  model_version: { type: string }
+                  limitations: { type: array, items: { type: string } }
+                  reality_layer: { type: string, enum: [HYPOTHETICAL] }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---- Public Debt & Borrowing Intelligence ----
+
+  /debt:
+    get:
+      tags: [debt]
+      summary: National debt dashboard (latest CBK snapshot + debt service + debt-to-GDP)
+      description: |
+        The platform never computes a "best borrower" or political performance
+        score. Every figure is an immutable observation; changes in debt stock
+        can reflect exchange-rate movements, valuation changes, repayments,
+        refinancing, arrears, adjustments, and disbursement timing — NOT just new
+        borrowing.
+      responses:
+        '200':
+          description: Dashboard
+          content: { application/json: { schema: { $ref: '#/components/schemas/DebtDashboard' } } }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /debt/loans:
+    get:
+      tags: [debt, loans]
+      summary: Borrowing register
+      description: |
+        Each agreement carries an `attribution_warning` field when its
+        `GovernmentAdministrationID` does not correspond to the administration
+        in power on `ContractDate` (issue #221). The platform never rejects
+        records — it surfaces the discrepancy for human review (Spec section 28).
+      responses:
+        '200':
+          description: Borrowing agreements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  borrowing_agreements: { type: array, items: { $ref: '#/components/schemas/BorrowingAgreement' } }
+                  count: { type: integer }
+                  disclaimer: { type: string }
+
+  /debt/timeline:
+    get:
+      tags: [debt]
+      summary: Debt-stock observations (chronological; immutable per Spec section 9)
+      description: |
+        Each point is an immutable observation. The trend line should NOT be
+        interpreted as a causal attribution of borrowing to any individual
+        president. Government transition dates overlay the chart; users can
+        correlate visually without the platform implying causation.
+      responses:
+        '200':
+          description: Timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  country_code: { type: string }
+                  points: { type: array, items: { $ref: '#/components/schemas/DebtTrendPoint' } }
+                  disclaimer: { type: string }
+
+  /debt/governments/{id}:
+    get:
+      tags: [debt, governments]
+      summary: Per-administration debt summary
+      description: |
+        The canonical `NO_POLITICAL_PERFORMANCE_SCORE` disclaimer is appended to
+        every per-administration summary (issue #222).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Government debt summary
+          content: { application/json: { schema: { $ref: '#/components/schemas/GovernmentDebtSummary' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /loans:
+    get:
+      tags: [loans]
+      summary: Sovereign loans tracker (list)
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: page_size, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Loans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/BorrowingAgreement' } }
+                  total: { type: integer }
+
+  /loans/{id}:
+    get:
+      tags: [loans]
+      summary: Sovereign loan detail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Loan
+          content: { application/json: { schema: { $ref: '#/components/schemas/BorrowingAgreement' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /grants:
+    get:
+      tags: [grants]
+      summary: Grants received by the government (list)
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: page_size, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Grants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Grant' } }
+                  total: { type: integer }
+
+  /grants/{id}:
+    get:
+      tags: [grants]
+      summary: Grant detail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Grant
+          content: { application/json: { schema: { $ref: '#/components/schemas/Grant' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---- Trust, Evidence, Claims, Contradictions, Sources ----
+
+  /provenance/{entity_type}/{id}:
+    get:
+      tags: [trust, evidence]
+      summary: Get the full evidence chain for an entity
+      parameters:
+        - { in: path, name: entity_type, required: true, schema: { type: string, enum: [bill, act, regulation, claim, evidence, source, policy] } }
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Provenance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entity_type: { type: string }
+                  entity_id: { type: string }
+                  claims: { type: array, items: { $ref: '#/components/schemas/Claim' } }
+                  evidence: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+                  sources: { type: array, items: { $ref: '#/components/schemas/Source' } }
+
+  /evidence/{id}:
+    get:
+      tags: [evidence]
+      summary: Evidence detail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Evidence
+          content: { application/json: { schema: { $ref: '#/components/schemas/Evidence' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /claims/{id}/evidence:
+    get:
+      tags: [claims]
+      summary: Get a claim with its supporting evidence
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Claim + evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim: { $ref: '#/components/schemas/Claim' }
+                  evidence: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /contradictions:
+    get:
+      tags: [contradictions]
+      summary: List active source conflicts
+      responses:
+        '200':
+          description: Contradictions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Contradiction' } }
+                  total: { type: integer }
+
+  /sources:
+    get:
+      tags: [sources]
+      summary: List trust sources
+      responses:
+        '200':
+          description: Sources
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Source' } }
+                  total: { type: integer }
+
+  /sources/{id}:
+    get:
+      tags: [sources]
+      summary: Source detail with health
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Source
+          content: { application/json: { schema: { $ref: '#/components/schemas/Source' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---- Corrections, Subscriptions, Notifications ----
+
+  /corrections:
+    post:
+      tags: [corrections]
+      summary: Submit a correction request (anonymous submitters must provide submitted_email)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CorrectionRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Correction' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    get:
+      tags: [corrections]
+      summary: List corrections (admin scope - user:admin or evidence:write)
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [pending, in_review, accepted, rejected, superseded] } }
+      responses:
+        '200':
+          description: Corrections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Correction' } }
+                  total: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /corrections/{id}:
+    get:
+      tags: [corrections]
+      summary: Correction detail (admin scope)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Correction
+          content: { application/json: { schema: { $ref: '#/components/schemas/Correction' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /subscriptions:
+    post:
+      tags: [subscriptions]
+      summary: Follow an entity (bill, committee, topic, institution, person)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity_type, entity_id]
+              properties:
+                entity_type: { type: string, enum: [bill, committee, topic, institution, person] }
+                entity_id: { type: string }
+      responses:
+        '201':
+          description: Followed
+          content: { application/json: { schema: { $ref: '#/components/schemas/Follow' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    get:
+      tags: [subscriptions]
+      summary: List the caller's follows
+      parameters:
+        - { in: query, name: entity_type, schema: { type: string, enum: [bill, committee, topic, institution, person] } }
+      responses:
+        '200':
+          description: Follows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Follow' } }
+                  total: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /subscriptions/{id}:
+    delete:
+      tags: [subscriptions]
+      summary: Unfollow
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Unfollowed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /notifications:
+    get:
+      tags: [notifications]
+      summary: List the caller's notifications
+      parameters:
+        - { in: query, name: unread, schema: { type: boolean, default: false } }
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+                  total: { type: integer }
+                  unread: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/{id}/read:
+    post:
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Marked as read }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /questions/stream:
+    post:
+      tags: [qa]
+      summary: Ask a civic question (SSE streaming)
+      description: |
+        Streams Server-Sent Events as the AI gateway streams tokens. The
+        response is validated before being committed to the canonical claim
+        store (ADR-0005).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 1000 }
+                bill_id: { type: string, format: uuid }
+                country: { type: string, default: KE }
+                impact_lens:
+                  type: string
+                  enum: [citizen, student, small_business, employee, farmer, driver, tenant, homeowner, employer, digital_worker]
+      responses:
+        '200':
+          description: SSE stream of validated tokens + citations
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---- Sponsor (payments) ----
+
+  /sponsor/mpesa:
+    post:
+      tags: [sponsor]
+      summary: Initiate an M-Pesa sponsorship
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, amount]
+              properties:
+                phone: { type: string }
+                amount: { type: integer, minimum: 100 }
+      responses:
+        '200':
+          description: STK push initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkout_request_id: { type: string }
+                  status: { type: string }
+
+  /sponsor/card:
+    post:
+      tags: [sponsor]
+      summary: Initiate a card sponsorship (Stripe)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: { type: integer, minimum: 100 }
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Payment intent created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client_secret: { type: string }
+                  publishable_key: { type: string }
+
+  /sponsor/mpesa/callback:
+    post:
+      tags: [sponsor]
+      summary: M-Pesa STK push callback receiver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Acknowledged }
+
+  /sponsor/card/webhook:
+    post:
+      tags: [sponsor]
+      summary: Stripe webhook receiver
+      parameters:
+        - { in: header, name: Stripe-Signature, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Acknowledged }
+
+  # ---- Operational ----
+
+  /refresh:
+    post:
+      tags: [operational]
+      summary: Trigger adapter re-discovery (called by cron)
+      responses:
+        '200':
+          description: Refresh triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  refreshed_at: { type: string, format: date-time }
 
 components:
   securitySchemes:
@@ -379,6 +1442,371 @@ components:
         type: { type: string, enum: [legislature, executive, judiciary, ministry, agency, regulator, county, commission, constitutional_body, independent_office] }
         country: { type: string }
 
+    Act:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        citation: { type: string, example: 'Act No. 23 of 2012' }
+        year: { type: integer }
+        country: { type: string, example: KE }
+        status: { type: string, enum: [in_force, amended, repealed, not_commenced] }
+        assent_date: { type: string, format: date, nullable: true }
+        publication_date: { type: string, format: date, nullable: true }
+        commencement_date: { type: string, format: date, nullable: true }
+        description: { type: string, nullable: true }
+        source_url: { type: string, nullable: true }
+        version_count: { type: integer }
+        event_count: { type: integer }
+
+    ActAudit:
+      type: object
+      properties:
+        act_id: { type: string }
+        assent_recorded: { type: boolean }
+        act_published: { type: boolean }
+        act_number: { type: string }
+        commencement_notice: { type: boolean }
+        regulations_issued: { type: boolean }
+        amended: { type: boolean }
+        court_challenged: { type: boolean }
+        judicial_decision: { type: boolean }
+        repealed: { type: boolean }
+        current_status: { type: string }
+        audit_statuses: { type: array, items: { type: string } }
+        data_gaps: { type: array, items: { type: string } }
+        disclaimer: { type: string }
+
+    PostAssentEvent:
+      type: object
+      properties:
+        id: { type: string }
+        act_id: { type: string }
+        event_type: { type: string, enum: [ASSENT, PUBLICATION, COMMENCEMENT, REGULATION, AMENDMENT, COURT_CHALLENGE, JUDICIAL_DECISION, REPEAL] }
+        event_date: { type: string, format: date-time }
+        title: { type: string }
+        description: { type: string }
+        source_url: { type: string }
+
+    Policy:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        ministry_id: { type: string, nullable: true }
+        ministry_name: { type: string, nullable: true }
+        published_at: { type: string, format: date-time }
+        source_url: { type: string }
+        topics: { type: array, items: { type: string } }
+
+    Constitution:
+      type: object
+      properties:
+        id: { type: string }
+        country_code: { type: string, example: KE }
+        title: { type: string, example: 'Constitution of Kenya, 2010' }
+        promulgated_on: { type: string, format: date }
+        source_url: { type: string }
+        article_count: { type: integer }
+
+    President:
+      type: object
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        country_code: { type: string }
+        birth_date: { type: string, format: date, nullable: true }
+        death_date: { type: string, format: date, nullable: true }
+        source_url: { type: string, nullable: true }
+
+    Administration:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        president_id: { type: string }
+        president_name: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date, nullable: true, description: 'NULL means administration is current' }
+        is_current: { type: boolean }
+        country_code: { type: string }
+        source_url: { type: string }
+
+    PresidentialTerm:
+      type: object
+      properties:
+        id: { type: string }
+        administration_id: { type: string }
+        term_number: { type: integer }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date, nullable: true }
+        is_current: { type: boolean }
+        source_url: { type: string }
+
+    GovernmentTransition:
+      type: object
+      properties:
+        id: { type: string }
+        transition_date: { type: string, format: date }
+        outgoing_admin_id: { type: string, nullable: true }
+        incoming_admin_id: { type: string }
+        outgoing_president: { type: string, nullable: true }
+        incoming_president: { type: string }
+        source_url: { type: string }
+
+    Scenario:
+      type: object
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        reality_layer: { type: string, enum: [FACT, OBSERVED, HYPOTHETICAL, MODELED, UNKNOWN] }
+        scenario_type: { type: string }
+        status: { type: string, enum: [DRAFT, READY, RUNNING, COMPLETED, FAILED, ARCHIVED] }
+        model_id: { type: string }
+        model_version: { type: string }
+        baseline: { type: object }
+        assumptions: { type: array, items: { $ref: '#/components/schemas/ScenarioAssumption' } }
+        constraints: { type: array, items: { type: object } }
+        variables: { type: array, items: { type: object } }
+        time_horizon: { type: object }
+        methodology: { $ref: '#/components/schemas/Methodology' }
+        source_evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceRef' } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ScenarioAssumption:
+      type: object
+      properties:
+        id: { type: string }
+        statement: { type: string }
+        status: { type: string, enum: [PROPOSED, ACCEPTED, REJECTED, OBSERVED] }
+        confidence: { type: string, enum: [high, medium, low, unknown] }
+        source_evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceRef' } }
+
+    EvidenceRef:
+      type: object
+      properties:
+        kind: { type: string, enum: [bill, act, regulation, hansard, committee_report, order_paper, gazette, news, journal] }
+        ref_id: { type: string }
+        url: { type: string }
+        retrieved_at: { type: string, format: date-time }
+
+    Methodology:
+      type: object
+      properties:
+        approach: { type: string }
+        data_sources: { type: array, items: { type: string } }
+        limitations: { type: array, items: { type: string } }
+        assumptions: { type: array, items: { type: string } }
+        validation_status: { type: string, enum: [pending, passed, failed, partial] }
+
+    SimulationRun:
+      type: object
+      properties:
+        id: { type: string }
+        scenario_id: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING, COMPLETED, FAILED, REPLAYED] }
+        seed: { type: integer }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+        duration: { type: string }
+        result_summary: { type: object, nullable: true }
+        reality_layer: { type: string, enum: [MODELED, HYPOTHETICAL] }
+
+    ScenarioComparison:
+      type: object
+      properties:
+        scenario_ids: { type: array, items: { type: string } }
+        dimensions: { type: array, items: { type: string } }
+        matrix:
+          type: array
+          items:
+            type: object
+            properties:
+              dimension: { type: string }
+              values:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    scenario_id: { type: string }
+                    value: { type: string }
+
+    DebtDashboard:
+      type: object
+      properties:
+        country_code: { type: string }
+        total_debt_stock: { type: number, nullable: true }
+        domestic_debt: { type: number, nullable: true }
+        external_debt: { type: number, nullable: true }
+        debt_service: { type: number, nullable: true }
+        debt_to_gdp: { type: number, nullable: true }
+        currency: { type: string, example: KES }
+        as_of: { type: string, format: date }
+        source_url: { type: string }
+        disclaimer: { type: string }
+
+    DebtTrendPoint:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        total_debt_stock: { type: number, nullable: true }
+        domestic_debt: { type: number, nullable: true }
+        external_debt: { type: number, nullable: true }
+        source_url: { type: string }
+
+    GovernmentDebtSummary:
+      type: object
+      properties:
+        administration_id: { type: string }
+        period: { type: string }
+        debt_at_start: { type: number, nullable: true }
+        debt_at_end: { type: number, nullable: true }
+        new_borrowing: { type: number, nullable: true }
+        debt_service: { type: number, nullable: true }
+        external_debt: { type: number, nullable: true }
+        domestic_debt: { type: number, nullable: true }
+        currency: { type: string }
+        source_urls: { type: array, items: { type: string } }
+        disclaimer: { type: string }
+
+    BorrowingAgreement:
+      type: object
+      properties:
+        id: { type: string }
+        country_code: { type: string }
+        government_administration_id: { type: string }
+        presidential_term_id: { type: string, nullable: true }
+        borrower: { type: string }
+        creditor_id: { type: string }
+        creditor_name: { type: string }
+        creditor_category: { type: string }
+        instrument_type: { type: string }
+        domestic_or_external: { type: string, enum: [DOMESTIC, EXTERNAL] }
+        original_amount: { type: number }
+        original_currency: { type: string }
+        purpose: { type: string }
+        sector: { type: string }
+        contract_date: { type: string, format: date, nullable: true }
+        status: { type: string }
+        source_url: { type: string }
+        attribution_warning: { type: string, description: "Present when the agreement's GovernmentAdministrationID does not match the administration in power on ContractDate." }
+
+    Grant:
+      type: object
+      properties:
+        id: { type: string }
+        country_code: { type: string }
+        donor_id: { type: string }
+        donor_name: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+        purpose: { type: string }
+        sector: { type: string }
+        agreement_date: { type: string, format: date, nullable: true }
+        status: { type: string }
+        source_url: { type: string }
+
+    Claim:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [FACT, EXPLANATION, INFERENCE] }
+        text: { type: string }
+        authority: { type: string, enum: [PRIMARY_OFFICIAL, OFFICIAL_REPOSITORY, SECONDARY_VERIFIED, UNVERIFIED] }
+        confidence: { type: string, enum: [high, medium, low, unknown] }
+        citations: { type: array, items: { $ref: '#/components/schemas/Citation' } }
+
+    Evidence:
+      type: object
+      properties:
+        id: { type: string }
+        claim_id: { type: string }
+        source_url: { type: string }
+        snippet: { type: string }
+        retrieved_at: { type: string, format: date-time }
+        source_type: { type: string, enum: [parliament, gazette, kenya_law, hansard, committee_report, order_paper, votes_proceedings] }
+
+    Contradiction:
+      type: object
+      properties:
+        id: { type: string }
+        claim_a_id: { type: string }
+        claim_b_id: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [active, resolved, superseded] }
+        detected_at: { type: string, format: date-time }
+
+    Source:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string }
+        authority: { type: string, enum: [PRIMARY_OFFICIAL, OFFICIAL_REPOSITORY, SECONDARY_VERIFIED, UNVERIFIED] }
+        last_polled_at: { type: string, format: date-time, nullable: true }
+        health: { type: string, enum: [healthy, degraded, down, unknown] }
+        coverage: { type: string }
+
+    Correction:
+      type: object
+      properties:
+        id: { type: string }
+        target_type: { type: string, enum: [bill, act, claim, evidence, source, regulation, policy, person, committee] }
+        target_id: { type: string }
+        reason: { type: string }
+        category: { type: string }
+        page_url: { type: string }
+        evidence: { type: string }
+        previous_state: { type: object, nullable: true }
+        corrected_state: { type: object, nullable: true }
+        submitted_by: { type: string }
+        submitted_email: { type: string }
+        reviewed_by: { type: string, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [pending, in_review, accepted, rejected, superseded] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CorrectionRequest:
+      type: object
+      required: [target_type, target_id, category, reason, page_url]
+      properties:
+        target_type: { type: string, enum: [bill, act, claim, evidence, source, regulation, policy, person, committee] }
+        target_id: { type: string }
+        category: { type: string, enum: [wrong_fact, wrong_source, wrong_citation, outdated, incorrect_interpretation, missing_information, conflicting_sources, broken_document] }
+        reason: { type: string, minLength: 1 }
+        page_url: { type: string, format: uri }
+        evidence: { type: string, format: uri }
+        submitted_email: { type: string, format: email, description: 'Required for anonymous submissions' }
+        corrected_state: { type: object }
+
+    Follow:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        entity_type: { type: string, enum: [bill, committee, topic, institution, person] }
+        entity_id: { type: string }
+        created_at: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string }
+        event_type: { type: string, enum: [bill_published, bill_stage_change, bill_amended, bill_assented, new_document, committee_report, public_participation] }
+        title: { type: string }
+        body: { type: string }
+        payload: { type: object }
+        read_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
   responses:
     Health:
       description: OK
@@ -388,6 +1816,15 @@ components:
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
     Unauthorized:
       description: Unauthorized
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Forbidden — caller lacks the required scope
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    BadRequest:
+      description: Bad request — validation failed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ServiceUnavailable:
+      description: Service unavailable — backing store could not be loaded
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
 
     Error:

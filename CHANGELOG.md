@@ -6,6 +6,158 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Post-Phase-1 (PRs #196–#241)
+
+#### Phase 18 — Simulation Infrastructure
+
+- **Scenarios domain** (`services/simulation/`): country-agnostic scenario model
+  (`Scenario`, `ScenarioAssumption`, `ScenarioModel`, `ScenarioConstraint`,
+  `ScenarioVariable`) with `RealityLayer` tagging (FACT / OBSERVED / HYPOTHETICAL /
+  MODELED / UNKNOWN). Every response from the simulation API carries an explicit
+  reality-layer tag so HYPOTHETICAL outputs cannot be confused with observed
+  civic facts.
+- **Simulation engines**: deterministic, Monte-Carlo, and counterfactual engines
+  with `ValidatePipeline` (Inputs → Assumptions → Constraints → Model → Run →
+  Results → Audit), reproducibility gate (Gate L), and constraint evaluation
+  (`EvaluateConstraint` parses a small expression grammar: `<`, `<=`, `>`, `>=`,
+  `==`, `!=`, `&&`, `||`, `!`, parentheses, variable references, numeric and
+  boolean literals — issue #210).
+- **Golden dataset** (`services/simulation/internal/golden/golden.go`): covers
+  all 11 documented categories (simple-deterministic, multi-variable,
+  historical-counterfactual, uncertainty, missing-data, contradictory-inputs,
+  invalid, extreme-values, scenario-comparison, reproducibility,
+  model-version-changes). Backed by `golden_test.go` with one test function per
+  category — issue #209.
+- **Scenario API** (`services/api/cmd/scenarios.go`): 12 endpoints under
+  `/api/v1/scenarios` — list, create, get, validate, run, replay, assumptions,
+  evidence, results, timeline, methodology, compare. Each response carries a
+  HYPOTHETICAL / SIMULATED disclaimer (Phase 18 section 33).
+
+#### Constitution + Government domain
+
+- **Government types** (`services/legislation/government/`): `Constitution`,
+  `President`, `Administration`, `PresidentialTerm`, `GovernmentTransition`,
+  `CabinetMember` — country-agnostic, sourced from authoritative material.
+- **Kenya seed** (`adapters/kenya/kenya_seed/government.go`): Constitution of
+  Kenya 2010, all administrations from 1964 to present (Kenyatta, Moi, Kibaki,
+  Uhuru Kenyatta, William Ruto) with presidential terms and transition dates.
+- **Government API** (`services/api/cmd/governments.go`): `/api/v1/governments`
+  (list administrations), `/api/v1/governments/{id}` (detail + terms),
+  `/api/v1/constitution` (authoritative text — never reinterpreted),
+  `/api/v1/transitions` (presidential transition timeline). The Constitution
+  endpoint carries `reality_layer: "FACT"`.
+
+#### Post-Assent Legislative Lifecycle
+
+- **Post-assent domain** (`services/legislation/internal/domain/post_assent.go`):
+  `Act`, `ActVersion` (immutable — ADR-0011), `PostAssentEvent`,
+  `PresidentialAssentEvent`, `LegislativeLifecycleAudit`,
+  `ActRepository` interface (9 methods including `RecordAssent` — the explicit
+  Bill → Act transition per Spec §15).
+- **ActRepository implementation**
+  (`services/legislation/internal/infrastructure/memory/act_repository.go`):
+  thread-safe in-memory repository with country isolation, append-only versions
+  + events, and the Spec §15 `RecordAssent` semantics — fixes #202.
+- **Post-assent API** (`services/api/cmd/post_assent.go`):
+  `/api/v1/acts/{id}/audit` (full lifecycle audit),
+  `/api/v1/acts/{id}/events` (post-assent events: commencement, regulations,
+  court challenges, amendments),
+  `/api/v1/acts/{id}/follow` (Follow-a-Law flagship experience — issue #193,
+  creates a real persisted subscription with eight monitoring domains),
+  `/api/v1/acts/{id}/lineage` (full legal lineage — Bill → Parliamentary
+  journey → Assent → Publication → Commencement → Regulations → Amendments →
+  Court decisions → Current status). Missing steps are reported as
+  `NOT_VERIFIED`, never inferred.
+
+#### Public Debt & Borrowing Intelligence
+
+- **Public-debt domain** (`services/legislation/internal/domain/public_debt.go`):
+  `PublicDebtSnapshot` (immutable), `BorrowingAgreement`,
+  `Disbursement`, `Repayment`, `GovernmentDebtSummary`,
+  `DebtRepository` interface (10 methods),
+  `ValidateAttribution(agreement, []Administration) error` — verifies the
+  agreement's `GovernmentAdministrationID` corresponds to the administration
+  in power on `ContractDate` (issue #221).
+- **DebtRepository implementation**
+  (`services/legislation/internal/infrastructure/memory/debt_repository.go`):
+  thread-safe in-memory repository; immutable snapshots (rejected by ID and by
+  `(country, observation_date)` composite key); chronological list queries;
+  orphan-rejecting disbursement/repayment appenders — fixes #203.
+- **Kenya debt seed** (`adapters/kenya/kenya_seed/public_debt.go`): 12 CBK
+  debt-stock observations (2013–2024), per-administration summaries
+  (Uhuru Kenyatta, William Ruto), and 10 borrowing agreements sourced from
+  public press releases / prospectuses (China Exim Bank SGR, Eurobonds, World
+  Bank DPOs, AfDB Last Mile, IMF SCF/ECF) — fixes #220.
+- **Debt API** (`services/api/cmd/public_debt.go`): `/api/v1/debt` (national
+  debt dashboard with the latest CBK snapshot + debt service + debt-to-GDP),
+  `/api/v1/debt/loans` (borrowing register — each item runs through
+  `ValidateAttribution` and surfaces an `attribution_warning` field on
+  mismatch), `/api/v1/debt/timeline` (chronological debt-stock observations),
+  `/api/v1/debt/governments/{id}` (per-administration summary). The
+  `NO_POLITICAL_PERFORMANCE_SCORE` canonical constant is appended to every
+  per-administration disclaimer — fixes #222. The platform never attributes
+  sovereign borrowing personally to a president.
+
+#### Postgres migrations (Phase 18 + government + post-assent schemas)
+
+- **019_simulation_schema.{up,down}.sql**: 11 tables (`scenarios`,
+  `scenario_versions` (immutable), `scenario_assumptions`, `scenario_inputs`,
+  `scenario_models`, `simulation_runs`, `simulation_results` (immutable),
+  `simulation_metrics`, `scenario_evidence`, `scenario_relationships`,
+  `scenario_audits` (append-only)). UUID PKs, `tenant_id` btree indexes,
+  CHECK constraints mirroring every domain enum, FK to `identity.users`,
+  immutability triggers (BEFORE UPDATE OR DELETE OR TRUNCATE) on
+  `scenario_versions`, `simulation_results`, `scenario_audits` — fixes #211.
+- **020_government_schema.{up,down}.sql**: 10 tables (`constitutions`,
+  `constitution_chapters`, `constitution_articles`,
+  `constitution_cross_references`, `presidents`, `administrations`,
+  `presidential_terms`, `government_periods`, `cabinet_members`,
+  `transitions`). Temporal validity via `EXCLUDE USING gist` (prevents
+  overlapping administration/term/period/cabinet windows). `btree_gist`
+  extension created inline — fixes #214.
+- **021_post_assent_schema.{up,down}.sql**: 4 tables
+  (`presidential_assent_events`, `act_versions` (immutable),
+  `post_assent_events`, `legislative_lifecycle_audits`). Hard FK
+  `act_versions.act_id → legislation.acts(id) ON DELETE RESTRICT`.
+  Immutability trigger on `act_versions` (ADR-0011) — fixes #228.
+
+#### Frontend
+
+- **Navbar mega-menu redesign** (`apps/web/src/components/header.tsx`):
+  reorganised into 6 thematic groups (Legislation, Government, Finance,
+  Intelligence, Scenarios, Resources) so 30+ destinations stay scannable.
+  Includes a primary nav (Home, Ask, Briefing, Countries) and an expandable
+  Explore dropdown.
+- **Scenarios UI** (`apps/web/src/app/scenarios/`): list, create, detail,
+  methodology, evidence, results, timeline, assumptions, and comparison
+  pages — every page surfaces the HYPOTHETICAL disclaimer.
+- **Acts UI** (`apps/web/src/app/acts/[id]/{audit,events,follow,lineage}/`):
+  post-assent lifecycle pages wired to the new API endpoints.
+- **Government UI** (`apps/web/src/app/governments/`): list + detail + terms
+  pages.
+- **Debt UI** (`apps/web/src/app/debt/`, `/loans`, `/grants`): public debt
+  dashboard with trend chart, sovereign loans tracker, grants page.
+- **Trust + Provenance UI** (`/trust`), **Notifications** (`/notifications`),
+  **Following** (`/following`), **What Changed** (`/what-changed`),
+  **Feed** (`/feed`), **Trending** (`/trending`), **Sponsor** (`/sponsor`).
+
+### Fixed — Post-Phase-1
+
+- **#201** — Parliament `DiscoverBills` infinite recursion (`fetchURL` was
+  delegating back to `Fetch`; refactored to make the actual HTTP call and let
+  `Fetch` build the `RawDocument`).
+- **#204** — `next build` failed on ESLint unused-import errors (removed
+  unused imports from 3 files).
+- **#207** — `TestRunService_Run_RejectsNonReadyScenario` was tautological:
+  the test seeded a DRAFT scenario in a different repo than `rs` used. Rewrote
+  the test to use `rs`'s own repo and assert the error mentions READY.
+- **#213 / #219** — `governments.go` and `public_debt.go` header comments
+  listed unregistered endpoints. Removed the doc lines for routes that are
+  not actually registered in `main.go`.
+- **#218** — `/acts/page.tsx` rendered a hardcoded array of acts; refactored
+  to a server component that fetches `/api/v1/acts` so frontend and backend
+  can no longer drift silently.
+
 ### Added — Phase 1 (Foundation)
 
 - **Monorepo structure**: `apps/web`, `services/{api,legislation,ingestion,documents,evidence,intelligence,search,notifications,identity,ai}`, `adapters/kenya/{parliament,kenya_law,gazette,internal}`, `packages/{contracts,events,observability,auth,config}`, `infrastructure/{postgres,docker,kubernetes,terraform,observability,temporal,opensearch}`, `docs/{architecture,adr,api,routes}`, `tests/{integration,e2e,evaluation,contract}`.
