@@ -37,8 +37,8 @@ async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 // getJSON_ is the exported form of the internal helper, so other client
-// modules (e.g. government-api, scenarios-api) can reuse the same fetch
-// + error-handling logic.
+// modules (e.g. government-api, scenarios-api, debt-api) can reuse the
+// same fetch + error-handling logic.
 export { getJSON as getJSON_ };
 
 // postJSON is exported for clients that need to POST JSON bodies
