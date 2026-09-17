@@ -12,7 +12,7 @@ export default function CountryPage() {
     { code: 'UG', name: 'Uganda', active: false },
     { code: 'TZ', name: 'Tanzania', active: true },
     { code: 'GH', name: 'Ghana', active: false },
-    { code: 'NG', name: 'Nigeria', active: false },
+    { code: 'NG', name: 'Nigeria', active: true },
     { code: 'ZA', name: 'South Africa', active: false },
   ];
 
