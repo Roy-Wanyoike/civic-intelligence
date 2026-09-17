@@ -173,6 +173,12 @@ func main() {
         apiHandler.HandleFunc("/api/v1/corrections", makeCorrectionsHandler(correctionStore))
         apiHandler.HandleFunc("/api/v1/corrections/", makeCorrectionDetailHandler(correctionStore))
 
+        // Scenarios — Phase 18 simulation infrastructure. Every response carries
+        // an explicit HYPOTHETICAL / SIMULATED reality-layer tag.
+        apiHandler.HandleFunc("/api/v1/scenarios", makeScenariosHandler())
+        apiHandler.HandleFunc("/api/v1/scenarios/compare", makeScenarioCompareHandler())
+        apiHandler.HandleFunc("/api/v1/scenarios/", makeScenarioDetailHandler())
+
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
         mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(metered))
@@ -1444,7 +1450,7 @@ type ChangeItem struct {
 // This is the proactive intelligence feed — it shows what changed recently,
 // not what a citizen asked for. Every item links to evidence.
 func makeWhatChangedHandler(kenyaLaw *kenya_law.Adapter) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+        return func(w http.ResponseWriter, r *http.Request) {
         // In production, this would query the trust.claims + trust.audit_events tables
         // for recently verified changes. For now, return the most recently published
         // Bills as "what changed" items.
