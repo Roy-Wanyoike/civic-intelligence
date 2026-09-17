@@ -122,6 +122,12 @@ var ErrNoValidator = fmt.Errorf("bill stage validator not provided")
 // aggregate uses to validate stage transitions. The implementation is built
 // from the country adapter's StageDefinitions; the Bill entity never
 // hard-codes any stage name.
+//
+// Issue #227: there is now a SINGLE canonical implementation —
+// StageGraphValidator below. BillStateMachine (in bill_state_machine.go) is
+// a thin wrapper that delegates to StageGraphValidator so callers that still
+// construct validators via NewBillStateMachine continue to work; the
+// duplicate validation logic has been removed.
 type BillStageTransitionValidator interface {
         // ValidateTransition returns nil if transitioning from -> to is
         // permitted by the country's stage definitions.
@@ -133,6 +139,20 @@ type BillStageTransitionValidator interface {
 // contracts.StageDefinition (typically produced by the country adapter).
 // It NEVER hard-codes any stage name; whatever the adapter supplies is what
 // the validator enforces.
+//
+// Validation rules (issue #227):
+//   - "to" must be a known stage and must not be the empty string.
+//   - If "from" is the empty string (a brand-new Bill), the transition is
+//     allowed only if "to" is NOT a terminal stage — a brand-new Bill cannot
+//     begin at REJECTED / WITHDRAWN / etc.
+//   - If "from" is a known stage that IS terminal, no transitions are
+//     allowed (terminals are final).
+//   - Otherwise "to" must appear in source.AllowedTransitions OR
+//     source.AllowedNext — the two slice fields are treated as a union so
+//     adapters can populate whichever they prefer.
+//
+// Errors are typed: contracts.ErrValidation for empty/unknown/terminal-stage
+// cases, contracts.ErrStageTransition for "not in allowed set" cases.
 type StageGraphValidator struct {
         stages map[string]contracts.StageDefinition
 }
@@ -153,9 +173,36 @@ func NewStageGraphValidator(stages []contracts.StageDefinition) (*StageGraphVali
         return out, nil
 }
 
-// ValidateTransition implements BillStageTransitionValidator.
+// ValidateTransition implements BillStageTransitionValidator. See the type
+// docstring for the full validation rules.
 func (v *StageGraphValidator) ValidateTransition(from, to string) error {
-        src, ok := v.stages[from]
+        if to == "" {
+                return contracts.ErrValidation{
+                        Kind:   "bill_stage",
+                        Field:  "to",
+                        Reason: "target stage is empty",
+                }
+        }
+        target, ok := v.stages[to]
+        if !ok {
+                return contracts.ErrValidation{
+                        Kind:   "bill_stage",
+                        Field:  "to",
+                        Reason: fmt.Sprintf("unknown target stage %q", to),
+                }
+        }
+        // Brand-new Bill: only non-terminal stages are valid initial stages.
+        if from == "" {
+                if target.IsTerminal {
+                        return contracts.ErrValidation{
+                                Kind:   "bill_stage",
+                                Field:  "from",
+                                Reason: fmt.Sprintf("cannot start a Bill at terminal stage %q", to),
+                        }
+                }
+                return nil
+        }
+        source, ok := v.stages[from]
         if !ok {
                 return contracts.ErrValidation{
                         Kind:   "bill_stage",
@@ -163,23 +210,41 @@ func (v *StageGraphValidator) ValidateTransition(from, to string) error {
                         Reason: fmt.Sprintf("unknown source stage %q", from),
                 }
         }
-        if _, ok := v.stages[to]; !ok {
+        if source.IsTerminal {
                 return contracts.ErrValidation{
                         Kind:   "bill_stage",
-                        Field:  "to",
-                        Reason: fmt.Sprintf("unknown target stage %q", to),
+                        Field:  "from",
+                        Reason: fmt.Sprintf("source stage %q is terminal — no transitions allowed", from),
                 }
         }
-        for _, allowed := range src.AllowedTransitions {
+        // Allowed if explicitly listed in AllowedTransitions OR AllowedNext.
+        // The two slice fields are aliases — adapters may populate either.
+        for _, allowed := range source.AllowedTransitions {
                 if allowed == to {
                         return nil
                 }
         }
+        for _, allowed := range source.AllowedNext {
+                if allowed == to {
+                        return nil
+                }
+        }
+        // Surface the union of both fields so callers can produce a helpful
+        // "expected one of ..." message.
+        allowedUnion := make([]string, 0, len(source.AllowedTransitions)+len(source.AllowedNext))
+        allowedUnion = append(allowedUnion, source.AllowedTransitions...)
+        allowedUnion = append(allowedUnion, source.AllowedNext...)
         return contracts.ErrStageTransition{
                 From:    from,
                 To:      to,
-                Allowed: src.AllowedTransitions,
+                Allowed: allowedUnion,
         }
+}
+
+// IsTerminal reports whether the given stage code is terminal for this country.
+func (v *StageGraphValidator) IsTerminal(stage string) bool {
+        s, ok := v.stages[stage]
+        return ok && s.IsTerminal
 }
 
 // Stages returns the underlying stage definitions (for inspection/debugging).
