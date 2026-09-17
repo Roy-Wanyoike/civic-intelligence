@@ -150,3 +150,51 @@ This is a Phase 12 feature — the architecture already supports it via the coun
 - [ ] Set `DEV_MODE=false` on Railway/Render (Go service)
 - [ ] Optional: Set `MPESA_*` and `STRIPE_SECRET_KEY` for sponsor payments
 - [ ] Point your domain to Vercel
+
+---
+
+## Railway Deployment (Backend — Go API + Python AI)
+
+Railway is the recommended platform for the Go API and Python AI service.
+
+### Step-by-step
+
+1. **Go to [railway.app](https://railway.app)** and sign in with GitHub
+2. **New Project** → **Deploy from GitHub repo**
+3. Select `Roy-Wanyoike/civic-intelligence`
+4. **Create Service 1 — Go API:**
+   - **Root Directory:** `services/api`
+   - **Build Command:** `go build -o api ./cmd/`
+   - **Start Command:** `./api`
+   - **Port:** `9000` (Railway auto-detects, or set `PORT=9000`)
+   - **Environment Variables:**
+     - `DATABASE_URL` — your Postgres connection string (from Supabase)
+     - `OPENAI_API_KEY` — for real AI (optional)
+     - `DEV_MODE=false` — for production auth
+     - `AI_SERVICE_URL` — URL of your Python AI service (from step 5)
+5. **Create Service 2 — Python AI:**
+   - **Root Directory:** `services/ai`
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Environment Variables:**
+     - `OPENAI_API_KEY` — your OpenAI API key
+     - `AI_MODEL_GATEWAY_DEFAULT_PROVIDER=openai` — use real AI
+6. **Copy the Railway URLs** back to your Vercel project:
+   - `API_SERVICE_URL` = Railway Go API URL (e.g., `https://civic-api.up.railway.app`)
+   - `AI_SERVICE_URL` = Railway Python AI URL (e.g., `https://civic-ai.up.railway.app`)
+7. **Set up hourly refresh:**
+   - Vercel Cron is configured in `vercel.json` (runs every hour)
+   - It calls `/api/v1/refresh` which proxies to the Go API
+   - The Go API re-discovers Bills from kenyalaw.org
+
+### Alternative: Render
+
+Same approach — two web services on [render.com](https://render.com):
+- Go API: https://render.com/docs/deploy-go
+- Python AI: https://render.com/docs/deploy-fastapi
+
+### Alternative: Fly.io
+
+Deploy as Docker containers using the existing Dockerfiles:
+- Go: `infrastructure/docker/Dockerfile.go`
+- Python: `infrastructure/docker/Dockerfile.python-ai`

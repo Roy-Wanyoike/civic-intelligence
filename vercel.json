@@ -4,5 +4,11 @@
   "buildCommand": "cd apps/web && npm install && npm run build",
   "outputDirectory": "apps/web/.next",
   "installCommand": "cd apps/web && npm install",
-  "devCommand": "cd apps/web && npm run dev"
+  "devCommand": "cd apps/web && npm run dev",
+  "crons": [
+    {
+      "path": "/api/v1/refresh",
+      "schedule": "0 * * * *"
+    }
+  ]
 }
