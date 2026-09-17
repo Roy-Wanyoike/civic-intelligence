@@ -22,7 +22,13 @@
 //   - Debt restructuring — modification of existing debt terms
 package domain
 
-import "time"
+import (
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/Roy-Wanyoike/civic-intelligence/services/legislation/government"
+)
 
 // FiscalYear represents a government fiscal year.
 type FiscalYear struct {
@@ -284,3 +290,93 @@ const NO_POLITICAL_PERFORMANCE_SCORE = `This summary provides factual fiscal rec
 calculate "best borrower", "worst borrower", "debt score", or any political
 performance ranking. Users can interpret the underlying measurements
 themselves.`
+
+// Attribution validation errors. Issue #221.
+var (
+	// ErrAttributionMissingContractDate is returned by ValidateAttribution
+	// when the borrowing agreement has no ContractDate. Without a contract
+	// date the attribution cannot be verified — the platform refuses to
+	// silently accept an un-verifiable claim.
+	ErrAttributionMissingContractDate = errors.New("borrowing agreement has no contract date; attribution cannot be verified")
+
+	// ErrAttributionUnknownAdministration is returned by ValidateAttribution
+	// when the agreement's GovernmentAdministrationID does not match any
+	// known administration.
+	ErrAttributionUnknownAdministration = errors.New("borrowing agreement references an unknown administration")
+
+	// ErrAttributionMismatch is returned by ValidateAttribution when the
+	// agreement's GovernmentAdministrationID does not correspond to the
+	// administration that was actually in power on ContractDate. The error
+	// message names both the attributed administration and the
+	// administration that should have been attributed.
+	ErrAttributionMismatch = errors.New("borrowing agreement is attributed to the wrong administration for its contract date")
+)
+
+// ValidateAttribution verifies that BorrowingAgreement.GovernmentAdministrationID
+// actually corresponds to the administration in power on the agreement's
+// ContractDate. Issue #221.
+//
+// The CRITICAL ATTRIBUTION RULE (Spec section 35) requires the platform to
+// attribute borrowing by CONTRACTED_DURING, not by DISBURSED_DURING or
+// REPAID_DURING. A loan contracted during administration A but repaid
+// during administration B must still be attributed to administration A.
+// This function guards against the opposite mistake: attributing a loan
+// to administration B simply because someone recorded it that way.
+//
+// Returns nil if:
+//   - the agreement has a ContractDate, AND
+//   - the agreement's GovernmentAdministrationID matches an administration
+//     whose [StartDate, EndDate) window contains ContractDate.
+//
+// Returns:
+//   - ErrAttributionMissingContractDate if ContractDate is nil.
+//   - ErrAttributionUnknownAdministration if no administration matches
+//     GovernmentAdministrationID.
+//   - ErrAttributionMismatch if a matching administration exists but its
+//     date window does NOT contain ContractDate. The wrapped error
+//     message names the administration that SHOULD be attributed (the one
+//     whose window contains ContractDate), or notes that no administration
+//     was in power on ContractDate.
+func ValidateAttribution(agreement BorrowingAgreement, administrations []government.Administration) error {
+	if agreement.ContractDate == nil {
+		return ErrAttributionMissingContractDate
+	}
+	contractDate := *agreement.ContractDate
+
+	// Find the administration the agreement claims to be attributed to.
+	var claimed *government.Administration
+	for i := range administrations {
+		if string(administrations[i].ID) == string(agreement.GovernmentAdministrationID) {
+			claimed = &administrations[i]
+			break
+		}
+	}
+	if claimed == nil {
+		return ErrAttributionUnknownAdministration
+	}
+
+	// Find the administration that was actually in power on ContractDate.
+	var inPower *government.Administration
+	for i := range administrations {
+		a := &administrations[i]
+		if !contractDate.Before(a.StartDate) && (a.EndDate == nil || contractDate.Before(*a.EndDate)) {
+			inPower = a
+			break
+		}
+	}
+
+	if inPower == nil {
+		return fmt.Errorf("%w: no administration was in power on %s; agreement claims %s (%s)",
+			ErrAttributionMismatch, contractDate.Format("2006-01-02"),
+			string(claimed.ID), claimed.Name)
+	}
+
+	if string(inPower.ID) != string(claimed.ID) {
+		return fmt.Errorf("%w: contract date %s falls within %s (%s), not %s (%s)",
+			ErrAttributionMismatch, contractDate.Format("2006-01-02"),
+			string(inPower.ID), inPower.Name,
+			string(claimed.ID), claimed.Name)
+	}
+
+	return nil
+}

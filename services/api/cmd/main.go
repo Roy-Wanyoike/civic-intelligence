@@ -62,6 +62,19 @@ func main() {
         // Build the metric registry for observability.
         metrics := observability.NewMetricRegistry()
 
+        // Build the debt repository (issue #203). The repository is seeded
+        // with Kenya's authoritative CBK + Treasury observations via
+        // kenya_seed.SeedDebt. In production this Wire call returns a
+        // Postgres-backed implementation; the in-memory implementation is
+        // used by tests + local dev.
+        debtRepo, debtErr := legislation.WireDebtRepository(kenya_seed.SeedDebt)
+        if debtErr != nil {
+                // The seeder returns ErrSnapshotImmutable (etc.) if re-run; the
+                // API service treats that as non-fatal because the repository is
+                // still populated for the snapshots that succeeded. Log + continue.
+                log.Printf("debt repository seed warning (non-fatal): %v", debtErr)
+        }
+
         // Build the router with middleware chain.
         mux := http.NewServeMux()
 
@@ -190,10 +203,12 @@ func main() {
         apiHandler.HandleFunc("/api/v1/constitution", makeConstitutionHandler())
         apiHandler.HandleFunc("/api/v1/transitions", makeTransitionsHandler())
 
-        // Public Debt & Borrowing Intelligence (issue #195). The platform
+        // Public Debt & Borrowing Intelligence (issue #195, #203). The platform
         // NEVER attributes sovereign borrowing personally to a president.
-        apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter())
-        apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter())
+        // makeDebtRouter consumes the legislation.DebtRepository constructed
+        // above (seeded with Kenya's CBK + Treasury observations).
+        apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
+        apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
@@ -1074,7 +1089,7 @@ var actRepo = buildActRepo()
 // then handed to legislation.Wire() which builds the in-memory repo and
 // populates it.
 func buildActRepo() legislation.ActRepository {
-        now := legislation.Now()
+        now := time.Now().UTC()
         acts := kenya_seed.MapActs(kenya_seed.KenyaActs, now)
         events := kenya_seed.MapPostAssentEvents(kenya_seed.KenyaPostAssentEvents, now)
         return legislation.Wire(acts, events)

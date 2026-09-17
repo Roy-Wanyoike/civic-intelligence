@@ -13,41 +13,48 @@
 //
 //	GET /api/v1/debt/creditors          -- not implemented
 //	GET /api/v1/debt/legislatures/{id}  -- not implemented (placeholder)
+//
+// Issue #203: handlers consume a legislation.DebtRepository (constructed by
+// legislation.WireDebtRepository and seeded by kenya_seed.SeedDebt). The
+// hardcoded sampleDebtTrend + sampleGovernmentDebtSummaries that previously
+// lived in this file have been moved to adapters/kenya/kenya_seed.
 package main
 
 import (
         "net/http"
         "strings"
+
+        "github.com/Roy-Wanyoike/civic-intelligence/services/legislation"
 )
 
 // DebtDashboardResponse is the response for GET /api/v1/debt.
 type DebtDashboardResponse struct {
-        CountryCode     string  `json:"country_code"`
-        TotalDebtStock  *float64 `json:"total_debt_stock"`
-        DomesticDebt     *float64 `json:"domestic_debt"`
-        ExternalDebt    *float64 `json:"external_debt"`
-        DebtService     *float64 `json:"debt_service"`
-        DebtToGDP       *float64 `json:"debt_to_gdp"`
-        Currency        string  `json:"currency"`
-        AsOf            string  `json:"as_of"`
-        SourceURL       string  `json:"source_url"`
-        Disclaimer      string  `json:"disclaimer"`
+        CountryCode    string   `json:"country_code"`
+        TotalDebtStock *float64 `json:"total_debt_stock"`
+        DomesticDebt   *float64 `json:"domestic_debt"`
+        ExternalDebt   *float64 `json:"external_debt"`
+        DebtService    *float64 `json:"debt_service"`
+        DebtToGDP      *float64 `json:"debt_to_gdp"`
+        Currency       string   `json:"currency"`
+        AsOf           string   `json:"as_of"`
+        SourceURL      string   `json:"source_url"`
+        Disclaimer     string   `json:"disclaimer"`
 }
 
 // DebtTrendPointResponse is a single point in the debt trend graph.
 type DebtTrendPointResponse struct {
-        Date           string  `json:"date"`
+        Date           string   `json:"date"`
         TotalDebtStock *float64 `json:"total_debt_stock"`
         DomesticDebt   *float64 `json:"domestic_debt"`
         ExternalDebt   *float64 `json:"external_debt"`
-        SourceURL      string  `json:"source_url"`
+        SourceURL      string   `json:"source_url"`
 }
 
 // DebtTimelineResponse is the response for GET /api/v1/debt/timeline.
 type DebtTimelineResponse struct {
-        CountryCode string                    `json:"country_code"`
+        CountryCode string                   `json:"country_code"`
         Points      []DebtTrendPointResponse `json:"points"`
-        Disclaimer  string                    `json:"disclaimer"`
+        Disclaimer  string                   `json:"disclaimer"`
 }
 
 // GovernmentDebtSummaryResponse is the response for GET /api/v1/debt/governments/{id}.
@@ -65,118 +72,94 @@ type GovernmentDebtSummaryResponse struct {
         Disclaimer       string   `json:"disclaimer"`
 }
 
-// sampleDebtTrend is sample debt stock observations sourced from CBK and
-// Treasury. Spec section 9: "Populate the production chart from validated
-// Treasury/CBK observations."
-//
-// Source: CBK Monthly Economic Indicators, Treasury Annual Public Debt Report.
-var sampleDebtTrend = []DebtTrendPointResponse{
-        {Date: "2013-06-30", TotalDebtStock: ptrFloat(1.96e12), DomesticDebt: ptrFloat(0.83e12), ExternalDebt: ptrFloat(1.13e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2014-06-30", TotalDebtStock: ptrFloat(2.38e12), DomesticDebt: ptrFloat(1.06e12), ExternalDebt: ptrFloat(1.32e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2015-06-30", TotalDebtStock: ptrFloat(2.84e12), DomesticDebt: ptrFloat(1.27e12), ExternalDebt: ptrFloat(1.57e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2016-06-30", TotalDebtStock: ptrFloat(3.28e12), DomesticDebt: ptrFloat(1.44e12), ExternalDebt: ptrFloat(1.84e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2017-06-30", TotalDebtStock: ptrFloat(3.85e12), DomesticDebt: ptrFloat(1.65e12), ExternalDebt: ptrFloat(2.20e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2018-06-30", TotalDebtStock: ptrFloat(4.49e12), DomesticDebt: ptrFloat(1.95e12), ExternalDebt: ptrFloat(2.54e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2019-06-30", TotalDebtStock: ptrFloat(5.07e12), DomesticDebt: ptrFloat(2.20e12), ExternalDebt: ptrFloat(2.87e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2020-06-30", TotalDebtStock: ptrFloat(5.94e12), DomesticDebt: ptrFloat(2.59e12), ExternalDebt: ptrFloat(3.35e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2021-06-30", TotalDebtStock: ptrFloat(6.92e12), DomesticDebt: ptrFloat(3.06e12), ExternalDebt: ptrFloat(3.86e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2022-06-30", TotalDebtStock: ptrFloat(7.71e12), DomesticDebt: ptrFloat(3.42e12), ExternalDebt: ptrFloat(4.29e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2023-06-30", TotalDebtStock: ptrFloat(9.18e12), DomesticDebt: ptrFloat(3.96e12), ExternalDebt: ptrFloat(5.22e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-        {Date: "2024-06-30", TotalDebtStock: ptrFloat(10.59e12), DomesticDebt: ptrFloat(4.59e12), ExternalDebt: ptrFloat(6.00e12), SourceURL: "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/"},
-}
+// debtDisclaimerDashboard is the canonical disclaimer attached to the
+// /api/v1/debt dashboard. Spec section 35, 37.
+const debtDisclaimerDashboard = `Public debt figures are sourced from CBK Monthly Economic Indicators
+and Treasury Annual Public Debt Reports. The platform does not calculate
+"best borrower" or any political performance score. Every figure is an
+immutable observation; changes in debt stock can reflect exchange-rate
+movements, valuation changes, repayments, refinancing, arrears, adjustments,
+and disbursement timing — NOT just new borrowing.`
 
-// sampleGovernmentDebtSummaries maps administration IDs to debt summaries.
-//
-// CRITICAL ATTRIBUTION RULE (Spec section 35): the platform does NOT say
-// "President X borrowed KSh X". It says "The Government of Kenya recorded
-// KSh X in borrowing during this period."
-var sampleGovernmentDebtSummaries = map[string]GovernmentDebtSummaryResponse{
-        "admin-uhuru-kenyatta": {
-                AdministrationID: "admin-uhuru-kenyatta",
-                Period:           "2013-2022",
-                DebtAtStart:      ptrFloat(1.96e12),
-                DebtAtEnd:        ptrFloat(7.71e12),
-                NewBorrowing:     ptrFloat(5.75e12),
-                DebtService:      ptrFloat(2.81e12),
-                ExternalDebt:     ptrFloat(4.29e12),
-                DomesticDebt:     ptrFloat(3.42e12),
-                Currency:         "KES",
-                SourceURLs: []string{
-                        "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/",
-                        "https://www.treasury.go.ke/wp-content/uploads/2023/05/Annual-Public-Debt-Report-2022-23.pdf",
-                },
-                Disclaimer: `The Government of Kenya recorded KSh 5.75 trillion in new borrowing
-during the 2013-2022 period. This is NOT "President Uhuru Kenyatta borrowed
-KSh 5.75T" — the legal borrower is the Republic of Kenya. The platform does
-not calculate debt performance scores or rank governments.`,
-        },
-        "admin-william-ruto": {
-                AdministrationID: "admin-william-ruto",
-                Period:           "2022-Present",
-                DebtAtStart:      ptrFloat(7.71e12),
-                DebtAtEnd:        ptrFloat(10.59e12),
-                NewBorrowing:     ptrFloat(2.88e12),
-                DebtService:      ptrFloat(1.36e12),
-                ExternalDebt:     ptrFloat(6.00e12),
-                DomesticDebt:     ptrFloat(4.59e12),
-                Currency:         "KES",
-                SourceURLs: []string{
-                        "https://www.centralbank.go.ke/uploads/monthly_economic_indicators/",
-                        "https://www.treasury.go.ke/wp-content/uploads/2024/05/Annual-Public-Debt-Report-2023-24.pdf",
-                },
-                Disclaimer: `The Government of Kenya recorded KSh 2.88 trillion in new borrowing
-during the 2022-present period. This is NOT "President William Ruto borrowed
-KSh 2.88T" — the legal borrower is the Republic of Kenya. The platform does
-not calculate debt performance scores or rank governments.`,
-        },
-}
+// debtDisclaimerTimeline is attached to /api/v1/debt/timeline. Spec
+// section 4 — the trend line is a series of immutable observations, not
+// a causal attribution of borrowing to any individual president.
+const debtDisclaimerTimeline = `Each point is an immutable observation. The trend line should NOT be
+interpreted as a causal attribution of borrowing to any individual president.
+Government transition dates overlay the chart; users can correlate visually
+without the platform implying causation.`
 
 // makeDebtDashboardHandler handles GET /api/v1/debt.
-func makeDebtDashboardHandler() http.HandlerFunc {
+//
+// The dashboard surfaces the most recent CBK snapshot for Kenya, plus
+// dashboard-level derived figures (debt service + debt-to-GDP ratio)
+// sourced from the Treasury Annual Public Debt Report. The derived
+// figures are returned by kenya_seed.DebtDashboardFigures(); they are
+// NOT derived from snapshot deltas (Spec section 9 — never infer new
+// borrowing from end - start).
+func makeDebtDashboardHandler(repo legislation.DebtRepository) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 if r.Method != http.MethodGet {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
                         return
                 }
                 w.Header().Set("Content-Type", "application/json")
-                // Most recent snapshot.
-                latest := sampleDebtTrend[len(sampleDebtTrend)-1]
+
+                // Pull all available Kenya snapshots and take the latest. ListDebtSnapshots
+                // returns them in chronological order, so the last element is the most
+                // recent observation. We deliberately do NOT compute (end - start) deltas
+                // here — Spec section 9 forbids inferring new borrowing from snapshots.
+                from := farPastDate()
+                to := farFutureDate()
+                snaps, err := repo.ListDebtSnapshots(r.Context(), "KE", from, to)
+                if err != nil || len(snaps) == 0 {
+                        writeError(w, http.StatusServiceUnavailable, "debt_unavailable",
+                                "no debt snapshots available; the CBK seed data may not have loaded")
+                        return
+                }
+                latest := snaps[len(snaps)-1]
+                debtService, debtToGDP := kenyaDebtDashboardFigures()
                 resp := DebtDashboardResponse{
-                        CountryCode:    "KE",
-                        TotalDebtStock: latest.TotalDebtStock,
-                        DomesticDebt:    latest.DomesticDebt,
-                        ExternalDebt:   latest.ExternalDebt,
-                        DebtService:    ptrFloat(1.36e12), // FY 2023/24 debt service
-                        DebtToGDP:      ptrFloat(70.2),   // ~70.2% as of FY 2023/24
-                        Currency:       "KES",
-                        AsOf:           latest.Date,
+                        CountryCode:    latest.CountryCode,
+                        TotalDebtStock: ptrFloat(latest.TotalDebtStock),
+                        DomesticDebt:   ptrFloat(latest.DomesticDebt),
+                        ExternalDebt:   ptrFloat(latest.ExternalDebt),
+                        DebtService:    ptrFloat(debtService),
+                        DebtToGDP:      ptrFloat(debtToGDP),
+                        Currency:       latest.Currency,
+                        AsOf:           latest.ObservationDate.UTC().Format("2006-01-02"),
                         SourceURL:      latest.SourceURL,
-                        Disclaimer: `Public debt figures are sourced from CBK Monthly Economic Indicators
-and Treasury Annual Public Debt Reports. The platform does not calculate
-"best borrower" or any political performance score. Every figure is an
-immutable observation; changes in debt stock can reflect exchange-rate
-movements, valuation changes, repayments, refinancing, arrears, adjustments,
-and disbursement timing — NOT just new borrowing.`,
+                        Disclaimer:     debtDisclaimerDashboard,
                 }
                 writeJSON(w, http.StatusOK, resp)
         }
 }
 
 // makeDebtTimelineHandler handles GET /api/v1/debt/timeline.
-func makeDebtTimelineHandler() http.HandlerFunc {
+//
+// The timeline returns every CBK observation for Kenya in chronological
+// order. Each point is an immutable observation (Spec section 9).
+func makeDebtTimelineHandler(repo legislation.DebtRepository) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 if r.Method != http.MethodGet {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
                         return
                 }
                 w.Header().Set("Content-Type", "application/json")
+                snaps, err := repo.ListDebtSnapshots(r.Context(), "KE", farPastDate(), farFutureDate())
+                if err != nil {
+                        writeError(w, http.StatusServiceUnavailable, "debt_unavailable",
+                                "debt snapshots could not be loaded")
+                        return
+                }
+                points := make([]DebtTrendPointResponse, 0, len(snaps))
+                for _, s := range snaps {
+                        points = append(points, snapshotToTrendPoint(s))
+                }
                 writeJSON(w, http.StatusOK, DebtTimelineResponse{
                         CountryCode: "KE",
-                        Points:      sampleDebtTrend,
-                        Disclaimer: `Each point is an immutable observation. The trend line should NOT be
-interpreted as a causal attribution of borrowing to any individual president.
-Government transition dates overlay the chart; users can correlate visually
-without the platform implying causation.`,
+                        Points:      points,
+                        Disclaimer:  debtDisclaimerTimeline,
                 })
         }
 }
@@ -184,16 +167,29 @@ without the platform implying causation.`,
 // makeDebtLoansHandler handles GET /api/v1/debt/loans.
 // Returns the borrowing register. Until the fiscal service is wired up,
 // returns an empty list with a clear disclaimer.
-func makeDebtLoansHandler() http.HandlerFunc {
+//
+// Issue #203: the handler now consults the repository via
+// ListBorrowingAgreements. If the seeder has not populated any agreements
+// (which is the current state — loan-level ingestion is pending issue
+// #93), the response is still well-formed: count=0, agreements=[].
+func makeDebtLoansHandler(repo legislation.DebtRepository) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 if r.Method != http.MethodGet {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
                         return
                 }
                 w.Header().Set("Content-Type", "application/json")
+                agreements, err := repo.ListBorrowingAgreements(r.Context(), legislation.DebtFilter{
+                        CountryCode: "KE",
+                })
+                if err != nil {
+                        writeError(w, http.StatusServiceUnavailable, "debt_unavailable",
+                                "borrowing agreements could not be loaded")
+                        return
+                }
                 writeJSON(w, http.StatusOK, map[string]any{
-                        "borrowing_agreements": []any{},
-                        "count":                 0,
+                        "borrowing_agreements": agreements,
+                        "count":                len(agreements),
                         "disclaimer": `Each borrowing agreement is sourced from authoritative material
 (Treasury External Public Debt Register, IMF, World Bank, AfDB press releases).
 The platform distinguishes CONTRACTED_DURING, DISBURSED_DURING, REPAID_DURING,
@@ -204,7 +200,11 @@ attribution. Loan-level ingestion is pending (issue #93).`,
 }
 
 // makeGovernmentDebtHandler handles GET /api/v1/debt/governments/{id}.
-func makeGovernmentDebtHandler() http.HandlerFunc {
+//
+// The handler consults the repository for the cached summary. If no
+// summary exists for the requested administration, the response is 404
+// with a clear error — the platform does not fabricate summaries.
+func makeGovernmentDebtHandler(repo legislation.DebtRepository) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 if r.Method != http.MethodGet {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -213,21 +213,23 @@ func makeGovernmentDebtHandler() http.HandlerFunc {
                 w.Header().Set("Content-Type", "application/json")
                 id := strings.TrimPrefix(r.URL.Path, "/api/v1/debt/governments/")
                 id = strings.TrimSuffix(id, "/")
-                summary, ok := sampleGovernmentDebtSummaries[id]
-                if !ok {
+                summary, err := repo.GetGovernmentDebtSummary(r.Context(), legislation.ID(id))
+                if err != nil {
                         writeError(w, http.StatusNotFound, "not_found", "no debt summary for administration: "+id)
                         return
                 }
-                writeJSON(w, http.StatusOK, summary)
+                writeJSON(w, http.StatusOK, summaryFromDomain(*summary))
         }
 }
 
-// makeDebtRouter routes /api/v1/debt/* sub-resources.
-func makeDebtRouter() http.HandlerFunc {
-        dash := makeDebtDashboardHandler()
-        timeline := makeDebtTimelineHandler()
-        loans := makeDebtLoansHandler()
-        gov := makeGovernmentDebtHandler()
+// makeDebtRouter routes /api/v1/debt/* sub-resources. The repository is
+// threaded through every handler so they all read from the same in-memory
+// store (or, in production, the same Postgres-backed store).
+func makeDebtRouter(repo legislation.DebtRepository) http.HandlerFunc {
+        dash := makeDebtDashboardHandler(repo)
+        timeline := makeDebtTimelineHandler(repo)
+        loans := makeDebtLoansHandler(repo)
+        gov := makeGovernmentDebtHandler(repo)
         return func(w http.ResponseWriter, r *http.Request) {
                 path := strings.TrimPrefix(r.URL.Path, "/api/v1/debt")
                 path = strings.TrimPrefix(path, "/")
@@ -243,6 +245,37 @@ func makeDebtRouter() http.HandlerFunc {
                 default:
                         writeError(w, http.StatusNotFound, "not_found", "unknown debt sub-resource: "+path)
                 }
+        }
+}
+
+// snapshotToTrendPoint converts a domain.PublicDebtSnapshot to the JSON
+// response shape. The conversion is lossless — the response type is a
+// strict subset of the domain type.
+func snapshotToTrendPoint(s legislation.PublicDebtSnapshot) DebtTrendPointResponse {
+        return DebtTrendPointResponse{
+                Date:           s.ObservationDate.UTC().Format("2006-01-02"),
+                TotalDebtStock: ptrFloat(s.TotalDebtStock),
+                DomesticDebt:   ptrFloat(s.DomesticDebt),
+                ExternalDebt:   ptrFloat(s.ExternalDebt),
+                SourceURL:      s.SourceURL,
+        }
+}
+
+// summaryFromDomain converts a domain.GovernmentDebtSummary to the JSON
+// response shape.
+func summaryFromDomain(s legislation.GovernmentDebtSummary) GovernmentDebtSummaryResponse {
+        return GovernmentDebtSummaryResponse{
+                AdministrationID: string(s.AdministrationID),
+                Period:           s.Period,
+                DebtAtStart:      s.DebtAtStart,
+                DebtAtEnd:        s.DebtAtEnd,
+                NewBorrowing:     s.NewBorrowing,
+                DebtService:      s.DebtService,
+                ExternalDebt:     s.ExternalDebt,
+                DomesticDebt:     s.DomesticDebt,
+                Currency:         s.Currency,
+                SourceURLs:       s.SourceURLs,
+                Disclaimer:       s.Disclaimer,
         }
 }
 
