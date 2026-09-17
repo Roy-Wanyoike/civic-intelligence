@@ -25,6 +25,7 @@ const exploreLinks = [
   { href: '/acts', label: 'Acts' },
   { href: '/regulations', label: 'Regulations' },
   { href: '/policies', label: 'Policies' },
+  { href: '/what-changed', label: 'What Changed' },
   { href: '/feed', label: 'Feed' },
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/datasets', label: 'Datasets' },
