@@ -107,3 +107,30 @@ body {
     min-width: 44px;
   }
 }
+
+/* Dark theme */
+.dark {
+  --background: 11 31 23;
+  --foreground: 245 247 246;
+  --muted: 130 145 140;
+  --primary: 21 120 74;
+  --accent: 212 160 23;
+  --border: 40 60 50;
+}
+
+.dark body {
+  background: rgb(11 31 23);
+  color: rgb(245 247 246);
+}
+
+.dark .bg-civic-paper { background-color: rgb(20 40 32); }
+.dark .bg-civic-mist { background-color: rgb(15 35 27); }
+.dark .text-civic-ink { color: rgb(245 247 246); }
+.dark .text-civic-forest { color: rgb(120 200 160); }
+.dark .text-civic-stone { color: rgb(160 175 170); }
+.dark .text-civic-leaf { color: rgb(80 200 130); }
+.dark .border-civic-border { border-color: rgb(40 60 50); }
+.dark .bg-civic-forest { background-color: rgb(8 25 18); }
+.dark .bg-civic-leaf\/10 { background-color: rgba(21, 120, 74, 0.15); }
+.dark .bg-civic-acacia\/20 { background-color: rgba(212, 160, 23, 0.15); }
+.dark .bg-civic-mist\/50 { background-color: rgba(15, 35, 27, 0.5); }

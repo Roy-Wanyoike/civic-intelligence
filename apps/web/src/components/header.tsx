@@ -12,6 +12,7 @@ import {
   User,
   Heart,
 } from 'lucide-react';
+import { ThemeToggle } from './theme-toggle';
 
 /**
  * Explore dropdown — secondary destinations grouped under one primary slot
@@ -212,6 +213,9 @@ export function Header() {
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
           </Link>
+
+          {/* Dark/Light theme toggle */}
+          <ThemeToggle />
 
           {/* Account */}
           <Link

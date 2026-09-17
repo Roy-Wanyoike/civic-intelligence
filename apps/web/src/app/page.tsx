@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowRight, FileText, Search, Sparkles, BookOpen, ShieldCheck, TrendingUp } from 'lucide-react';
 import { mockBills } from '@/lib/mock-data';
 import { TrendingCarousel } from '@/components/trending-carousel';
+import { ConstitutionSpotlight } from '@/components/constitution-spotlight';
 
 export default function HomePage() {
   const billsToWatch = mockBills.filter(b => b.status !== 'enacted').slice(0, 4);
@@ -64,6 +65,9 @@ export default function HomePage() {
               </Link>
             ))}
           </div>
+
+          {/* Constitution Spotlight — random constitutional clause */}
+          <ConstitutionSpotlight />
         </div>
       </section>
 
