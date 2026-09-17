@@ -77,6 +77,42 @@ type (
 // do not need to import internal/domain.
 const NO_POLITICAL_PERFORMANCE_SCORE = domain.NO_POLITICAL_PERFORMANCE_SCORE
 
+// Debt-domain enum constants (issue #220). Re-exported here so the Kenya
+// seed package (and future country adapters) can construct
+// BorrowingAgreement records without importing internal/domain. Because
+// CreditorCategory / DomesticOrExternal / DebtPurpose are type aliases
+// (above), the constants are assignable directly to the aliased struct
+// fields on legislation.BorrowingAgreement.
+const (
+        // CreditorCategory values. Spec section 18.
+        CreditorMultilateral  = domain.CreditorMultilateral
+        CreditorBilateral     = domain.CreditorBilateral
+        CreditorCommercial    = domain.CreditorCommercial
+        CreditorDomestic      = domain.CreditorDomestic
+        CreditorInstitution   = domain.CreditorInstitution
+        CreditorOther         = domain.CreditorOther
+
+        // DomesticOrExternal values. Spec section 2.
+        BorrowingDomestic = domain.BorrowingDomestic
+        BorrowingExternal = domain.BorrowingExternal
+
+        // DebtPurpose values. Spec section 19.
+        PurposeInfrastructure = domain.PurposeInfrastructure
+        PurposeBudgetSupport = domain.PurposeBudgetSupport
+        PurposeHealth        = domain.PurposeHealth
+        PurposeEducation     = domain.PurposeEducation
+        PurposeEnergy        = domain.PurposeEnergy
+        PurposeTransport    = domain.PurposeTransport
+        PurposeWater         = domain.PurposeWater
+        PurposeAgriculture   = domain.PurposeAgriculture
+        PurposeICT           = domain.PurposeICT
+        PurposeSecurity      = domain.PurposeSecurity
+        PurposeRefinancing   = domain.PurposeRefinancing
+        PurposeGeneralGovt   = domain.PurposeGeneralGovt
+        PurposeOther         = domain.PurposeOther
+        PurposeUnknown       = domain.PurposeUnknown
+)
+
 // SeedAct is a country-supplied seed record for an Act. The caller (typically
 // the API service) sources these from the country adapter and passes them to
 // Wire().
