@@ -19,7 +19,7 @@ export default function ReportPage() {
           <input type="url" id="url" name="url" placeholder="https://civic-intelligence.vercel.app/bills/..." className="mt-1 w-full rounded-md border border-civic-border bg-civic-paper px-3 py-2 text-sm" />
         </div>
         <div>
-          <label htmlFor="description" className="block text-xs font-medium text-civic-stone">What's wrong?</label>
+          <label htmlFor="description" className="block text-xs font-medium text-civic-stone">What&apos;s wrong?</label>
           <textarea id="description" name="description" rows={4} placeholder="Describe the error..." className="mt-1 w-full rounded-md border border-civic-border bg-civic-paper px-3 py-2 text-sm" />
         </div>
         <div>

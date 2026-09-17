@@ -46,7 +46,7 @@ Content Hash`}
         <div className="rounded-lg border border-civic-border bg-civic-paper p-6">
           <h2 className="font-serif text-lg font-semibold text-civic-ink">Report an Error</h2>
           <p className="mt-2 text-sm text-civic-stone">
-            Found something wrong? Every page has a "Report an error" link.
+            Found something wrong? Every page has a &quot;Report an error&quot; link.
             Corrections go through a review process and create auditable versions.
             We never silently rewrite history.
           </p>

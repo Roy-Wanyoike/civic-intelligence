@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Download, Database } from 'lucide-react';
+import { Database } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Civic Datasets',
