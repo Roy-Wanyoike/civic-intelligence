@@ -41,6 +41,10 @@ import (
 // expectedCountries is the canonical list of countries the platform supports.
 // Adding a new country? Append it here — every test below is table-driven off
 // this list so the new country is exercised automatically.
+//
+// Wave 12 (ENG-L1, 2026) added the final 4 adapters — Rwanda (RW), Zambia
+// (ZM), Senegal (SN), and Egypt (EG) — bringing the platform from 6 to 10
+// supported countries.
 var expectedCountries = []struct {
         code, name, flag, parliament, legType string
 }{
@@ -50,6 +54,10 @@ var expectedCountries = []struct {
         {"GH", "Ghana", "🇬🇭", "Parliament of Ghana", "unicameral"},
         {"NG", "Nigeria", "🇳🇬", "National Assembly of Nigeria", "bicameral"},
         {"ZA", "South Africa", "🇿🇦", "Parliament of South Africa", "bicameral"},
+        {"RW", "Rwanda", "🇷🇼", "Parliament of Rwanda", "bicameral"},
+        {"ZM", "Zambia", "🇿🇲", "National Assembly of Zambia", "unicameral"},
+        {"SN", "Senegal", "🇸🇳", "Assemblée Nationale du Sénégal", "unicameral"},
+        {"EG", "Egypt", "🇪🇬", "Egyptian Parliament", "bicameral"},
 }
 
 // setupRegistryForTest returns a registry with all 6 default adapters

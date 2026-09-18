@@ -22,17 +22,27 @@ require (
 	github.com/Roy-Wanyoike/civic-intelligence/services/legislation v0.0.0
 )
 
-require golang.org/x/net v0.30.0 // indirect
+require (
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/egypt v0.0.0 // indirect
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/rwanda v0.0.0 // indirect
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/senegal v0.0.0 // indirect
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/zambia v0.0.0 // indirect
+	golang.org/x/net v0.30.0 // indirect
+)
 
 replace (
 	github.com/Roy-Wanyoike/civic-intelligence => ../..
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/egypt => ../../adapters/egypt
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana => ../../adapters/ghana
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya => ../../adapters/kenya
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria => ../../adapters/nigeria
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/registry => ../../adapters/registry
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/rwanda => ../../adapters/rwanda
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/senegal => ../../adapters/senegal
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/south_africa => ../../adapters/south_africa
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania => ../../adapters/tanzania
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/uganda => ../../adapters/uganda
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/zambia => ../../adapters/zambia
 	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts => ../../packages/contracts
 	github.com/Roy-Wanyoike/civic-intelligence/packages/events => ../../packages/events
 	github.com/Roy-Wanyoike/civic-intelligence/packages/observability => ../../packages/observability
