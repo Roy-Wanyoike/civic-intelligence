@@ -19,6 +19,8 @@ import (
         "encoding/json"
         "net/http"
         "strings"
+
+        "github.com/Roy-Wanyoike/civic-intelligence/services/api/internal/middleware"
 )
 
 // scorecardDisclaimer is the canonical, immutable disclaimer returned with
@@ -547,8 +549,14 @@ func makePeopleListHandler() http.HandlerFunc {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
                         return
                 }
+                country := middleware.CountryFromContext(r.Context())
                 items := make([]scorecardListItem, 0, len(sampleScorecards))
                 for _, p := range sampleScorecards {
+                        // Filter by country: return only matching country's people.
+                        // ALL = global dashboard view.
+                        if country != "" && country != "ALL" && country != "KE" {
+                                continue
+                        }
                         items = append(items, scorecardListItem{
                                 PersonID:     p.PersonID,
                                 Name:         p.Name,
