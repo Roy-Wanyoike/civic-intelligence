@@ -3,10 +3,12 @@ module github.com/Roy-Wanyoike/civic-intelligence/services/ingestion
 go 1.25.0
 
 require (
+	github.com/Roy-Wanyoike/civic-intelligence/packages/config v0.0.0
 	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts v0.0.0
 	github.com/Roy-Wanyoike/civic-intelligence/packages/observability v0.0.0
 	github.com/nats-io/nats.go v1.53.1
 	github.com/stretchr/testify v1.11.1
+	go.temporal.io/sdk v1.33.0
 )
 
 require (
@@ -23,11 +25,8 @@ require (
 )
 
 replace (
+	github.com/Roy-Wanyoike/civic-intelligence/packages/config => ../../packages/config
 	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts => ../../packages/contracts
 	github.com/Roy-Wanyoike/civic-intelligence/packages/events => ../../packages/events
 	github.com/Roy-Wanyoike/civic-intelligence/packages/observability => ../../packages/observability
 )
-
-require github.com/Roy-Wanyoike/civic-intelligence/packages/config v0.0.0
-
-replace github.com/Roy-Wanyoike/civic-intelligence/packages/config => ../../packages/config
