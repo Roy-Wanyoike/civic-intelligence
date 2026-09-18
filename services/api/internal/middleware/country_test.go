@@ -208,7 +208,7 @@ func TestCountry_InvalidReturns400(t *testing.T) {
                 t.Errorf("expected supplied=XX echoed back, got %q", body.Supplied)
         }
         if len(body.SupportedCountries) != 10 {
-                t.Errorf("expected 10 supported countries, got %d", len(body.SupportedCountries))
+                t.Errorf("expected at least 10 supported countries, got %d", len(body.SupportedCountries))
         }
         if body.GlobalCountry != GlobalCountry {
                 t.Errorf("expected global_country=ALL, got %q", body.GlobalCountry)
