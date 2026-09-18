@@ -179,6 +179,22 @@ paths:
           content: { application/json: { schema: { type: object, properties: { followed: { type: boolean } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /follow:
+    post:
+      tags: [subscriptions]
+      summary: Legacy single-shot follow endpoint (kept for backward compat)
+      description: |
+        The legacy /follow endpoint creates a subscription for the
+        authenticated user. New callers should use the per-entity
+        `/acts/{id}/follow` or `/subscriptions` endpoints instead. This
+        endpoint is preserved so existing clients do not break during the
+        migration window (issue #110).
+      responses:
+        '200':
+          description: Followed
+          content: { application/json: { schema: { type: object, properties: { followed: { type: boolean } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /questions:
     post:
       tags: [qa]
@@ -521,6 +537,47 @@ paths:
                   constitution: { $ref: '#/components/schemas/Constitution' }
                   reality_layer: { type: string, enum: [FACT] }
                   disclaimer: { type: string }
+
+  /constitution/articles:
+    get:
+      tags: [constitution]
+      summary: List Constitution chapters + articles (issue #212)
+      description: |
+        Returns the curated chapter + article tree sourced from the
+        kenya_seed package. Every chapter carries at least one article.
+        Response carries `reality_layer: "FACT"` to signal the
+        Constitution is authoritative source material.
+      responses:
+        '200':
+          description: Chapters + articles tree
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chapters: { type: array, items: { $ref: '#/components/schemas/ConstitutionChapter' } }
+                  count: { type: integer }
+                  reality_layer: { type: string, enum: [FACT] }
+                  disclaimer: { type: string }
+
+  /constitution/articles/{id}:
+    get:
+      tags: [constitution]
+      summary: Get a single Constitution article by stable ID (issue #212)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Constitution article
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  article: { $ref: '#/components/schemas/ConstitutionArticle' }
+                  reality_layer: { type: string, enum: [FACT] }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /governments:
     get:
@@ -872,6 +929,26 @@ paths:
         '200':
           description: Government debt summary
           content: { application/json: { schema: { $ref: '#/components/schemas/GovernmentDebtSummary' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /debt/legislatures/{id}:
+    get:
+      tags: [debt]
+      summary: Per-legislature debt summary (GAP-19-1, Spec section 19)
+      description: |
+        Surfaces debt at beginning/end, new borrowing (CONTRACTED_DURING),
+        domestic/external split, disbursements, repayments, debt service,
+        and outstanding obligations. The legal borrower is the Republic of
+        Kenya — the platform never attributes borrowing to a Parliament or
+        its members (Spec section 35). The canonical
+        `NO_POLITICAL_PERFORMANCE_SCORE` disclaimer is appended to every
+        per-legislature summary.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Legislature debt summary
+          content: { application/json: { schema: { $ref: '#/components/schemas/LegislatureDebtSummary' } } }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /loans:
