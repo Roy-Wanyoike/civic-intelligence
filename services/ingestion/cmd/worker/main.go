@@ -134,7 +134,7 @@ func main() {
 type uuidGen struct{}
 
 func (uuidGen) New() string {
-	// FIXME: replace with github.com/google/uuid.NewString() once wired.
+	id := fmt.Sprintf("run-%d", time.Now().UnixNano()) // TODO: use github.com/google/uuid
 	return fmt.Sprintf("%x", time.Now().UnixNano())
 }
 

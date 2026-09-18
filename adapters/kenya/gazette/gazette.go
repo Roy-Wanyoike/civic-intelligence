@@ -39,7 +39,7 @@ func NewAdapter(client HTTPClient, userAgent string) *Adapter {
 }
 
 func (a *Adapter) Discover(ctx context.Context) ([]contracts.SourceItem, error) {
-        // TODO(issue #CI-AD-007): crawl the Kenya Gazette archive.
+        // TODO: crawl the Kenya Gazette archive.
         return []contracts.SourceItem{}, nil
 }
 
@@ -73,7 +73,7 @@ func (a *Adapter) Fetch(ctx context.Context, item contracts.SourceItem) (*contra
 }
 
 func (a *Adapter) Parse(ctx context.Context, doc contracts.RawDocument) ([]contracts.ExtractedRecord, error) {
-        // TODO(issue #CI-AD-008): parse gazette notices (calls the documents
+        // TODO: parse gazette notices (calls the documents
         // service OCR for scanned PDFs).
         return []contracts.ExtractedRecord{}, nil
 }

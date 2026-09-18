@@ -1094,19 +1094,76 @@ func makeTerminologyHandler() http.HandlerFunc {
 
 // --- People / Committees / Institutions ---
 
+// samplePeople provides seed data for the people endpoint.
+var samplePeople = []map[string]any{
+        {"id": "person-001", "full_name": "Rt. Hon. Moses Wetangula", "role": "Speaker of the National Assembly", "house": "National Assembly", "country": "KE"},
+        {"id": "person-002", "full_name": "Sen. Amason Kingi", "role": "Speaker of the Senate", "house": "Senate", "country": "KE"},
+        {"id": "person-003", "full_name": "Kimani Ichung'wah", "role": "Majority Leader, National Assembly", "house": "National Assembly", "country": "KE"},
+        {"id": "person-004", "full_name": "Opiyo Wandayi", "role": "Minority Leader, National Assembly", "house": "National Assembly", "country": "KE"},
+        {"id": "person-005", "full_name": "William Ruto", "role": "President of Kenya", "house": "Executive", "country": "KE"},
+}
+
 func handlePeople(w http.ResponseWriter, r *http.Request) {
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
-        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "People — pending (issue #19)"})
+        if id == "" {
+                writeJSON(w, http.StatusOK, map[string]any{"items": samplePeople, "total": len(samplePeople)})
+                return
+        }
+        for _, p := range samplePeople {
+                if p["id"] == id {
+                        writeJSON(w, http.StatusOK, p)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "person not found: "+id)
+}
+
+// sampleCommittees provides seed data for the committees endpoint.
+var sampleCommittees = []map[string]any{
+        {"id": "committee-finance", "name": "Departmental Committee on Finance and National Planning", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-health", "name": "Departmental Committee on Health", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-education", "name": "Departmental Committee on Education and Research", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-justice", "name": "Departmental Committee on Justice and Legal Affairs", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-devolution", "name": "Senate Standing Committee on Devolution and Intergovernmental Relations", "house": "Senate", "country": "KE"},
 }
 
 func handleCommittees(w http.ResponseWriter, r *http.Request) {
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/committees/")
-        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Committees — pending (issue #28)"})
+        if id == "" {
+                writeJSON(w, http.StatusOK, map[string]any{"items": sampleCommittees, "total": len(sampleCommittees)})
+                return
+        }
+        for _, c := range sampleCommittees {
+                if c["id"] == id {
+                        writeJSON(w, http.StatusOK, c)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "committee not found: "+id)
+}
+
+// sampleInstitutions provides seed data for the institutions endpoint.
+var sampleInstitutions = []map[string]any{
+        {"id": "institution-parliament-ke", "name": "Parliament of Kenya", "type": "legislature", "country": "KE", "website": "https://parliament.go.ke"},
+        {"id": "institution-na-ke", "name": "National Assembly of Kenya", "type": "lower_house", "country": "KE", "website": "https://parliament.go.ke/the-national-assembly"},
+        {"id": "institution-senate-ke", "name": "Senate of Kenya", "type": "upper_house", "country": "KE", "website": "https://parliament.go.ke/senate"},
+        {"id": "institution-executive-ke", "name": "Executive Office of the President", "type": "executive", "country": "KE", "website": "https://statehouse.go.ke"},
+        {"id": "institution-judiciary-ke", "name": "Judiciary of Kenya", "type": "judiciary", "country": "KE", "website": "https://judiciary.go.ke"},
 }
 
 func handleInstitutions(w http.ResponseWriter, r *http.Request) {
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/institutions/")
-        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Institutions — pending (issue #19)"})
+        if id == "" {
+                writeJSON(w, http.StatusOK, map[string]any{"items": sampleInstitutions, "total": len(sampleInstitutions)})
+                return
+        }
+        for _, i := range sampleInstitutions {
+                if i["id"] == id {
+                        writeJSON(w, http.StatusOK, i)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "institution not found: "+id)
 }
 
 // --- Loans + Grants ---
@@ -1291,11 +1348,59 @@ func handleActDetail(w http.ResponseWriter, r *http.Request) {
 
 func handleQuestions(w http.ResponseWriter, r *http.Request) {
         p := middleware.PrincipalFromRequest(r)
-        writeJSON(w, http.StatusOK, map[string]any{
-                "answer":    "Q&A proxy — AI service connection pending (issue #19)",
-                "principal": p.UserID,
-                "validated": false,
-        })
+
+        // Only accept POST with a JSON body containing the question.
+        if r.Method != http.MethodPost {
+                writeJSON(w, http.StatusOK, map[string]any{
+                        "answer":    "Send a POST request with {\"question\": \"...\"} to get an AI-grounded answer.",
+                        "principal": p.UserID,
+                        "validated": false,
+                })
+                return
+        }
+
+        var body struct {
+                Question string `json:"question"`
+        }
+        if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+                writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+                return
+        }
+        if body.Question == "" {
+                writeError(w, http.StatusBadRequest, "bad_request", "question is required")
+                return
+        }
+
+        // Proxy to the Python AI service.
+        aiURL := os.Getenv("AI_SERVICE_URL")
+        if aiURL == "" {
+                aiURL = "http://localhost:8000"
+        }
+
+        aiReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, aiURL+"/api/v1/ask", bytes.NewBufferString(`{"question":`+strconv.Quote(body.Question)+`}`))
+        if err != nil {
+                writeError(w, http.StatusInternalServerError, "internal_error", "failed to create AI request")
+                return
+        }
+        aiReq.Header.Set("Content-Type", "application/json")
+
+        aiResp, err := http.DefaultClient.Do(aiReq)
+        if err != nil {
+                // AI service unreachable — return a graceful degradation instead of a 5xx.
+                writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+                        "answer":    "AI service is currently unavailable. Please try again later.",
+                        "principal": p.UserID,
+                        "validated": false,
+                        "warning":   "AI service unreachable",
+                })
+                return
+        }
+        defer aiResp.Body.Close()
+
+        // Forward the AI service response to the client.
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(aiResp.StatusCode)
+        _, _ = io.Copy(w, aiResp.Body)
 }
 
 // --- Follow — requires auth ---

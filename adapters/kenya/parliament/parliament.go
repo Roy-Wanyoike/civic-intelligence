@@ -256,7 +256,7 @@ func (a *Adapter) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
 // and the weekly-tracker PDF URL as SourceURL so the caller can schedule a
 // follow-up PDF-parsing job.
 //
-// TODO(issue #CI-AD-005): integrate an external PDF parser (pdfcpu or unidoc)
+// TODO: integrate an external PDF parser (pdfcpu or unidoc)
 // to extract per-Bill stage rows from the weekly tracker PDF.
 func (a *Adapter) FetchBillTracker(ctx context.Context, billURL string) (*BillTracker, error) {
 	if billURL == "" {
