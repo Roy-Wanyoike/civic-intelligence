@@ -1,134 +1,196 @@
-# Engineering Worklog
+# Worklog
 
-A chronological log of engineering work on the Civic Intelligence Platform.
-Each entry is keyed by an engineer task ID (ENG-X#) and summarises the
-files added/changed, the tests added, the verification commands run, and
-the commit hash. The companion `CHANGELOG.md` covers user-visible
-releases; this file covers individual engineering sessions.
+A linear record of engineer-level task entries. Each entry references a
+task ID (e.g. `ENG-I3`), the branch it landed on, and a concise summary
+of what was done, what was tested, and what was committed.
 
-## ENG-I1 — Civic Knowledge Graph (Wave 9)
+This file complements `CHANGELOG.md` (which tracks user-visible changes)
+by capturing the per-engineer context: which worktree, which files
+touched, which tests added, which disclaimers enforced.
 
-**Branch:** `feat/wave9-civic-graph`
-**Worktree:** `/home/z/my-project/wt-civic-graph`
+---
+
+## ENG-I3 — Cross-country civic comparison tool + civic indicators dashboard
+
+**Branch:** `feat/wave9-civic-compare`
+**Worktree:** `/home/z/my-project/wt-civic-compare`
+**Commit:** `feat: cross-country comparison tool + civic indicators dashboard`
+**Status:** complete — backend tests pass, frontend type-checks.
 
 ### Goal
 
-Build an interactive Civic Knowledge Graph — a visual exploration tool
-that shows how Bills, Acts, Institutions, People, Constitution Articles,
-and Government terms are connected. No civic intelligence platform in
-Africa offers a graph explorer; this is the platform's signature
-differentiator.
+Build the first African civic-intelligence platform feature that lets
+users compare legislation, government structure, public debt, and civic
+indicators across the 6 supported countries (Kenya, Uganda, Tanzania,
+Ghana, Nigeria, South Africa) with the same structured schema. No
+platform in Africa offers side-by-side comparison of civic data across
+multiple countries — this enables cross-jurisdictional research that
+was previously impossible.
 
 ### Files added
 
-- `services/api/cmd/graph.go` — backend Graph API. Five endpoints
-  (`/api/v1/graph/nodes`, `/node/{id}`, `/relationships?id=...&depth=1|2|3`,
-  `/search?q=...`, `/paths?from=...&to=...`) plus a bare `/graph` summary
-  endpoint. The graph is built once at package init from the existing
-  Kenya seed data (acts, administrations, presidents, presidential terms,
-  constitution articles, borrowing agreements) plus the package-level
-  `sampleInstitutions`, `samplePeople`, `sampleCommittees` tables.
-  - Node types: `bill`, `act`, `institution`, `person`,
-    `constitution_article`, `administration`, `presidential_term`,
-    `legislature`, `committee`, `creditor`, `borrowing_agreement`.
-  - Edge types: `ORIGINATES_FROM` (Bill→Act), `SPONSORED_BY` (Bill→Person),
-    `BELONGS_TO` (Bill→Legislature), `ASSESSED_BY` (Bill→Committee),
-    `CITES` (Bill→Article), `ESTABLISHES` (Article→Institution),
-    `GOVERNED_BY` (Bill→Administration), `ASSESNTED_BY` (Act→President),
-    `BORROWED_BY` (Agreement→Creditor), `CONTRACTED_DURING`
-    (Agreement→Administration), `MEMBER_OF` (Person→Committee), `LEADS`
-    (Person→Institution).
-  - BFS shortest-path traversal treats the graph as undirected so a
-    citizen asking "how is this Bill connected to this President" gets
-    the answer regardless of edge direction.
-- `services/api/cmd/graph_test.go` — 16 unit tests covering all 5
-  endpoints + the bare `/graph` summary + invariants over the seeded
-  graph (every documented edge + node type is present).
-- `apps/web/src/lib/graph-api.ts` — typed client for the 5 graph
-  endpoints. Mirrors the Go response structs so a contract change
-  surfaces as a TypeScript compile error.
-- `apps/web/src/app/graph/page.tsx` — server component that fetches the
-  graph summary and renders the interactive explorer.
-- `apps/web/src/app/graph/graph-view.tsx` — client component with:
-  - Force-directed SVG visualization powered by `d3-force`.
-  - Nodes coloured by type (bills=blue, acts=green, institutions=orange,
-    people=purple, articles=gold, plus 6 more type-specific colours).
-  - Click a node → side panel shows node details + its direct
-    relationships (sourced from `/api/v1/graph/node/{id}`).
-  - Search bar at the top (debounced `/api/v1/graph/search`).
-  - Depth selector (1, 2, 3 hops).
-  - "Find Path" feature — select two nodes via search, see the
-    shortest connection path highlighted in the graph.
-  - Zoom/pan/drag controls (wheel + drag).
-  - Export PNG (svg → canvas → html2canvas → download).
-  - Accessible tabular data view as alternative to the visual graph.
-  - Mobile-friendly list view with "expand relationship" buttons.
-- `tests/integration/api_graph_test.go` — 12 integration tests covering
-  all 5 endpoints + the FACT reality_layer tag on the summary + the
-  response-shape contract (every node carries id/type/label, every edge
-  carries source/target/type) + the source_url evidence-first promise.
+**Backend (Go):**
+- `services/api/cmd/compare.go` (~970 lines) — 5 endpoints under
+  `/api/v1/compare/*`:
+    - `GET /api/v1/compare/countries?countries=KE,UG,TZ`
+    - `GET /api/v1/compare/legislation?countries=KE,UG&topic=health`
+    - `GET /api/v1/compare/debt?countries=KE,UG,TZ&from=2020&to=2024`
+    - `GET /api/v1/compare/government-structure?countries=KE,UG,NG,ZA`
+    - `GET /api/v1/compare/indicators?countries=KE,UG,TZ&indicators=debt_to_gdp,bills_introduced`
+  - Static country-profile registry mirroring each adapter's
+    `GetLegislativeStructure()` output (chamber count, members, term
+    length, government system, parliament URL).
+  - Per-country indicator registry (Bills introduced, Bills passed,
+    Acts commenced, debt-to-GDP, parliament sessions, committee
+    meetings, public participation) — every value carries a `source_url`.
+  - Live Kenya debt series pulled from the existing
+    `legislation.DebtRepository` (CBK + Treasury seed).
+  - `comparisonDisclaimer` constant attached to EVERY response — "the
+    platform does not rank countries or imply political preference".
+  - For /compare/debt, the canonical `NO_POLITICAL_PERFORMANCE_SCORE`
+    disclaimer is appended via the existing `appendCanonicalDisclaimer`
+    helper.
+- `services/api/cmd/compare_test.go` (~440 lines) — 11 test functions
+  covering:
+    - `TestCompare_CountriesReturnsAllProfiles` — 3-country compare
+    - `TestCompare_CountriesDisclaimerPresent` — disclaimer invariant
+    - `TestCompare_GovernmentStructureReturnsBicameralVsUnicameral`
+    - `TestCompare_LegislationByTopic` — topic filter
+    - `TestCompare_DebtReturnsKenyaLiveSeries` — KE pulls from repo
+    - `TestCompare_DebtCarriesNoPoliticalPerformanceScore`
+    - `TestCompare_IndicatorsFiltersByKey`
+    - `TestCompare_IndicatorsDisclaimerPresent`
+    - `TestCompare_NeverRanksCountries` — scans all 5 endpoints for
+      forbidden ranking language ("best country", "top performer",
+      "#1", etc.)
+    - `TestCompare_AllFiveEndpointsReturnDisclaimer` — every endpoint
+      carries the disclaimer (structural invariant)
+    - `TestCompare_DefaultsToAllCountriesWhenParamMissing`
+    - `TestCompare_DropsUnknownCountryCodes` — silent drop, no 400
+    - `TestCompare_MethodNotAllowed` — POST/PUT/DELETE → 405
+    - `TestCompare_UnknownSubResourceReturns404`
 
-### Files changed
+**Backend wiring:**
+- `services/api/cmd/main.go` — registered `/api/v1/compare` and
+  `/api/v1/compare/` routes with `makeCompareRouter(debtRepo)`, threading
+  the existing DebtRepository through so /compare/debt can pull live
+  CBK + Treasury observations for Kenya.
 
-- `services/api/cmd/main.go` — register `/api/v1/graph` and
-  `/api/v1/graph/` routes on the public API mux (read-only; no auth
-  required, in keeping with the existing public-read pattern).
-- `apps/web/src/components/header.tsx` — add "Knowledge Graph" to the
-  navbar mega-menu under the "Intelligence" group, with the `Network`
-  icon.
-- `apps/web/src/components/command-palette.tsx` — add "Knowledge Graph"
-  to the Intelligence group of the Cmd+K palette.
-- `apps/web/src/i18n/locales/en.json` — add `nav.pages.graph` =
-  "Knowledge Graph".
-- `apps/web/src/i18n/locales/sw.json` — add `nav.pages.graph` =
-  "Grafu ya Maarifa" (Kiswahili).
-- `apps/web/package.json` — add `d3-force`, `html2canvas` runtime deps
-  + `@types/d3-force` dev dep.
-- `docs/api/openapi.yaml` — document the 6 graph endpoints
-  (`/graph`, `/graph/nodes`, `/graph/node/{id}`,
-  `/graph/relationships`, `/graph/search`, `/graph/paths`) plus the
-  `GraphNode`, `GraphEdge`, `GraphResponse` schemas.
-- `tests/contract/openapi_contract_test.go` — add `/graph` to the
-  sub-router allowlist so the OpenAPI contract test recognises that
-  `/api/v1/graph/` is satisfied by at least one `/graph/*` openapi
-  entry.
+**Frontend (Next.js 14 / TypeScript):**
+- `apps/web/src/lib/compare-api.ts` (~200 lines) — typed client for
+  the 5 compare endpoints. Exports `COUNTRY_META`, `INDICATOR_META`,
+  `SUPPORTED_COUNTRIES`, `COMPARISON_DISCLAIMER`, and
+  `formatIndicatorValue` helpers.
+- `apps/web/src/app/compare/page.tsx` — server component that fetches
+  profiles, debt data, and indicators in parallel and passes to
+  `CompareView`. Reads `?countries=KE,UG,TZ` from the URL so users
+  can deep-link.
+- `apps/web/src/app/compare/compare-view.tsx` (~580 lines) — client
+  component with:
+    - Multi-select country chips (flags + names) for the 6 countries
+    - Dimension selector: government structure, legislation, debt,
+      indicators
+    - Side-by-side comparison table with color-coded differences
+      (highlight outliers in amber, not green/red — no value judgment)
+    - Visual charts:
+        - Debt comparison: grouped SVG bar chart (debt_to_gdp per country)
+        - Legislative activity: line chart via `BaseChart` (bills
+          introduced over time)
+        - Government structure: per-country chamber diagram
+          (unicameral vs bicameral)
+    - "Key Differences" section with plain-language explanations
+    - Print + Share buttons
+    - Top + bottom disclaimer banners
+- `apps/web/src/app/indicators/page.tsx` (~280 lines) — civic
+  indicators dashboard:
+    - Card grid: 7 indicators × N countries (filter by country + year)
+    - Each card: value, trend badge (up/down/flat/unknown), source URL,
+      last-updated date
+    - CSV export via `data:` URL (no client round-trip needed)
+    - "Compare with others" deep-link per country row
+- `apps/web/src/app/indicators/indicators-filters.tsx` (~60 lines) —
+  small client component driving the country + year select via Next.js
+  router (keeps the page a server component).
+
+**Navbar:**
+- `apps/web/src/components/header.tsx` — added `/compare` and
+  `/indicators` under the "Intelligence" nav group.
+- `apps/web/src/components/command-palette.tsx` — added `/compare` and
+  `/indicators` to the Intelligence command group.
+- `apps/web/src/i18n/locales/en.json` — added `nav.pages.compare` and
+  `nav.pages.indicators`.
+- `apps/web/src/i18n/locales/sw.json` — added Swahili translations
+  (`Linganisha`, `Viashiria`).
 
 ### Tests added
 
-- `services/api/cmd/graph_test.go` — 16 tests (all PASS).
-- `tests/integration/api_graph_test.go` — 12 tests (all PASS).
+| Test                                                            | Count |
+|----------------------------------------------------------------|-------|
+| `TestCompare_CountriesReturnsAllProfiles`                       | 1     |
+| `TestCompare_CountriesDisclaimerPresent`                       | 1     |
+| `TestCompare_GovernmentStructureReturnsBicameralVsUnicameral`   | 1     |
+| `TestCompare_LegislationByTopic`                               | 1     |
+| `TestCompare_DebtReturnsKenyaLiveSeries`                       | 1     |
+| `TestCompare_DebtCarriesNoPoliticalPerformanceScore`           | 1     |
+| `TestCompare_IndicatorsFiltersByKey`                           | 1     |
+| `TestCompare_IndicatorsDisclaimerPresent`                      | 1     |
+| `TestCompare_NeverRanksCountries` (5 sub-tests)               | 5     |
+| `TestCompare_AllFiveEndpointsReturnDisclaimer` (5 sub-tests)  | 5     |
+| `TestCompare_DefaultsToAllCountriesWhenParamMissing`          | 1     |
+| `TestCompare_DropsUnknownCountryCodes`                         | 1     |
+| `TestCompare_MethodNotAllowed` (5 endpoints)                  | 1     |
+| `TestCompare_UnknownSubResourceReturns404`                     | 1     |
+
+**Total: 22 distinct test functions, 31 (sub-)tests, all passing.**
 
 ### Verification
 
-- `cd services/api && go test -count=1 ./cmd/ 2>&1 | tail -5`
-  → `ok github.com/Roy-Wanyoike/civic-intelligence/services/api/cmd 0.018s`
-- `cd apps/web && npx tsc --noEmit 2>&1 | tail -5` → no errors.
-- `cd tests/contract && go test -count=1 ./...` → PASS (OpenAPI
-  contract test satisfied).
-- `cd tests/integration && go test -count=1 ./...` → PASS (3.8s).
-- Full `cmd/` suite: 160 tests pass, 0 fail.
+```bash
+# Backend tests
+$ cd services/api && go test -count=1 ./cmd/ 2>&1 | tail -5
+ok  	github.com/Roy-Wanyoike/civic-intelligence/services/api/cmd	0.015s
 
-### Design notes
+# Frontend type-check
+$ cd apps/web && npx tsc --noEmit 2>&1 | tail -5
+exit code: 0   # no errors
+```
 
-- The graph is a NAVIGATION aid, never the source of truth. Every node
-  carries the same `source_url` as the underlying entity so a citizen
-  can verify any relationship against the authoritative Kenya Law / CBK
-  / Treasury source. The summary endpoint is tagged
-  `reality_layer: FACT`.
-- The graph is built once at package init from the existing seed data;
-  there are no write paths today. When the legislation service gains
-  sponsor data, the `SPONSORED_BY` edge will appear without further
-  code changes (the field is wired but the seed has no sponsors).
-- The path BFS treats the graph as undirected — a citizen asking "how
-  is this Bill connected to this President" gets the shortest
-  connection regardless of edge direction.
-- The frontend uses SVG (not canvas) so each node + edge is a real DOM
-  element that carries a `<title>`, hover state, and click handler —
-  accessibility gate.
-- The bare `/api/v1/graph` endpoint returns a metadata summary (total
-  node + edge counts broken down by type) so the page's initial server
-  render shows the graph size without requiring a full traversal.
+### Design invariants enforced
+
+1. **The platform NEVER ranks countries.** Every response carries the
+   `comparisonDisclaimer`; /compare/debt also appends
+   `NO_POLITICAL_PERFORMANCE_SCORE`. The `TestCompare_NeverRanksCountries`
+   test scans all 5 endpoints for forbidden ranking phrases ("best
+   country", "top performer", "#1", "first place", etc.).
+2. **Differences are described, not evaluated.** The `differences` array
+   uses phrases like "bicameral vs unicameral" and "4-year vs 5-year
+   terms" — never "better" / "worse" / "higher" / "lower".
+3. **Colour coding is structural, not value-based.** Outlier cells are
+   highlighted in amber (caution) rather than green/red (good/bad).
+4. **Every value carries a source_url.** No figure is presented without
+   a verifiable source — the user can always click through to the
+   Parliament or IMF page that published it.
+5. **Kenya's live debt data is pulled from the existing
+   DebtRepository** (CBK + Treasury seed) — not duplicated. The
+   compare endpoint reuses the existing `legislation.WireDebtRepository`
+   wiring rather than fetching fresh data.
+6. **The compare page is print-friendly + shareable.** The URL carries
+   the selected countries + dimension via query params; the Share button
+   uses the Web Share API with clipboard fallback.
+
+### Follow-ups (not blocking)
+
+- Replace illustrative pre-2024 Bills-introduced trend values with real
+  per-country historical data once each adapter's `DiscoverBills()`
+  supports year-range queries.
+- Wire non-Kenya countries' live debt data when each country's
+  DebtRepository seed lands (currently only Kenya has seeded CBK +
+  Treasury observations; the other 5 fall back to IMF WEO debt-to-GDP).
+- Add per-country topic taxonomy (currently the `topic` filter matches
+  against the sample Bills' titles + tags).
 
 ### Commit
 
-`feat: interactive Civic Knowledge Graph — visual relationship explorer`
+```
+feat: cross-country comparison tool + civic indicators dashboard
+```

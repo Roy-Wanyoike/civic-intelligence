@@ -120,6 +120,8 @@ const navGroups: NavGroup[] = [
       { href: '/feed', i18nKey: 'pages.feed', icon: Newspaper, description: 'Full civic activity feed' },
       { href: '/trending', i18nKey: 'pages.trending', icon: TrendingUp, description: 'Trending Bills and topics' },
       { href: '/graph', i18nKey: 'pages.graph', icon: Network, description: 'Trace how Bills, Acts, People, and Institutions are connected' },
+      { href: '/compare', i18nKey: 'pages.compare', icon: Globe, description: 'Cross-country civic comparison — legislation, debt, indicators' },
+      { href: '/indicators', i18nKey: 'pages.indicators', icon: BarChart3, description: 'Civic indicators dashboard — Bills, Acts, debt, sessions' },
       { href: '/research', i18nKey: 'pages.research', icon: FileSearch, description: 'Research missions and reports' },
       { href: '/trust', i18nKey: 'pages.trust', icon: ShieldCheck, description: 'Trust and verification network' },
       { href: '/report', i18nKey: 'pages.reports', icon: FileBarChart, description: 'Generated civic reports' },

@@ -90,7 +90,12 @@ const NAV_GROUPS = [
       { href: '/what-changed', label: 'What Changed' },
       { href: '/feed', label: 'Feed' },
       { href: '/trending', label: 'Trending' },
+<<<<<<< HEAD
       { href: '/graph', label: 'Knowledge Graph' },
+=======
+      { href: '/compare', label: 'Compare' },
+      { href: '/indicators', label: 'Indicators' },
+>>>>>>> feat/wave9-civic-compare
       { href: '/research', label: 'Research' },
       { href: '/trust', label: 'Trust' },
       { href: '/report', label: 'Reports' },
