@@ -6,6 +6,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Civic Daily Brief + AI Summary (task ENG-I2, branch `feat/wave9-civic-brief`)
+
+Personalised, AI-grounded, plain-language daily summary of civic developments
+— the first surface on the platform that tells each citizen what matters to
+*them* based on their followed topics, institutions, and Bills, with every
+claim backed by a primary-source evidence URL.
+
+**Backend — `services/api/cmd/brief.go`** (new file, ~620 LOC):
+- `POST /api/v1/brief/generate` — generate + persist a personalised brief
+- `GET  /api/v1/brief/today`     — today's brief (on-demand if missing)
+- `GET  /api/v1/brief/archive`   — list previously generated briefs
+- `GET  /api/v1/brief/{id}`      — single brief by ID
+- Brief shape: `{ id, date, headline, sections[], ai_summary, ai_disclaimer,
+  ai_source, evidence_count, generated_at, country, user_id }`
+- Four sections: "What Changed Today", "Your Followed Topics", "What to
+  Watch", "Constitutional Context" — every item carries an `evidence_url`.
+- AI summary: calls the Python AI service `/v1/briefing/generate` (existing
+  capability `BriefingGeneratorCapability`). When the AI service is
+  unreachable, falls back to a deterministic template summary explicitly
+  labelled "Auto-generated summary." — NEVER presented as AI output (the
+  no-fake-AI rule from `docs/NO_FAKE_COMPLETION.md`). `ai_source` field
+  distinguishes `"ai-service"` from `"template-fallback"`.
+- `ai_disclaimer` constant: `"AI-generated summary. Verify against primary
+  sources."` — surfaced verbatim on every brief + rendered next to the
+  ASSUMPTION reality badge on the frontend.
+- Filtering: followed_topics matched against Bill titles (case-insensitive
+  substring); followed_institutions against house + title; followed_bills
+  against source ID. An empty follow set returns ALL Bills (the brief is
+  still useful for a citizen who follows nothing yet).
+- Constitutional Context section: curated mapping of topics → Constitution
+  of Kenya 2010 articles (Article 10 default; Article 43 health/education/
+  housing/water; Article 201 public finance; Article 31 data protection;
+  Article 42 environment; Article 60 land; Article 53 children; Article 41
+  labour; Article 238 security). Every article links to kenyalaw.org.
+- In-memory `briefStore` (sync.RWMutex + `map[string]brief`). The /today
+  endpoint caches the on-demand brief; subsequent calls return the cached
+  copy (same `generated_at` timestamp).
+- When the adapter fails (HTTP 500 / network error), the handler returns
+  200 with an empty Bill list + the template fallback summary — the brief
+  surfaces the failure honestly rather than returning 5xx.
+
+**Backend — `services/api/cmd/main.go`**: registered four new routes on the
+existing `apiHandler` mux. The legacy `/api/v1/briefing` endpoint is kept for
+backward compat with `api.ts:getBriefing` (the old empty-placeholder handler).
+
+**Backend — `services/api/cmd/brief_test.go`** (new file, 26 tests):
+- `TestGenerateBrief_BasicShape` — id, date, headline, 4 sections, AI disclaimer.
+- `TestGenerateBrief_EveryItemHasEvidenceURL` — the brief's core contract:
+  every item in every section carries a non-empty `evidence_url`.
+- `TestGenerateBrief_AIDisclaimerPresent` — the exact disclaimer string.
+- `TestGenerateBrief_TemplateFallbackNotLabelledAsAI` — template fallback
+  is prefixed "Auto-generated summary." (the no-fake-AI gate).
+- `TestGenerateBrief_EmptyBills` — honest empty state when no Bills found.
+- `TestGenerateBrief_FollowedTopicsFilters` — followed_topics "health"
+  surfaces the Public Health Bill.
+- `TestGenerateBrief_FollowedTopicsNoMatch` — surfaces the templated
+  "no matches" item (with its own evidence_url) when nothing matched.
+- `TestGenerateBrief_ConstitutionalContextForHealth` — followed topic
+  "health" → Article 43 surfaces with kenyalaw.org evidence_url.
+- `TestGenerateBrief_HeadlineCounts` — headline counts Bills into
+  published / amendment / finance buckets.
+- `TestBriefGenerateHandler_Post`, `TestBriefGenerateHandler_GetRejectsMethod`,
+  `TestBriefTodayHandler_OnDemand`, `TestBriefTodayHandler_AdapterError`,
+  `TestBriefArchiveHandler_ListsStoredBriefs`, `TestBriefDetailHandler_Found`,
+  `TestBriefDetailHandler_NotFound`, `TestBriefDetailHandler_RejectsReservedNames`,
+  `TestBriefEndpoints_RegisteredOnMux` — full HTTP + routing coverage.
+- `TestCallAIBriefingGenerator_Reachable` + `TestCallAIBriefingGenerator_Unreachable`
+  + `TestGenerateAISummary_FallsBackToTemplate` — AI integration.
+- `TestComposeAISummaryFromResponse_NeverEchoesAIHeadline` — the BFF composes
+  its own summary from observed Bills; it never echoes the AI service's
+  headline verbatim (single-source-of-truth rule).
+- `TestBrief_JSONShape`, `TestBriefStore_PutGet`, `TestBriefArchiveEntry_JSONShape`,
+  `TestBriefAISummaryDisclaimer_Constant` — contract + store + JSON shape.
+
+**Frontend — `apps/web/src/app/briefing/page.tsx`** (redesigned server component):
+- Hero: date + headline + meta (country, evidence citation count, generated_at).
+- "3 things you need to know" — bulleted top-3 from "What Changed Today".
+- "What Changed Today" timeline of changes (every item links to evidence).
+- "Your Followed Topics" personalised section (empty-state copy when no follows).
+- "What to Watch" upcoming / approaching-final Bills.
+- "Constitutional Context" — relevant articles with article text + connection.
+- "AI Summary" — clearly labelled with `RealityBadge kind="ASSUMPTION"` +
+  the platform-wide `ai_disclaimer` string + (when fallback) an explicit
+  "(AI service unavailable — this is an auto-generated summary, not a
+  model output.)" caveat.
+- "Evidence" footer — every source URL cited in the brief, deduped.
+- Share button (Web Share API → clipboard fallback) + "Subscribe to daily
+  email" button (placeholder → `/notifications`) + "Personalise" button
+  (→ `/following`).
+- Mobile-first: collapsible sections (tap to expand/collapse), horizontal
+  swipe-between-sections via scroll-snap on the section-nav strip, 44px+
+  touch targets, `print:` Tailwind variants for print-friendly output.
+- Honest fallback: when the BFF is unreachable, the page renders an empty
+  brief with an alert banner — it never fabricates a brief.
+
+**Frontend — `apps/web/src/app/briefing/brief-reader.tsx`** (new client
+component, ~330 LOC): owns the interactive bits — collapsible sections,
+swipe nav, share button, evidence footer.
+
+**Frontend — `apps/web/src/app/briefing/archive/page.tsx`** (new): archive
+list of past briefs; each entry links to `/briefing?id={brief-id}` which
+the brief page reads via `searchParams` and uses to fetch the specific
+brief from `/api/v1/brief/{id}`.
+
+**Frontend — `apps/web/src/lib/types.ts`**: added `BriefSectionItem`,
+`BriefSection`, `CivicBrief`, `BriefArchiveEntry` types mirroring the Go
+structs in `services/api/cmd/brief.go`.
+
+**Frontend — `apps/web/src/lib/api.ts`**: added `generateBrief()`,
+`getTodaysBrief()`, `listBriefArchive()`, `getBrief(id)` typed clients.
+Kept the legacy `getBriefing()` for backward compat.
+
+**Verification**:
+- `cd services/api && go test -count=1 ./cmd/ 2>&1 | tail -5` → `ok … 0.015s`
+  (170 tests passing, +26 new brief tests).
+- `cd apps/web && ./node_modules/.bin/tsc --noEmit 2>&1 | tail -5` → clean.
+
 ### Added — Wave 5 Documentation Pass (this commit, branch `fix/wave5-docs-a`)
 
 #### Wave 5 forensic re-audit (5 audit teams, spec §79)

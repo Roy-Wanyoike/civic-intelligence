@@ -149,8 +149,19 @@ func main() {
         // Search — public.
         apiHandler.HandleFunc("/api/v1/search", handleSearch)
 
-        // Briefing — public.
+        // Briefing — legacy single-shot endpoint (kept for backward compat
+        // with api.ts:getBriefing). The personalised Civic Daily Brief lives
+        // under /api/v1/brief/* (task ENG-I2) — see brief.go.
         apiHandler.HandleFunc("/api/v1/briefing", handleBriefing)
+
+        // Civic Daily Brief (task ENG-I2) — personalised, AI-grounded, every
+        // item carries an evidence_url. The briefStore is the package-level
+        // in-memory cache populated by /generate and /today.
+        briefStore := newBriefStore()
+        apiHandler.HandleFunc("/api/v1/brief/generate", makeBriefGenerateHandler(kenyaLaw, cfg.AIServiceURL, briefStore))
+        apiHandler.HandleFunc("/api/v1/brief/today", makeBriefTodayHandler(kenyaLaw, cfg.AIServiceURL, briefStore))
+        apiHandler.HandleFunc("/api/v1/brief/archive", makeBriefArchiveHandler(briefStore))
+        apiHandler.HandleFunc("/api/v1/brief/", makeBriefDetailHandler(briefStore))
 
         // People, committees, institutions — public read.
         apiHandler.HandleFunc("/api/v1/people/", handlePeople)
