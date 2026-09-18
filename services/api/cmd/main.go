@@ -804,21 +804,16 @@ func billIDToUUID(billID string) string {
 }
 
 // --- Search ---
-
-func handleSearch(w http.ResponseWriter, r *http.Request) {
-        q := r.URL.Query().Get("q")
-        if q == "" {
-                writeError(w, http.StatusBadRequest, "bad_request", "query parameter 'q' is required")
-                return
-        }
-        // TODO: call search service. For now, search through discovered bills.
-        writeJSON(w, http.StatusOK, map[string]any{
-                "q":     q,
-                "items": []any{},
-                "total": 0,
-                "note":  "Search — full-text search pending (issue #45)",
-        })
-}
+//
+// The search handler used to live inline in this file (returning an empty
+// result with a "pending issue #45" note). It has been promoted to its own
+// file, search.go, with an in-memory stopgap implementation that actually
+// returns results across Bills, Acts, and Constitution articles. The route
+// registration `apiHandler.HandleFunc("/api/v1/search", handleSearch)` below
+// is unchanged; only the function's body has moved.
+//
+// See search.go for the implementation and the stopgap note about the
+// pending Postgres FTS wiring.
 
 // --- Briefing ---
 

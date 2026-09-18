@@ -3,16 +3,16 @@
 //
 // Endpoints (routed by makeDebtRouter via /api/v1/debt and /api/v1/debt/):
 //
-//      GET /api/v1/debt                    -- national debt dashboard
-//      GET /api/v1/debt/loans              -- borrowing register
-//      GET /api/v1/debt/timeline           -- debt stock timeline
-//      GET /api/v1/debt/governments/{id}   -- government debt summary
+//      GET /api/v1/debt                       -- national debt dashboard
+//      GET /api/v1/debt/loans                 -- borrowing register
+//      GET /api/v1/debt/timeline              -- debt stock timeline
+//      GET /api/v1/debt/governments/{id}      -- government debt summary
+//      GET /api/v1/debt/legislatures/{id}     -- legislature debt summary
 //
-// The following endpoints are NOT routed, even though earlier versions of this
-// file documented them:
+// The following endpoint is NOT routed, even though earlier versions of this
+// file documented it:
 //
-//      GET /api/v1/debt/creditors          -- not implemented
-//      GET /api/v1/debt/legislatures/{id}  -- not implemented (placeholder)
+//      GET /api/v1/debt/creditors             -- not implemented
 //
 // Issue #203: handlers consume a legislation.DebtRepository (constructed by
 // legislation.WireDebtRepository and seeded by kenya_seed.SeedDebt). The
@@ -32,6 +32,14 @@
 // field is attached to the response item. The platform does NOT reject
 // invalid agreements — it surfaces the uncertainty for human review (Spec
 // section 28).
+//
+// GAP-19-1: /debt/legislatures/{id} now returns the per-legislature
+// (Parliamentary term) debt summary. Spec section 19 requires every
+// legislature to surface debt at beginning/end, new borrowing, domestic/
+// external split, disbursements, repayments, debt service, and outstanding
+// obligations. As with the governments endpoint, the platform NEVER
+// attributes sovereign borrowing to a Parliament — the legal borrower is
+// the Republic of Kenya.
 package main
 
 import (
@@ -84,6 +92,35 @@ type GovernmentDebtSummaryResponse struct {
         Currency         string   `json:"currency"`
         SourceURLs       []string `json:"source_urls"`
         Disclaimer       string   `json:"disclaimer"`
+}
+
+// LegislatureDebtSummaryResponse is the response for
+// GET /api/v1/debt/legislatures/{id}. Spec section 19 — each legislature
+// surfaces debt at beginning/end, new borrowing (CONTRACTED_DURING),
+// domestic/external split, disbursements, repayments, debt service, and
+// outstanding obligations.
+//
+// As with GovernmentDebtSummaryResponse, every field is a strict subset of
+// the domain.LegislatureDebtSummary struct. The Disclaimer field is the
+// per-legislature text appended with the canonical
+// NO_POLITICAL_PERFORMANCE_SCORE constant so the platform-wide promise
+// (never rank legislatures by "borrowing performance") is preserved even
+// if the per-legislature text drifts.
+type LegislatureDebtSummaryResponse struct {
+        LegislatureID         string   `json:"legislature_id"`
+        Period                 string   `json:"period"`
+        TotalNewBorrowing      *float64 `json:"total_new_borrowing"`
+        DomesticBorrowing      *float64 `json:"domestic_borrowing"`
+        ExternalBorrowing      *float64 `json:"external_borrowing"`
+        Disbursements          *float64 `json:"disbursements"`
+        Repayments             *float64 `json:"repayments"`
+        DebtService            *float64 `json:"debt_service"`
+        DebtStockAtStart       *float64 `json:"debt_stock_at_start"`
+        DebtStockAtEnd         *float64 `json:"debt_stock_at_end"`
+        OutstandingObligations *float64 `json:"outstanding_obligations"`
+        Currency               string   `json:"currency"`
+        SourceURLs             []string `json:"source_urls"`
+        Disclaimer             string   `json:"disclaimer"`
 }
 
 // BorrowingAgreementResponse is the JSON shape returned for each item in
@@ -324,6 +361,41 @@ func makeGovernmentDebtHandler(repo legislation.DebtRepository) http.HandlerFunc
         }
 }
 
+// makeLegislatureDebtHandler handles GET /api/v1/debt/legislatures/{id}.
+// Spec section 19 — each legislature surfaces debt at beginning/end, new
+// borrowing (CONTRACTED_DURING), domestic/external split, disbursements,
+// repayments, debt service, and outstanding obligations.
+//
+// The handler consults the repository for the cached summary. If no
+// summary exists for the requested legislature, the response is 404
+// with a clear error — the platform does not fabricate summaries, and it
+// does NOT silently attribute the underlying BorrowingAgreement records
+// to a legislature (Spec section 35 — the legal borrower is the Republic
+// of Kenya, never a Parliament or its members).
+//
+// GAP-19-1: previously this endpoint was a documented placeholder. The
+// in-memory repository now stores per-legislature summaries seeded by
+// kenya_seed.KenyaLegislatureDebtSummaries, so the handler can return
+// real data for Kenya's 12th (2017-2022) and 13th (2022-present)
+// Parliaments.
+func makeLegislatureDebtHandler(repo legislation.DebtRepository) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+                if r.Method != http.MethodGet {
+                        writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+                        return
+                }
+                w.Header().Set("Content-Type", "application/json")
+                id := strings.TrimPrefix(r.URL.Path, "/api/v1/debt/legislatures/")
+                id = strings.TrimSuffix(id, "/")
+                summary, err := repo.GetLegislatureDebtSummary(r.Context(), legislation.ID(id))
+                if err != nil {
+                        writeError(w, http.StatusNotFound, "not_found", "no debt summary for legislature: "+id)
+                        return
+                }
+                writeJSON(w, http.StatusOK, legislatureSummaryFromDomain(*summary))
+        }
+}
+
 // makeDebtRouter routes /api/v1/debt/* sub-resources. The repository is
 // threaded through every handler so they all read from the same in-memory
 // store (or, in production, the same Postgres-backed store).
@@ -332,6 +404,7 @@ func makeDebtRouter(repo legislation.DebtRepository) http.HandlerFunc {
         timeline := makeDebtTimelineHandler(repo)
         loans := makeDebtLoansHandler(repo)
         gov := makeGovernmentDebtHandler(repo)
+        leg := makeLegislatureDebtHandler(repo)
         return func(w http.ResponseWriter, r *http.Request) {
                 path := strings.TrimPrefix(r.URL.Path, "/api/v1/debt")
                 path = strings.TrimPrefix(path, "/")
@@ -344,6 +417,8 @@ func makeDebtRouter(repo legislation.DebtRepository) http.HandlerFunc {
                         loans(w, r)
                 case strings.HasPrefix(path, "governments/"):
                         gov(w, r)
+                case strings.HasPrefix(path, "legislatures/"):
+                        leg(w, r)
                 default:
                         writeError(w, http.StatusNotFound, "not_found", "unknown debt sub-resource: "+path)
                 }
@@ -390,6 +465,32 @@ func summaryFromDomain(s legislation.GovernmentDebtSummary) GovernmentDebtSummar
                 Currency:         s.Currency,
                 SourceURLs:       s.SourceURLs,
                 Disclaimer:       appendCanonicalDisclaimer(s.Disclaimer),
+        }
+}
+
+// legislatureSummaryFromDomain converts a domain.LegislatureDebtSummary to
+// the JSON response shape. Mirrors summaryFromDomain — every field is a
+// strict subset of the domain struct, and the Disclaimer is the
+// per-legislature text appended with the canonical
+// NO_POLITICAL_PERFORMANCE_SCORE constant (Spec section 37).
+//
+// GAP-19-1.
+func legislatureSummaryFromDomain(s legislation.LegislatureDebtSummary) LegislatureDebtSummaryResponse {
+        return LegislatureDebtSummaryResponse{
+                LegislatureID:         string(s.LegislatureID),
+                Period:                 s.Period,
+                TotalNewBorrowing:      s.TotalNewBorrowing,
+                DomesticBorrowing:      s.DomesticBorrowing,
+                ExternalBorrowing:      s.ExternalBorrowing,
+                Disbursements:          s.Disbursements,
+                Repayments:             s.Repayments,
+                DebtService:            s.DebtService,
+                DebtStockAtStart:       s.DebtStockAtStart,
+                DebtStockAtEnd:         s.DebtStockAtEnd,
+                OutstandingObligations: s.OutstandingObligations,
+                Currency:               s.Currency,
+                SourceURLs:             s.SourceURLs,
+                Disclaimer:             appendCanonicalDisclaimer(s.Disclaimer),
         }
 }
 

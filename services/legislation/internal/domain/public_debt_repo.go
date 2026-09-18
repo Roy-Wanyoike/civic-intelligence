@@ -53,6 +53,19 @@ var ErrBorrowingAgreementNotFound = errors.New("borrowing agreement not found")
 // when no summary exists for the requested administration.
 var ErrGovernmentDebtSummaryNotFound = errors.New("government debt summary not found")
 
+// ErrLegislatureDebtSummaryAlreadyExists is returned by
+// RecordLegislatureDebtSummary when a summary for the same legislature has
+// already been recorded. Summaries are computed once and cached; if the
+// underlying data changes, the caller should recompute and record a new
+// summary under a different legislature ID (or the caller should delete
+// and re-add — which is not exposed via this interface).
+var ErrLegislatureDebtSummaryAlreadyExists = errors.New("legislature debt summary already exists; summaries are immutable cached values")
+
+// ErrLegislatureDebtSummaryNotFound is returned by
+// GetLegislatureDebtSummary when no summary exists for the requested
+// legislature.
+var ErrLegislatureDebtSummaryNotFound = errors.New("legislature debt summary not found")
+
 // DebtFilter narrows ListBorrowingAgreements results. All fields are
 // optional; a zero-value DebtFilter returns every agreement.
 //
@@ -144,6 +157,24 @@ type DebtRepository interface {
 	// same AdministrationID is already present — summaries are immutable
 	// cached values (Spec section 7, 37).
 	RecordGovernmentDebtSummary(ctx context.Context, summary GovernmentDebtSummary) error
+
+	// GetLegislatureDebtSummary returns the cached summary for a
+	// legislature (Parliamentary term). Spec section 19 — each
+	// legislative period surfaces debt at beginning/end, new borrowing
+	// (CONTRACTED_DURING), domestic/external split, disbursements,
+	// repayments, debt service, and outstanding obligations.
+	//
+	// As with GovernmentDebtSummary, the summary is NOT a political
+	// performance score for the legislature.
+	//
+	// Returns ErrLegislatureDebtSummaryNotFound if no summary exists.
+	GetLegislatureDebtSummary(ctx context.Context, legislatureID ID) (*LegislatureDebtSummary, error)
+
+	// RecordLegislatureDebtSummary stores a computed legislature summary.
+	// Returns ErrLegislatureDebtSummaryAlreadyExists if a summary for the
+	// same LegislatureID is already present — summaries are immutable
+	// cached values (Spec section 19, 37).
+	RecordLegislatureDebtSummary(ctx context.Context, summary LegislatureDebtSummary) error
 
 	// AppendReconciliationConflict records a detected conflict between
 	// official sources. Spec section 28 — the platform never silently
