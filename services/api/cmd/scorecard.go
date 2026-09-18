@@ -111,7 +111,7 @@ type MPScorecard struct {
 // parliamentary roles (Majority Leader, Senator, Committee Chair, etc.).
 // Each name is paired with a generic role so the scorecard renders even
 // before the live parliament.go.ke feed is wired.
-var samplePeople = []MPScorecard{
+var sampleScorecards = []MPScorecard{
         {
                 PersonID:            "person-001",
                 Name:                "Kimani Ichung'wah",
@@ -409,9 +409,9 @@ var scorecardDisclaimerForTest = scorecardDisclaimer
 // the sample list exists so the frontend + tests have something to render
 // before the live parliament.go.ke feed is wired.
 func findScorecard(personID string) *MPScorecard {
-        for i := range samplePeople {
-                if samplePeople[i].PersonID == personID {
-                        return &samplePeople[i]
+        for i := range sampleScorecards {
+                if sampleScorecards[i].PersonID == personID {
+                        return &sampleScorecards[i]
                 }
         }
         return nil
@@ -535,6 +535,7 @@ type scorecardListItem struct {
         Constituency string `json:"constituency"`
         Party        string `json:"party"`
         ScorecardURL string `json:"scorecard_url"`
+        Country      string `json:"country"`
 }
 
 // makePeopleListHandler returns the handler for GET /api/v1/people. It lists
@@ -546,8 +547,8 @@ func makePeopleListHandler() http.HandlerFunc {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
                         return
                 }
-                items := make([]scorecardListItem, 0, len(samplePeople))
-                for _, p := range samplePeople {
+                items := make([]scorecardListItem, 0, len(sampleScorecards))
+                for _, p := range sampleScorecards {
                         items = append(items, scorecardListItem{
                                 PersonID:     p.PersonID,
                                 Name:         p.Name,
@@ -555,6 +556,7 @@ func makePeopleListHandler() http.HandlerFunc {
                                 Constituency: p.Constituency,
                                 Party:        p.Party,
                                 ScorecardURL: "/api/v1/people/" + p.PersonID + "/scorecard",
+                                Country:      "KE",
                         })
                 }
                 writeJSON(w, http.StatusOK, scorecardListResponse{

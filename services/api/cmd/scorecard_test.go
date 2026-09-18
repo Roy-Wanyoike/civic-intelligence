@@ -178,10 +178,10 @@ func TestScorecard_Returns404ForUnknownPerson(t *testing.T) {
 // against an accidental truncation of the samplePeople seed (e.g. if someone
 // deletes a row while editing the file).
 func TestScorecard_AllFiveSamplePeopleHaveScorecards(t *testing.T) {
-        if len(samplePeople) != 5 {
-                t.Fatalf("expected exactly 5 sample people for ENG-K2, got %d", len(samplePeople))
+        if len(sampleScorecards) != 5 {
+                t.Fatalf("expected exactly 5 sample people for ENG-K2, got %d", len(sampleScorecards))
         }
-        for _, p := range samplePeople {
+        for _, p := range sampleScorecards {
                 req := httptest.NewRequest(http.MethodGet, "/api/v1/people/"+p.PersonID+"/scorecard", nil)
                 rec := httptest.NewRecorder()
 
@@ -237,8 +237,8 @@ func TestPeopleList_ReturnsSamplePeopleWithScorecardLinks(t *testing.T) {
         if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
                 t.Fatalf("decode: %v", err)
         }
-        if resp.Total != len(samplePeople) {
-                t.Errorf("expected total=%d, got %d", len(samplePeople), resp.Total)
+        if resp.Total != len(sampleScorecards) {
+                t.Errorf("expected total=%d, got %d", len(sampleScorecards), resp.Total)
         }
         for _, item := range resp.Items {
                 if item.ScorecardURL == "" {

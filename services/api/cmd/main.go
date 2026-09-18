@@ -1234,7 +1234,7 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // compat with any external link still pointing at /api/v1/people/{id}.
         id := tail
         writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "People detail — pending (issue #19). Use /api/v1/people/{id}/scorecard for the factual MP record."})
-        id := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
+        id = strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
         country := middleware.CountryFromContext(r.Context())
         if id == "" {
                 filtered := filterMapsByCountry(samplePeople, country)

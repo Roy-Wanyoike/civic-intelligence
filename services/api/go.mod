@@ -19,12 +19,6 @@ require (
 )
 
 require (
-	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts v0.0.0 // indirect
-	golang.org/x/crypto v0.19.0 // indirect
-)
-
-replace (
-	github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya => ../../adapters/kenya
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/south_africa v0.0.0 // indirect
