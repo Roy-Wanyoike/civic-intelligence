@@ -39,16 +39,10 @@
       "what_changed": "What Changed",
       "feed": "Feed",
       "trending": "Trending",
-<<<<<<< HEAD
       "calendar": "Calendar",
-=======
-<<<<<<< HEAD
       "graph": "Knowledge Graph",
-=======
       "compare": "Compare",
       "indicators": "Indicators",
->>>>>>> feat/wave9-civic-compare
->>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
       "research": "Research",
       "trust": "Trust",
       "reports": "Reports",

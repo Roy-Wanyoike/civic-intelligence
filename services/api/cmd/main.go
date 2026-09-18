@@ -302,7 +302,6 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
-<<<<<<< HEAD
         // Civic Calendar (task ENG-K1 — Feature 1). The calendarStore is a
         // package-level in-memory store seeded with 26 realistic Kenya
         // Parliament events spanning ~3 months. In production this would
@@ -322,7 +321,6 @@ func main() {
         SeedGazetteSampleNotices(gazetteAlertStore, calendarAnchor)
         apiHandler.HandleFunc("/api/v1/gazette/alerts", makeGazetteAlertsHandler(gazetteAlertStore))
         apiHandler.HandleFunc("/api/v1/gazette/alerts/", makeGazetteAlertDetailHandler(gazetteAlertStore))
-=======
         // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
         // differentiator: a visual relationship explorer that traces how
         // Bills, Acts, Institutions, People, Constitution Articles, and
@@ -339,7 +337,6 @@ func main() {
         // supported countries.
         apiHandler.HandleFunc("/api/v1/compare", makeCompareRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/compare/", makeCompareRouter(debtRepo))
->>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 
         // Middleware chain (outermost → innermost):
         //   RequestID (GAP-67-1)     — generates / propagates X-Request-Id; logs every
@@ -1213,7 +1210,6 @@ var samplePeople = []map[string]any{
 }
 
 func handlePeople(w http.ResponseWriter, r *http.Request) {
-<<<<<<< HEAD
         // The people router is registered on /api/v1/people/. We dispatch on
         // the trailing path tail:
         //   - "" (root, no trailing slash)  → list the 5 sample people
@@ -1238,7 +1234,6 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // compat with any external link still pointing at /api/v1/people/{id}.
         id := tail
         writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "People detail — pending (issue #19). Use /api/v1/people/{id}/scorecard for the factual MP record."})
-=======
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
         country := middleware.CountryFromContext(r.Context())
         if id == "" {
@@ -1285,7 +1280,6 @@ var sampleCommittees = []map[string]any{
         // South Africa — Portfolio Committees of the National Assembly.
         {"id": "committee-za-finance", "name": "Standing Committee on Finance", "house": "National Assembly", "country": "ZA"},
         {"id": "committee-za-justice", "name": "Portfolio Committee on Justice and Correctional Services", "house": "National Assembly", "country": "ZA"},
->>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 }
 
 func handleCommittees(w http.ResponseWriter, r *http.Request) {

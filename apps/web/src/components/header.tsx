@@ -34,13 +34,10 @@ import {
   LayoutDashboard,
   Scale as ScaleIcon,
   Command as CommandIcon,
-<<<<<<< HEAD
   CalendarDays,
   MapPin,
-=======
   LogIn,
   Network,
->>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
@@ -125,13 +122,10 @@ const navGroups: NavGroup[] = [
       { href: '/what-changed', i18nKey: 'pages.what_changed', icon: Radio, description: 'Proactive civic change feed' },
       { href: '/feed', i18nKey: 'pages.feed', icon: Newspaper, description: 'Full civic activity feed' },
       { href: '/trending', i18nKey: 'pages.trending', icon: TrendingUp, description: 'Trending Bills and topics' },
-<<<<<<< HEAD
       { href: '/calendar', i18nKey: 'pages.calendar', icon: CalendarDays, description: 'Civic calendar — sessions, committees, gazette dates' },
-=======
       { href: '/graph', i18nKey: 'pages.graph', icon: Network, description: 'Trace how Bills, Acts, People, and Institutions are connected' },
       { href: '/compare', i18nKey: 'pages.compare', icon: Globe, description: 'Cross-country civic comparison — legislation, debt, indicators' },
       { href: '/indicators', i18nKey: 'pages.indicators', icon: BarChart3, description: 'Civic indicators dashboard — Bills, Acts, debt, sessions' },
->>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
       { href: '/research', i18nKey: 'pages.research', icon: FileSearch, description: 'Research missions and reports' },
       { href: '/trust', i18nKey: 'pages.trust', icon: ShieldCheck, description: 'Trust and verification network' },
       { href: '/report', i18nKey: 'pages.reports', icon: FileBarChart, description: 'Generated civic reports' },
