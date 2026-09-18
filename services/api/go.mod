@@ -4,10 +4,7 @@ go 1.23
 
 require (
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya v0.0.0
-<<<<<<< HEAD
-=======
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/registry v0.0.0
->>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 	github.com/Roy-Wanyoike/civic-intelligence/packages/auth v0.0.0
 	github.com/Roy-Wanyoike/civic-intelligence/packages/config v0.0.0
 	github.com/Roy-Wanyoike/civic-intelligence/packages/observability v0.0.0
@@ -22,14 +19,12 @@ require (
 )
 
 require (
-<<<<<<< HEAD
 	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts v0.0.0 // indirect
 	golang.org/x/crypto v0.19.0 // indirect
 )
 
 replace (
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya => ../../adapters/kenya
-=======
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/south_africa v0.0.0 // indirect
@@ -67,7 +62,6 @@ replace (
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/south_africa => ../../adapters/south_africa
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania => ../../adapters/tanzania
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/uganda => ../../adapters/uganda
->>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 	github.com/Roy-Wanyoike/civic-intelligence/packages/auth => ../../packages/auth
 	github.com/Roy-Wanyoike/civic-intelligence/packages/config => ../../packages/config
 	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts => ../../packages/contracts
