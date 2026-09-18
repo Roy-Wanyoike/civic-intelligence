@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowJs": false,
+    "typeRoots": ["../apps/web/node_modules/@types"],
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@playwright/test": ["../apps/web/node_modules/@playwright/test/index.d.ts"],
+      "@axe-core/playwright": ["../apps/web/node_modules/@axe-core/playwright/dist/index.d.ts"]
+    }
+  },
+  "include": ["e2e/**/*.ts"],
+  "exclude": ["node_modules"]
+}
