@@ -1,4 +1,3 @@
-// FIXME: verify with go build when Go available
 package cache
 
 import (

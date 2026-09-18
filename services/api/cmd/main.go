@@ -19,6 +19,7 @@ import (
 
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_law"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_seed"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/registry"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/auth"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/config"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/observability"
@@ -33,13 +34,36 @@ type Config struct {
         OIDCIssuer      string        `env:"OIDC_ISSUER" default:"http://localhost:8081/realms/civic"`
         OIDCAudience    string        `env:"OIDC_AUDIENCE" default:"civic-intelligence"`
         OIDCJWKSURL     string        `env:"OIDC_JWKS_URL" default:"http://localhost:8081/realms/civic/protocol/openid-connect/certs"`
-        DevMode         bool          `env:"DEV_MODE" default:"true"`
+        // DevMode gates the DevVerifier (which trusts JWT payloads WITHOUT
+        // signature verification). The default is `false` (P0-3 / audit-team-5
+        // gate #8 item 5) — production deployments MUST leave this off. Local
+        // development opts in by setting DEV_MODE=true. The runtime log line
+        // emits a WARNING when DevMode is true so an accidental production
+        // override is visible in logs.
+        DevMode         bool          `env:"DEV_MODE" default:"false"`
         ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" default:"15s"`
 
         // AIServiceURL is the base URL of the Python AI service (FastAPI).
         // Used by the bill summarizer, Q&A proxy, and impact-analysis endpoints.
         // Defaults to the local dev address (port 8000).
         AIServiceURL string `env:"AI_SERVICE_URL" default:"http://localhost:8000"`
+
+        // CORSAllowedOrigins is a comma-separated list of origins permitted to
+        // make cross-origin requests. Empty (the default) disables CORS — the
+        // frontend and API must share an origin. Production deployments serving
+        // the frontend from a different host (e.g. app.civicintelligence.com →
+        // api.civicintelligence.com) MUST set this to the frontend origin.
+        CORSAllowedOrigins string `env:"CORS_ALLOWED_ORIGINS" default:""`
+
+        // TracerEndpoint is the OTel collector endpoint (e.g.
+        // "localhost:4317"). Empty (the default) disables tracing — the API
+        // falls back to the NopTracer. Production deployments SHOULD set this
+        // to enable distributed tracing through Tempo.
+        TracerEndpoint string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" default:""`
+
+        // TracerServiceName overrides the OTel resource service.name attribute.
+        // Defaults to "civic-api" when empty.
+        TracerServiceName string `env:"OTEL_SERVICE_NAME" default:"civic-api"`
 }
 
 func main() {
@@ -60,8 +84,40 @@ func main() {
         // Build the Kenya Law adapter for real Bill discovery.
         kenyaLaw := kenya_law.NewAdapter(nil, "CivicIntelligence/0.1 (+https://github.com/Roy-Wanyoike/civic-intelligence)")
 
+        // Register every shipped country adapter (Kenya, Uganda, Tanzania,
+        // Ghana, Nigeria, South Africa) with the central registry. Future
+        // code (e.g. the bills + acts handlers) looks adapters up by
+        // country code via registry.GetAdapter so the API layer never has
+        // to know which specific adapters are installed. See
+        // CONTRIBUTING.md "Adding a New Country" for the contributor
+        // workflow.
+        registry.MustRegisterDefault()
+        log.Printf("registered %d country adapters in the registry", len(registry.SupportedCountries()))
+
         // Build the metric registry for observability.
         metrics := observability.NewMetricRegistry()
+
+        // Initialise the tracer. When TracerEndpoint is configured, the API
+        // uses a real OpenTelemetry tracer that exports to the OTel collector
+        // (production gate #13). When the endpoint is empty (the default), the
+        // API falls back to NopTracer — useful for unit tests + local dev.
+        tracerServiceName := cfg.TracerServiceName
+        if tracerServiceName == "" {
+                tracerServiceName = "civic-api"
+        }
+        if cfg.TracerEndpoint != "" {
+                shutdown, err := observability.InitOTelTracer(context.Background(), tracerServiceName, cfg.TracerEndpoint)
+                if err != nil {
+                        log.Printf("WARN: OTel tracer init failed (%v); falling back to NopTracer", err)
+                } else {
+                        defer func() {
+                                _ = shutdown(context.Background())
+                        }()
+                        log.Printf("OTel tracer initialised: service=%s endpoint=%s", tracerServiceName, cfg.TracerEndpoint)
+                }
+        } else {
+                log.Printf("OTel tracer disabled (OTEL_EXPORTER_OTLP_ENDPOINT not set) — using NopTracer")
+        }
 
         // Build the debt repository (issue #203). The repository is seeded
         // with Kenya's authoritative CBK + Treasury observations via
@@ -104,8 +160,19 @@ func main() {
         // Search — public.
         apiHandler.HandleFunc("/api/v1/search", handleSearch)
 
-        // Briefing — public.
+        // Briefing — legacy single-shot endpoint (kept for backward compat
+        // with api.ts:getBriefing). The personalised Civic Daily Brief lives
+        // under /api/v1/brief/* (task ENG-I2) — see brief.go.
         apiHandler.HandleFunc("/api/v1/briefing", handleBriefing)
+
+        // Civic Daily Brief (task ENG-I2) — personalised, AI-grounded, every
+        // item carries an evidence_url. The briefStore is the package-level
+        // in-memory cache populated by /generate and /today.
+        briefStore := newBriefStore()
+        apiHandler.HandleFunc("/api/v1/brief/generate", makeBriefGenerateHandler(kenyaLaw, cfg.AIServiceURL, briefStore))
+        apiHandler.HandleFunc("/api/v1/brief/today", makeBriefTodayHandler(kenyaLaw, cfg.AIServiceURL, briefStore))
+        apiHandler.HandleFunc("/api/v1/brief/archive", makeBriefArchiveHandler(briefStore))
+        apiHandler.HandleFunc("/api/v1/brief/", makeBriefDetailHandler(briefStore))
 
         // People, committees, institutions — public read.
         // /api/v1/people (list — no trailing slash) AND /api/v1/people/
@@ -165,6 +232,12 @@ func main() {
 
         // Civic Feed — public.
         apiHandler.HandleFunc("/api/v1/feed", makeCivicFeedHandler(kenyaLaw))
+
+        // Countries — public metadata for every adapter registered with the
+        // central registry (adapters/registry). The frontend Government
+        // Selector fetches this list so the dropdown reflects the
+        // registered adapters. See countries.go for the handler.
+        apiHandler.HandleFunc("/api/v1/countries", handleCountriesList)
 
         // Sponsor — M-Pesa + Card payment endpoints.
         apiHandler.HandleFunc("/api/v1/sponsor/mpesa", handleMpesaSponsor)
@@ -229,6 +302,7 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+<<<<<<< HEAD
         // Civic Calendar (task ENG-K1 — Feature 1). The calendarStore is a
         // package-level in-memory store seeded with 26 realistic Kenya
         // Parliament events spanning ~3 months. In production this would
@@ -248,22 +322,65 @@ func main() {
         SeedGazetteSampleNotices(gazetteAlertStore, calendarAnchor)
         apiHandler.HandleFunc("/api/v1/gazette/alerts", makeGazetteAlertsHandler(gazetteAlertStore))
         apiHandler.HandleFunc("/api/v1/gazette/alerts/", makeGazetteAlertDetailHandler(gazetteAlertStore))
+=======
+        // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
+        // differentiator: a visual relationship explorer that traces how
+        // Bills, Acts, Institutions, People, Constitution Articles, and
+        // Government borrowing are connected. The graph is built once at
+        // package init from the existing seed data (acts, administrations,
+        // constitution articles, borrowing agreements, sample people +
+        // institutions + committees).
+        apiHandler.HandleFunc("/api/v1/graph", makeGraphRouter())
+        apiHandler.HandleFunc("/api/v1/graph/", makeGraphRouter())
+
+        // Cross-country Civic Comparison (ENG-I3). 5 endpoints under
+        // /api/v1/compare/* let users compare legislation, government
+        // structure, public debt, and civic indicators across the 6
+        // supported countries.
+        apiHandler.HandleFunc("/api/v1/compare", makeCompareRouter(debtRepo))
+        apiHandler.HandleFunc("/api/v1/compare/", makeCompareRouter(debtRepo))
+>>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 
         // Middleware chain (outermost → innermost):
-        //   RequestID (GAP-67-1)  — generates / propagates X-Request-Id; logs every
-        //                          request start + completion with the id attached
-        //   OptionalAuth          — verifies bearer token if present (P0-3)
-        //   MetricsMiddleware      — Prometheus counter + latency histogram
-        //   RateLimit             — 300 req/min per IP
-        //   apiHandler            — the actual route mux
+        //   RequestID (GAP-67-1)     — generates / propagates X-Request-Id; logs every
+        //                             request start + completion with the id attached
+        //   Country (ENG-J1)        — reads X-Civic-Country header (?country= fallback,
+        //                             "KE" default); validates against the 6 supported
+        //                             codes; stores on context + echoes on response
+        //   CORS                     — handles preflight + sets Access-Control-* headers
+        //                             for allowlisted origins (gate #8 item: CORS)
+        //   OptionalAuth             — verifies bearer token if present (P0-3)
+        //   MetricsMiddleware        — Prometheus counter + latency histogram (gate #13)
+        //   SecurityHeaders          — X-Content-Type-Options, X-Frame-Options,
+        //                             X-XSS-Protection, HSTS, Referrer-Policy (gate #8)
+        //   PerPathRateLimiter       — per-path rate limits: AI 10/min, search 60/min,
+        //                             default 300/min (gate #8 item 4)
+        //   apiHandler               — the actual route mux
         //
         // RequestID is intentionally OUTERMOST so every log line emitted by the
-        // inner middlewares (auth rejections, rate-limit 429s, etc.) carries the
-        // correlation id.
-        rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
-        metered := observability.MetricsMiddleware(metrics, rateLimited)
+        // inner middlewares (country 400s, auth rejections, rate-limit 429s, etc.)
+        // carries the correlation id. Country sits just inside RequestID so the
+        // country scope is available on the context for every downstream middleware
+        // + handler, and a country-validation 400 is logged with the request_id
+        // attached. Country is OUTSIDE RateLimit so a 429 still carries the
+        // X-Civic-Country response header — the frontend can attribute the throttle
+        // to the right country in its telemetry. SecurityHeaders is INSIDE metrics
+        // + auth so auth rejection (401) responses also carry the headers (otherwise
+        // an attacker could fingerprint the auth layer by header absence).
+        // PerPathRateLimiter is innermost so it has the final say before the
+        // handler — a 429 still goes through SecurityHeaders (gets the headers) and
+        // metrics (counts).
+        corsCfg := middleware.DefaultCORSConfig()
+        if cfg.CORSAllowedOrigins != "" {
+                corsCfg.AllowedOrigins = splitCSV(cfg.CORSAllowedOrigins)
+        }
+        rateLimiter := middleware.NewPerPathRateLimiter(nil)
+        secured := middleware.SecurityHeaders(rateLimiter.Middleware(apiHandler))
+        metered := observability.MetricsMiddleware(metrics, secured)
         authed := middleware.OptionalAuth(verifier)(metered)
-        mux.Handle("/api/v1/", middleware.RequestID(nil)(authed))
+        corsed := middleware.CORSMiddleware(corsCfg)(authed)
+        countryed := middleware.Country(corsed)
+        mux.Handle("/api/v1/", middleware.RequestID(nil)(countryed))
 
         // Build the server.
         srv := &http.Server{
@@ -862,11 +979,12 @@ func billIDToUUID(billID string) string {
 // --- Briefing ---
 
 func handleBriefing(w http.ResponseWriter, r *http.Request) {
+        country := middleware.CountryFromContext(r.Context())
         writeJSON(w, http.StatusOK, map[string]any{
-                "country": "KE",
+                "country": country,
                 "date":    time.Now().UTC().Format(time.RFC3339),
                 "items":   []any{},
-                "note":    "Briefing — pending issue #40",
+                "note":    "Briefing — pending issue #40. Use the personalised /api/v1/brief/* endpoints for the Civic Daily Brief.",
         })
 }
 
@@ -1065,7 +1183,37 @@ func makeTerminologyHandler() http.HandlerFunc {
 
 // --- People / Committees / Institutions ---
 
+// samplePeople provides seed data for the people endpoint. The slice is
+// intentionally multi-country (each row carries a `country` field) so the
+// handlePeople handler can filter by the country from the request context
+// (task ENG-J1). Add rows for a new country here when its adapter ships.
+var samplePeople = []map[string]any{
+        {"id": "person-001", "full_name": "Rt. Hon. Moses Wetangula", "role": "Speaker of the National Assembly", "house": "National Assembly", "country": "KE"},
+        {"id": "person-002", "full_name": "Sen. Amason Kingi", "role": "Speaker of the Senate", "house": "Senate", "country": "KE"},
+        {"id": "person-003", "full_name": "Kimani Ichung'wah", "role": "Majority Leader, National Assembly", "house": "National Assembly", "country": "KE"},
+        {"id": "person-004", "full_name": "Opiyo Wandayi", "role": "Minority Leader, National Assembly", "house": "National Assembly", "country": "KE"},
+        {"id": "person-005", "full_name": "William Ruto", "role": "President of Kenya", "house": "Executive", "country": "KE"},
+        // Uganda — Speakers + President (Parliament of Uganda, unicameral).
+        {"id": "person-ug-001", "full_name": "Rt. Hon. Anita Among", "role": "Speaker of Parliament", "house": "Parliament", "country": "UG"},
+        {"id": "person-ug-002", "full_name": "Rt. Hon. Thomas Tayebwa", "role": "Deputy Speaker of Parliament", "house": "Parliament", "country": "UG"},
+        {"id": "person-ug-003", "full_name": "Yoweri Museveni", "role": "President of Uganda", "house": "Executive", "country": "UG"},
+        // Tanzania — Speaker + President (Bunge, unicameral).
+        {"id": "person-tz-001", "full_name": "Hon. Tulia Ackson", "role": "Speaker of the National Assembly", "house": "National Assembly", "country": "TZ"},
+        {"id": "person-tz-002", "full_name": "Samia Suluhu Hassan", "role": "President of Tanzania", "house": "Executive", "country": "TZ"},
+        // Ghana — Speaker + President (Parliament of Ghana, unicameral).
+        {"id": "person-gh-001", "full_name": "Rt. Hon. Alban Bagbin", "role": "Speaker of Parliament", "house": "Parliament", "country": "GH"},
+        {"id": "person-gh-002", "full_name": "Nana Akufo-Addo", "role": "President of Ghana", "house": "Executive", "country": "GH"},
+        // Nigeria — Senate President + President (National Assembly: bicameral).
+        {"id": "person-ng-001", "full_name": "Sen. Godswill Akpabio", "role": "President of the Senate", "house": "Senate", "country": "NG"},
+        {"id": "person-ng-002", "full_name": "Hon. Tajudeen Abbas", "role": "Speaker of the House of Representatives", "house": "House of Representatives", "country": "NG"},
+        {"id": "person-ng-003", "full_name": "Bola Ahmed Tinubu", "role": "President of Nigeria", "house": "Executive", "country": "NG"},
+        // South Africa — Speaker + President (Parliament: bicameral NA + NCOP).
+        {"id": "person-za-001", "full_name": "Hon. Nosiviwe Mapisa-Nqakula", "role": "Speaker of the National Assembly", "house": "National Assembly", "country": "ZA"},
+        {"id": "person-za-002", "full_name": "Cyril Ramaphosa", "role": "President of South Africa", "house": "Executive", "country": "ZA"},
+}
+
 func handlePeople(w http.ResponseWriter, r *http.Request) {
+<<<<<<< HEAD
         // The people router is registered on /api/v1/people/. We dispatch on
         // the trailing path tail:
         //   - "" (root, no trailing slash)  → list the 5 sample people
@@ -1090,29 +1238,142 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // compat with any external link still pointing at /api/v1/people/{id}.
         id := tail
         writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "People detail — pending (issue #19). Use /api/v1/people/{id}/scorecard for the factual MP record."})
+=======
+        id := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
+        country := middleware.CountryFromContext(r.Context())
+        if id == "" {
+                filtered := filterMapsByCountry(samplePeople, country)
+                writeJSON(w, http.StatusOK, map[string]any{"items": filtered, "total": len(filtered), "country": country})
+                return
+        }
+        // Detail lookup: a specific person ID is unique across countries, so
+        // the country filter is applied as a visibility gate — a Uganda-scoped
+        // request asking for a Kenyan person's ID returns 404 (not 200). This
+        // prevents cross-country leakage on detail views.
+        for _, p := range samplePeople {
+                if p["id"] == id {
+                        if c, _ := p["country"].(string); country == "" || country == middleware.GlobalCountry || c == country {
+                                writeJSON(w, http.StatusOK, p)
+                                return
+                        }
+                        writeError(w, http.StatusNotFound, "not_found", "person not visible in country "+country+": "+id)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "person not found: "+id)
+}
+
+// sampleCommittees provides seed data for the committees endpoint. Each row
+// carries a `country` field; handleCommittees filters by the country from
+// the request context (task ENG-J1).
+var sampleCommittees = []map[string]any{
+        {"id": "committee-finance", "name": "Departmental Committee on Finance and National Planning", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-health", "name": "Departmental Committee on Health", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-education", "name": "Departmental Committee on Education and Research", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-justice", "name": "Departmental Committee on Justice and Legal Affairs", "house": "National Assembly", "country": "KE"},
+        {"id": "committee-devolution", "name": "Senate Standing Committee on Devolution and Intergovernmental Relations", "house": "Senate", "country": "KE"},
+        // Uganda — Sessional Committees of Parliament.
+        {"id": "committee-ug-budget", "name": "Budget Committee", "house": "Parliament", "country": "UG"},
+        {"id": "committee-ug-legal", "name": "Legal and Parliamentary Affairs Committee", "house": "Parliament", "country": "UG"},
+        // Tanzania — Select Committees of the Bunge.
+        {"id": "committee-tz-finance", "name": "Finance and Economic Affairs Committee", "house": "National Assembly", "country": "TZ"},
+        // Ghana — Select Committees of Parliament.
+        {"id": "committee-gh-finance", "name": "Finance Committee", "house": "Parliament", "country": "GH"},
+        // Nigeria — Standing Committees of the Senate + House.
+        {"id": "committee-ng-appropriation", "name": "Committee on Appropriations", "house": "Senate", "country": "NG"},
+        {"id": "committee-ng-finance", "name": "Committee on Finance", "house": "Senate", "country": "NG"},
+        // South Africa — Portfolio Committees of the National Assembly.
+        {"id": "committee-za-finance", "name": "Standing Committee on Finance", "house": "National Assembly", "country": "ZA"},
+        {"id": "committee-za-justice", "name": "Portfolio Committee on Justice and Correctional Services", "house": "National Assembly", "country": "ZA"},
+>>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 }
 
 func handleCommittees(w http.ResponseWriter, r *http.Request) {
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/committees/")
-        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Committees — pending (issue #28)"})
+        country := middleware.CountryFromContext(r.Context())
+        if id == "" {
+                filtered := filterMapsByCountry(sampleCommittees, country)
+                writeJSON(w, http.StatusOK, map[string]any{"items": filtered, "total": len(filtered), "country": country})
+                return
+        }
+        for _, c := range sampleCommittees {
+                if c["id"] == id {
+                        if cc, _ := c["country"].(string); country == "" || country == middleware.GlobalCountry || cc == country {
+                                writeJSON(w, http.StatusOK, c)
+                                return
+                        }
+                        writeError(w, http.StatusNotFound, "not_found", "committee not visible in country "+country+": "+id)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "committee not found: "+id)
+}
+
+// sampleInstitutions provides seed data for the institutions endpoint. Each
+// row carries a `country` field; handleInstitutions filters by the country
+// from the request context (task ENG-J1).
+var sampleInstitutions = []map[string]any{
+        {"id": "institution-parliament-ke", "name": "Parliament of Kenya", "type": "legislature", "country": "KE", "website": "https://parliament.go.ke"},
+        {"id": "institution-na-ke", "name": "National Assembly of Kenya", "type": "lower_house", "country": "KE", "website": "https://parliament.go.ke/the-national-assembly"},
+        {"id": "institution-senate-ke", "name": "Senate of Kenya", "type": "upper_house", "country": "KE", "website": "https://parliament.go.ke/senate"},
+        {"id": "institution-executive-ke", "name": "Executive Office of the President", "type": "executive", "country": "KE", "website": "https://statehouse.go.ke"},
+        {"id": "institution-judiciary-ke", "name": "Judiciary of Kenya", "type": "judiciary", "country": "KE", "website": "https://judiciary.go.ke"},
+        // Uganda — Parliament + Executive + Judiciary.
+        {"id": "institution-parliament-ug", "name": "Parliament of Uganda", "type": "legislature", "country": "UG", "website": "https://www.parliament.go.ug"},
+        {"id": "institution-executive-ug", "name": "State House Uganda", "type": "executive", "country": "UG", "website": "https://www.statehouse.go.ug"},
+        {"id": "institution-judiciary-ug", "name": "Judiciary of Uganda", "type": "judiciary", "country": "UG", "website": "https://www.judiciary.go.ug"},
+        // Tanzania — Bunge + Executive.
+        {"id": "institution-parliament-tz", "name": "Parliament of Tanzania (Bunge)", "type": "legislature", "country": "TZ", "website": "https://www.parliament.go.tz"},
+        {"id": "institution-executive-tz", "name": "Office of the President of Tanzania", "type": "executive", "country": "TZ", "website": "https://www.tanzania.go.tz"},
+        // Ghana — Parliament + Executive.
+        {"id": "institution-parliament-gh", "name": "Parliament of Ghana", "type": "legislature", "country": "GH", "website": "https://www.parliament.gh"},
+        {"id": "institution-executive-gh", "name": "Office of the President of Ghana", "type": "executive", "country": "GH", "website": "https://www.presidency.gov.gh"},
+        // Nigeria — National Assembly (bicameral) + Executive.
+        {"id": "institution-nass-ng", "name": "National Assembly of Nigeria", "type": "legislature", "country": "NG", "website": "https://nass.gov.ng"},
+        {"id": "institution-senate-ng", "name": "Senate of Nigeria", "type": "upper_house", "country": "NG", "website": "https://nass.gov.ng/senate"},
+        {"id": "institution-house-reps-ng", "name": "House of Representatives of Nigeria", "type": "lower_house", "country": "NG", "website": "https://nass.gov.ng/house"},
+        {"id": "institution-executive-ng", "name": "Presidency of Nigeria", "type": "executive", "country": "NG", "website": "https://statehouse.gov.ng"},
+        // South Africa — Parliament (bicameral) + Executive.
+        {"id": "institution-parliament-za", "name": "Parliament of South Africa", "type": "legislature", "country": "ZA", "website": "https://www.parliament.gov.za"},
+        {"id": "institution-na-za", "name": "National Assembly of South Africa", "type": "lower_house", "country": "ZA", "website": "https://www.parliament.gov.za/na"},
+        {"id": "institution-ncop-za", "name": "National Council of Provinces", "type": "upper_house", "country": "ZA", "website": "https://www.parliament.gov.za/ncop"},
+        {"id": "institution-executive-za", "name": "The Presidency of South Africa", "type": "executive", "country": "ZA", "website": "https://www.presidency.gov.za"},
 }
 
 func handleInstitutions(w http.ResponseWriter, r *http.Request) {
         id := strings.TrimPrefix(r.URL.Path, "/api/v1/institutions/")
-        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "Institutions — pending (issue #19)"})
+        country := middleware.CountryFromContext(r.Context())
+        if id == "" {
+                filtered := filterMapsByCountry(sampleInstitutions, country)
+                writeJSON(w, http.StatusOK, map[string]any{"items": filtered, "total": len(filtered), "country": country})
+                return
+        }
+        for _, i := range sampleInstitutions {
+                if i["id"] == id {
+                        if c, _ := i["country"].(string); country == "" || country == middleware.GlobalCountry || c == country {
+                                writeJSON(w, http.StatusOK, i)
+                                return
+                        }
+                        writeError(w, http.StatusNotFound, "not_found", "institution not visible in country "+country+": "+id)
+                        return
+                }
+        }
+        writeError(w, http.StatusNotFound, "not_found", "institution not found: "+id)
 }
 
 // --- Loans + Grants ---
 
 func handleLoansList(w http.ResponseWriter, r *http.Request) {
         page, pageSize := parsePagination(r)
+        country := middleware.CountryFromContext(r.Context())
         writeJSON(w, http.StatusOK, map[string]any{
                 "items":     []any{},
                 "total":     0,
                 "page":      page,
                 "page_size": pageSize,
                 "has_next":  false,
-                "note":      "Loans — pending database connection (issue #93)",
+                "country":   country,
+                "note":      "Loans — pending database connection (issue #93). Use the /api/v1/debt endpoints for the live Kenya debt repository.",
         })
 }
 
@@ -1123,12 +1384,14 @@ func handleLoanDetail(w http.ResponseWriter, r *http.Request) {
 
 func handleGrantsList(w http.ResponseWriter, r *http.Request) {
         page, pageSize := parsePagination(r)
+        country := middleware.CountryFromContext(r.Context())
         writeJSON(w, http.StatusOK, map[string]any{
                 "items":     []any{},
                 "total":     0,
                 "page":      page,
                 "page_size": pageSize,
                 "has_next":  false,
+                "country":   country,
                 "note":      "Grants — pending database connection (issue #93)",
         })
 }
@@ -1238,6 +1501,11 @@ func handleActsList(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
+        // ENG-J1: filter by the country from the request context. Set by
+        // middleware.Country from X-Civic-Country header (default KE; "ALL"
+        // returns acts from every country — the dashboard view).
+        country := middleware.CountryFromContext(r.Context())
+
         items := make([]actResponse, 0, len(acts))
         for _, a := range acts {
                 resp := toActResponse(a)
@@ -1253,6 +1521,10 @@ func handleActsList(w http.ResponseWriter, r *http.Request) {
                 items = append(items, resp)
         }
 
+        // Apply country scoping AFTER search + status filtering, so a search
+        // like ?q=data&country=UG returns only Uganda Acts that match "data".
+        items = filterActsByCountry(items, country)
+
         total := len(items)
         paged, hasNext := paginate(items, page, pageSize)
         writeJSON(w, http.StatusOK, map[string]any{
@@ -1262,6 +1534,7 @@ func handleActsList(w http.ResponseWriter, r *http.Request) {
                 "page_size": pageSize,
                 "has_next":  hasNext,
                 "source":    "kenyalaw.org",
+                "country":   country,
                 "note":      "Sample data — full ingestion pending (issue #19). Every entry links to a verified Kenya Law source.",
         })
 }
@@ -1284,11 +1557,59 @@ func handleActDetail(w http.ResponseWriter, r *http.Request) {
 
 func handleQuestions(w http.ResponseWriter, r *http.Request) {
         p := middleware.PrincipalFromRequest(r)
-        writeJSON(w, http.StatusOK, map[string]any{
-                "answer":    "Q&A proxy — AI service connection pending (issue #19)",
-                "principal": p.UserID,
-                "validated": false,
-        })
+
+        // Only accept POST with a JSON body containing the question.
+        if r.Method != http.MethodPost {
+                writeJSON(w, http.StatusOK, map[string]any{
+                        "answer":    "Send a POST request with {\"question\": \"...\"} to get an AI-grounded answer.",
+                        "principal": p.UserID,
+                        "validated": false,
+                })
+                return
+        }
+
+        var body struct {
+                Question string `json:"question"`
+        }
+        if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+                writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+                return
+        }
+        if body.Question == "" {
+                writeError(w, http.StatusBadRequest, "bad_request", "question is required")
+                return
+        }
+
+        // Proxy to the Python AI service.
+        aiURL := os.Getenv("AI_SERVICE_URL")
+        if aiURL == "" {
+                aiURL = "http://localhost:8000"
+        }
+
+        aiReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, aiURL+"/api/v1/ask", bytes.NewBufferString(`{"question":`+strconv.Quote(body.Question)+`}`))
+        if err != nil {
+                writeError(w, http.StatusInternalServerError, "internal_error", "failed to create AI request")
+                return
+        }
+        aiReq.Header.Set("Content-Type", "application/json")
+
+        aiResp, err := http.DefaultClient.Do(aiReq)
+        if err != nil {
+                // AI service unreachable — return a graceful degradation instead of a 5xx.
+                writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+                        "answer":    "AI service is currently unavailable. Please try again later.",
+                        "principal": p.UserID,
+                        "validated": false,
+                        "warning":   "AI service unreachable",
+                })
+                return
+        }
+        defer aiResp.Body.Close()
+
+        // Forward the AI service response to the client.
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(aiResp.StatusCode)
+        _, _ = io.Copy(w, aiResp.Body)
 }
 
 // --- Follow — requires auth ---
@@ -1314,6 +1635,24 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
         w.Header().Set("Content-Type", "application/json")
         w.WriteHeader(status)
         _ = json.NewEncoder(w).Encode(map[string]string{"error": code, "message": message})
+}
+
+// splitCSV parses a comma-separated string into a slice, trimming whitespace
+// from each element and dropping empties. Used for env vars like
+// CORS_ALLOWED_ORIGINS="https://app.civicintelligence.com, https://admin.civicintelligence.com".
+func splitCSV(s string) []string {
+        if s == "" {
+                return nil
+        }
+        parts := strings.Split(s, ",")
+        out := make([]string, 0, len(parts))
+        for _, p := range parts {
+                p = strings.TrimSpace(p)
+                if p != "" {
+                        out = append(out, p)
+                }
+        }
+        return out
 }
 
 // maxPageSize caps the page_size query parameter at the value documented in

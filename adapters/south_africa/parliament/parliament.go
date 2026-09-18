@@ -17,7 +17,6 @@
 // NCOP" / "Assented to" / "In force"), and links to the published Bill text
 // PDFs.
 //
-// FIXME: verify with go build when Go available
 package parliament
 
 import (

@@ -1,4 +1,3 @@
-// FIXME: verify with go build when Go available
 //
 // Package temporal implements the durable Bill Processing Pipeline as a
 // Temporal workflow.

@@ -34,8 +34,13 @@ import {
   LayoutDashboard,
   Scale as ScaleIcon,
   Command as CommandIcon,
+<<<<<<< HEAD
   CalendarDays,
   MapPin,
+=======
+  LogIn,
+  Network,
+>>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
@@ -97,6 +102,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/constitution', i18nKey: 'pages.constitution', icon: BookOpen, description: 'The Constitution of Kenya, Article by Article' },
       { href: '/governments', i18nKey: 'pages.governments', icon: Landmark, description: 'Presidential administrations and terms' },
+      { href: '/legislatures', i18nKey: 'pages.legislatures', icon: Landmark, description: 'Parliaments — 11th, 12th, 13th — with Bills, Acts, committees' },
       { href: '/institutions', i18nKey: 'pages.institutions', icon: Landmark, description: 'Government institutions and agencies' },
       { href: '/people', i18nKey: 'pages.people', icon: Users, description: 'MPs, senators, and civic persons' },
       { href: '/constituencies', i18nKey: 'pages.constituencies', icon: MapPin, description: 'Per-constituency civic dashboards (MP, bills, budget, projects)' },
@@ -119,7 +125,13 @@ const navGroups: NavGroup[] = [
       { href: '/what-changed', i18nKey: 'pages.what_changed', icon: Radio, description: 'Proactive civic change feed' },
       { href: '/feed', i18nKey: 'pages.feed', icon: Newspaper, description: 'Full civic activity feed' },
       { href: '/trending', i18nKey: 'pages.trending', icon: TrendingUp, description: 'Trending Bills and topics' },
+<<<<<<< HEAD
       { href: '/calendar', i18nKey: 'pages.calendar', icon: CalendarDays, description: 'Civic calendar — sessions, committees, gazette dates' },
+=======
+      { href: '/graph', i18nKey: 'pages.graph', icon: Network, description: 'Trace how Bills, Acts, People, and Institutions are connected' },
+      { href: '/compare', i18nKey: 'pages.compare', icon: Globe, description: 'Cross-country civic comparison — legislation, debt, indicators' },
+      { href: '/indicators', i18nKey: 'pages.indicators', icon: BarChart3, description: 'Civic indicators dashboard — Bills, Acts, debt, sessions' },
+>>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
       { href: '/research', i18nKey: 'pages.research', icon: FileSearch, description: 'Research missions and reports' },
       { href: '/trust', i18nKey: 'pages.trust', icon: ShieldCheck, description: 'Trust and verification network' },
       { href: '/report', i18nKey: 'pages.reports', icon: FileBarChart, description: 'Generated civic reports' },
@@ -396,6 +408,19 @@ export function Header() {
           {/* Dark/Light theme toggle */}
           <ThemeToggle />
 
+          {/* Sign In — links to /auth/signin (issue #108). Real auth is
+              handled via Keycloak OIDC; the page renders a placeholder form
+              that explains the flow. */}
+          <Link
+            href="/auth/signin"
+            aria-label="Sign in"
+            title="Sign in"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-civic-border px-3 text-sm font-medium text-civic-ink transition hover:border-civic-leaf hover:text-civic-leaf"
+          >
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Sign in</span>
+          </Link>
+
           {/* Sponsor */}
           <Link
             href="/sponsor"
@@ -488,6 +513,14 @@ export function Header() {
               ))}
             </nav>
             <div className="space-y-2 border-t border-civic-border px-4 py-4">
+              <Link
+                href="/auth/signin"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center justify-center gap-2 rounded-md border border-civic-border bg-civic-paper px-4 py-3 text-sm font-medium text-civic-ink hover:border-civic-leaf hover:text-civic-leaf"
+              >
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+                Sign in
+              </Link>
               <Link
                 href="/sponsor"
                 onClick={() => setMobileOpen(false)}

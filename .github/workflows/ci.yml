@@ -65,10 +65,10 @@ jobs:
           done
       - name: Run Go tests
         run: |
-          for d in services/*/  adapters/*/; do
+          for d in services/*/  adapters/*/  packages/*/  tests/integration/ tests/contract/ tests/chaos/; do
             if [ -f "$d/go.mod" ]; then
               echo "::group::go test $d"
-              (cd "$d" && go test ./... || echo "::warning::tests failed in $d")
+              (cd "$d" && go test -count=1 ./...)
               echo "::endgroup::"
             fi
           done

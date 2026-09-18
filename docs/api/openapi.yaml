@@ -179,6 +179,22 @@ paths:
           content: { application/json: { schema: { type: object, properties: { followed: { type: boolean } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /follow:
+    post:
+      tags: [subscriptions]
+      summary: Legacy single-shot follow endpoint (kept for backward compat)
+      description: |
+        The legacy /follow endpoint creates a subscription for the
+        authenticated user. New callers should use the per-entity
+        `/acts/{id}/follow` or `/subscriptions` endpoints instead. This
+        endpoint is preserved so existing clients do not break during the
+        migration window (issue #110).
+      responses:
+        '200':
+          description: Followed
+          content: { application/json: { schema: { type: object, properties: { followed: { type: boolean } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /questions:
     post:
       tags: [qa]
@@ -522,6 +538,47 @@ paths:
                   reality_layer: { type: string, enum: [FACT] }
                   disclaimer: { type: string }
 
+  /constitution/articles:
+    get:
+      tags: [constitution]
+      summary: List Constitution chapters + articles (issue #212)
+      description: |
+        Returns the curated chapter + article tree sourced from the
+        kenya_seed package. Every chapter carries at least one article.
+        Response carries `reality_layer: "FACT"` to signal the
+        Constitution is authoritative source material.
+      responses:
+        '200':
+          description: Chapters + articles tree
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chapters: { type: array, items: { $ref: '#/components/schemas/ConstitutionChapter' } }
+                  count: { type: integer }
+                  reality_layer: { type: string, enum: [FACT] }
+                  disclaimer: { type: string }
+
+  /constitution/articles/{id}:
+    get:
+      tags: [constitution]
+      summary: Get a single Constitution article by stable ID (issue #212)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Constitution article
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  article: { $ref: '#/components/schemas/ConstitutionArticle' }
+                  reality_layer: { type: string, enum: [FACT] }
+                  disclaimer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /governments:
     get:
       tags: [governments]
@@ -536,6 +593,40 @@ paths:
                 properties:
                   administrations: { type: array, items: { $ref: '#/components/schemas/Administration' } }
                   count: { type: integer }
+
+  /countries:
+    get:
+      tags: [governments]
+      summary: List supported countries
+      description: |
+        Returns metadata for every country adapter registered with the
+        central registry (adapters/registry). The list is sorted by ISO
+        3166-1 alpha-2 code. The frontend Government Selector uses this
+        endpoint to render its country dropdown.
+
+        Adding a new country? Register it in adapters/registry (see
+        CONTRIBUTING.md "Adding a New Country") and it shows up here
+        automatically — no change to the OpenAPI spec is required.
+      responses:
+        '200':
+          description: Supported countries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  countries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string, description: 'ISO 3166-1 alpha-2 country code (e.g. "KE")' }
+                        name: { type: string, description: 'Human-readable country name' }
+                        flag_emoji: { type: string, description: 'Unicode flag emoji' }
+                        parliament_name: { type: string, description: 'Name of the national legislature' }
+                        legislature_type: { type: string, enum: [unicameral, bicameral] }
+                  count: { type: integer }
+                  source_registry: { type: string, description: 'Name of the Go package backing the response' }
 
   /governments/{id}:
     get:
@@ -872,6 +963,130 @@ paths:
         '200':
           description: Government debt summary
           content: { application/json: { schema: { $ref: '#/components/schemas/GovernmentDebtSummary' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /debt/legislatures/{id}:
+    get:
+      tags: [debt]
+      summary: Per-legislature debt summary (GAP-19-1, Spec section 19)
+      description: |
+        Surfaces debt at beginning/end, new borrowing (CONTRACTED_DURING),
+        domestic/external split, disbursements, repayments, debt service,
+        and outstanding obligations. The legal borrower is the Republic of
+        Kenya — the platform never attributes borrowing to a Parliament or
+        its members (Spec section 35). The canonical
+        `NO_POLITICAL_PERFORMANCE_SCORE` disclaimer is appended to every
+        per-legislature summary.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Legislature debt summary
+          content: { application/json: { schema: { $ref: '#/components/schemas/LegislatureDebtSummary' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /graph:
+    get:
+      tags: [graph]
+      summary: Civic Knowledge Graph summary
+      description: |
+        The Civic Knowledge Graph is the platform's signature differentiator:
+        a visual relationship explorer that traces how Bills, Acts,
+        Institutions, People, Constitution Articles, Administrations, and
+        Government borrowing are connected. The bare `/graph` endpoint
+        returns a metadata summary (total node + edge counts broken down
+        by type) tagged with `reality_layer: FACT` — every node carries
+        the same `source_url` as the underlying entity so a citizen can
+        verify any relationship against the authoritative Kenya Law / CBK /
+        Treasury source.
+      responses:
+        '200':
+          description: Graph summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_nodes: { type: integer }
+                  total_edges: { type: integer }
+                  node_types: { type: object, additionalProperties: { type: integer } }
+                  edge_types: { type: object, additionalProperties: { type: integer } }
+                  reality_layer: { type: string, example: FACT }
+                  disclaimer: { type: string }
+
+  /graph/nodes:
+    get:
+      tags: [graph]
+      summary: List graph nodes (optionally filtered by type)
+      parameters:
+        - { in: query, name: type, schema: { type: string, enum: [bill, act, institution, person, constitution_article, administration, presidential_term, legislature, committee, creditor, borrowing_agreement] } }
+        - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 200 } }
+        - { in: query, name: q, schema: { type: string }, description: Case-insensitive label substring filter }
+      responses:
+        '200':
+          description: Graph nodes
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+
+  /graph/node/{id}:
+    get:
+      tags: [graph]
+      summary: Get a single node with its direct relationships (depth=1)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Node + direct neighbours
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /graph/relationships:
+    get:
+      tags: [graph]
+      summary: Get relationships from a node up to N hops deep (BFS)
+      description: |
+        Depth is clamped to [1, 3] to bound response size. The response
+        uses the standard `GraphResponse` shape with `metadata.depth`
+        reporting the requested (clamped) depth.
+      parameters:
+        - { in: query, name: id, required: true, schema: { type: string } }
+        - { in: query, name: depth, schema: { type: integer, default: 1, minimum: 1, maximum: 3 } }
+      responses:
+        '200':
+          description: Subgraph reachable within the requested depth
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /graph/search:
+    get:
+      tags: [graph]
+      summary: Search graph nodes by label / properties
+      parameters:
+        - { in: query, name: q, required: true, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 200 } }
+      responses:
+        '200':
+          description: Matching nodes (depth=0)
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /graph/paths:
+    get:
+      tags: [graph]
+      summary: Find shortest path between two nodes (BFS, undirected)
+      description: |
+        Returns the shortest connection between two nodes. The graph is
+        traversed as undirected so a citizen asking "how is this Bill
+        connected to this President" gets the answer regardless of edge
+        direction. Returns 404 if no path exists.
+      parameters:
+        - { in: query, name: from, required: true, schema: { type: string } }
+        - { in: query, name: to, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Path nodes + edges
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /loans:
@@ -1807,6 +2022,34 @@ components:
         read_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
 
+    GraphNode:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [bill, act, institution, person, constitution_article, administration, presidential_term, legislature, committee, creditor, borrowing_agreement] }
+        label: { type: string }
+        properties: { type: object, additionalProperties: true }
+
+    GraphEdge:
+      type: object
+      properties:
+        source: { type: string }
+        target: { type: string }
+        type: { type: string, enum: [ORIGINATES_FROM, SPONSORED_BY, BELONGS_TO, ASSESSED_BY, CITES, ESTABLISHES, GOVERNED_BY, ASSESNTED_BY, BORROWED_BY, CONTRACTED_DURING, MEMBER_OF, LEADS] }
+        properties: { type: object, additionalProperties: true }
+
+    GraphResponse:
+      type: object
+      properties:
+        nodes: { type: array, items: { $ref: '#/components/schemas/GraphNode' } }
+        edges: { type: array, items: { $ref: '#/components/schemas/GraphEdge' } }
+        metadata:
+          type: object
+          properties:
+            total_nodes: { type: integer }
+            total_edges: { type: integer }
+            depth: { type: integer, description: "Traversal depth (0 = no traversal, 1-3 = BFS hops, edge count = path length)" }
+
   responses:
     Health:
       description: OK
@@ -1836,3 +2079,89 @@ components:
 
 security:
   - bearerAuth: []
+
+  /brief/generate:
+    post:
+      tags: [brief]
+      summary: Generate a personalized brief
+      description: Generates a personalized civic brief based on followed topics, institutions, and Bills.
+      responses:
+        '200':
+          description: Generated brief
+  /brief:
+    get:
+      tags: [brief]
+      summary: Get today's civic brief
+      description: Returns today's personalized civic brief, generated on-demand if not yet created.
+      responses:
+        '200':
+          description: Today's brief
+    post:
+      tags: [brief]
+      summary: Generate a personalized brief
+      description: Generates a personalized civic brief based on followed topics, institutions, and Bills.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id: { type: string }
+                followed_topics: { type: array, items: { type: string } }
+                followed_institutions: { type: array, items: { type: string } }
+                followed_bills: { type: array, items: { type: string } }
+                country: { type: string }
+      responses:
+        '200':
+          description: Generated brief
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /brief/today:
+    get:
+      tags: [brief]
+      summary: Get today's brief
+      responses:
+        '200':
+          description: Today's brief
+
+  /brief/archive:
+    get:
+      tags: [brief]
+      summary: List past briefs
+      responses:
+        '200':
+          description: List of archived briefs
+
+  /brief/{id}:
+    get:
+      tags: [brief]
+      summary: Get a specific brief by ID
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The brief
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /compare:
+    get:
+      tags: [compare]
+      summary: Compare countries across dimensions
+      description: Cross-country civic comparison — government structure, legislation, debt, indicators. The platform does not rank countries.
+      parameters:
+        - { in: query, name: countries, required: false, schema: { type: string }, description: "Comma-separated country codes (KE,UG,TZ,GH,NG,ZA)" }
+      responses:
+        '200':
+          description: Comparison data
+
+  /compare/{id}:
+    get:
+      tags: [compare]
+      summary: Get a specific comparison dimension
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Comparison data for the dimension
+        '404': { $ref: '#/components/responses/NotFound' }

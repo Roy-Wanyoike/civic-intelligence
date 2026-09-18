@@ -104,6 +104,61 @@ export interface DailyBriefing {
   generated_at: string;
 }
 
+// --- Civic Daily Brief (task ENG-I2) ---
+//
+// The personalised Civic Daily Brief is a richer shape than the legacy
+// DailyBriefing above: it groups items into titled sections, carries an
+// AI-generated plain-language summary (with disclaimer + source label),
+// and tracks a total evidence count across all sections. The legacy
+// DailyBriefing is kept for backward-compat with the old /api/v1/briefing
+// endpoint; new code should use CivicBrief.
+//
+// Mirrors the Go struct services/api/cmd/brief.go::brief.
+
+export interface BriefSectionItem {
+  type: string;
+  title?: string;
+  description?: string;
+  bill?: string;
+  change?: string;
+  house?: string;
+  date?: string;
+  significance?: string;
+  evidence_url: string;
+  // Constitutional-context specific.
+  article?: string;
+  text?: string;
+  connection?: string;
+}
+
+export interface BriefSection {
+  title: string;
+  summary: string;
+  items: BriefSectionItem[];
+}
+
+export interface CivicBrief {
+  id: string;
+  date: string;
+  headline: string;
+  sections: BriefSection[];
+  ai_summary: string;
+  ai_disclaimer: string;
+  ai_source: 'ai-service' | 'template-fallback';
+  evidence_count: number;
+  generated_at: string;
+  country: string;
+  user_id?: string;
+}
+
+export interface BriefArchiveEntry {
+  id: string;
+  date: string;
+  headline: string;
+  evidence_count: number;
+  generated_at: string;
+}
+
 export interface SearchResult {
   kind: 'bill' | 'act' | 'regulation' | 'hansard' | 'committee_report' | 'order_paper' | 'gazette';
   id: string;

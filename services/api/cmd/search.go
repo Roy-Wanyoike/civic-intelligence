@@ -40,6 +40,7 @@ import (
         "strings"
 
         kenya_seed "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_seed"
+        "github.com/Roy-Wanyoike/civic-intelligence/services/api/internal/middleware"
         "github.com/Roy-Wanyoike/civic-intelligence/services/legislation"
 )
 
@@ -188,12 +189,52 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
                 items = items[:maxSearchResults]
         }
 
+        // ENG-J1: filter by the country from the request context. The seed
+        // data today is Kenya-only (kenya_seed.KenyaActs + KenyaConstitution
+        // articles + the ActRepository seeded from kenya_seed), so a non-KE
+        // country yields an empty list (which is the correct behaviour —
+        // there is no Uganda seed yet). When other country adapters ship
+        // their seed data, the search handler should be extended to consult
+        // each adapter's seed (the per-adapter seeds already implement the
+        // same shape).
+        //
+        // "ALL" (GlobalCountry) returns results from every country's seed
+        // data — the dashboard view.
+        country := middleware.CountryFromContext(r.Context())
+        if country != "" && country != middleware.GlobalCountry {
+                filtered := make([]searchItem, 0, len(items))
+                for _, it := range items {
+                        // kenya_seed rows all start with "ke-" IDs; we use that
+                        // prefix as a quick country filter. When a real multi-country
+                        // search index lands, this is replaced by an explicit
+                        // country field on each searchItem.
+                        if matchesCountry(it.ID, country) {
+                                filtered = append(filtered, it)
+                        }
+                }
+                items = filtered
+        }
+
         writeJSON(w, http.StatusOK, map[string]any{
-                "q":     q,
-                "items": items,
-                "total": len(items),
-                "note":  searchStopgapNote,
+                "q":       q,
+                "items":   items,
+                "total":   len(items),
+                "country": country,
+                "note":    searchStopgapNote,
         })
+}
+
+// matchesCountry reports whether the supplied item ID belongs to the
+// supplied country. The platform's seed IDs all carry a country prefix
+// (e.g. "ke-act-data-protection-2019", "ug-bill-…", "za-act-…"). When
+// the search index moves to a real Postgres FTS projection, this
+// helper is replaced by a per-row country_code column.
+func matchesCountry(id, country string) bool {
+        if id == "" || country == "" {
+                return false
+        }
+        c := strings.ToLower(country)
+        return strings.HasPrefix(strings.ToLower(id), c+"-") || strings.HasPrefix(strings.ToLower(id), c+"_")
 }
 
 // scoreMatch scores a search hit against (title, body). Returns the

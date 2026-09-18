@@ -13,7 +13,6 @@
 // therefore extracts metadata from either the listing page or the PDF link's
 // containing anchor.
 //
-// FIXME: verify with go build when Go available
 package parliament
 
 import (

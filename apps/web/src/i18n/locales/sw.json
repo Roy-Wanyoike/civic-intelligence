@@ -28,6 +28,7 @@
       "committees": "Kamati",
       "constitution": "Katiba",
       "governments": "Serikali",
+      "legislatures": "Mabunge",
       "institutions": "Taasisi",
       "people": "Watu",
       "constituencies": "Jimbo",
@@ -38,7 +39,16 @@
       "what_changed": "Kilichobadilika",
       "feed": "Mtiririko",
       "trending": "Inavuma",
+<<<<<<< HEAD
       "calendar": "Kalenda",
+=======
+<<<<<<< HEAD
+      "graph": "Grafu ya Maarifa",
+=======
+      "compare": "Linganisha",
+      "indicators": "Viashiria",
+>>>>>>> feat/wave9-civic-compare
+>>>>>>> 67fdf85b4e02633df3f08e295597fbde145fcfc1
       "research": "Utafiti",
       "trust": "Uaminifu",
       "reports": "Ripoti",
