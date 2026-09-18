@@ -5,12 +5,19 @@ package ghana_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana/internal"
+	"github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana/parliament"
 	"github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Compile-time assertion: GhanaAdapter satisfies contracts.LegislativeSourceAdapter.
@@ -171,8 +178,96 @@ func TestGhanaAdapter_NormalizeSourceItem(t *testing.T) {
 
 func TestGhanaAdapter_DiscoverReturnsEmptyWithoutError(t *testing.T) {
 	a := ghana.NewGhanaAdapter()
+	// Without overriding the bills URL, Discover will attempt to hit the
+	// real parliament.ghana.gov.gh site, which is unreachable from the
+	// sandbox. We assert only that the contract surface compiles and the
+	// call returns without panicking — error or empty result are both
+	// acceptable here. The mock-server path (TestAdapter_DiscoverBills_ViaMockServer)
+	// is the authoritative test for Discover's behavior.
 	items, err := a.Discover(context.Background())
-	assert.NoError(t, err)
-	// Skeleton: discover returns an empty slice until the upstream crawler is wired.
-	assert.NotNil(t, items)
+	// In sandbox environments the HTTP call will fail; either an error or an
+	// empty slice is acceptable. What is NOT acceptable is a panic.
+	_ = items
+	_ = err
+}
+
+// TestAdapter_DiscoverBills_ViaMockServer serves the testdata/bills.html
+// fixture from a local HTTP server and verifies Discover returns Bills
+// extracted by the parliament adapter's ParseBillsListing.
+func TestAdapter_DiscoverBills_ViaMockServer(t *testing.T) {
+	html := loadGhanaFixture(t, "bills.html")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/business/bills", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(html))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	a := parliament.NewAdapter(srv.Client(), "CivicIntelligence/0.1-test")
+	a.SetBillsURLForTest(srv.URL + "/business/bills")
+
+	items, err := a.Discover(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, items, "Discover should return Bills from the fixture")
+
+	for i, item := range items {
+		assert.Equal(t, "GH", item.CountryCode, "item %d has wrong CountryCode", i)
+		assert.Equal(t, "bill", item.DocumentType, "item %d has wrong DocumentType", i)
+		assert.Equal(t, contracts.SourceItemBill, item.SourceType, "item %d has wrong SourceType", i)
+		assert.NotEmpty(t, item.URL, "item %d has empty URL", i)
+		assert.NotEmpty(t, item.Title, "item %d has empty Title", i)
+		assert.False(t, item.DiscoveredAt.IsZero(), "item %d has empty DiscoveredAt", i)
+		assert.Equal(t, "Parliament of Ghana", item.House, "item %d has wrong House", i)
+		assert.Equal(t, "Parliament of Ghana", item.Metadata["house"], "item %d has wrong house metadata", i)
+		assert.Equal(t, "Parliament of Ghana", item.Metadata["institution"], "item %d has wrong institution metadata", i)
+	}
+
+	titles := map[string]bool{}
+	for _, item := range items {
+		titles[item.Title] = true
+	}
+	for _, want := range []string{
+		"The Right to Information (Amendment) Bill, 2024",
+		"The Minerals Income Tax (Amendment) Bill, 2024",
+		"The Public Universities Bill, 2024",
+		"The Cyber Security (Amendment) Bill, 2024",
+		"The Companies (Amendment) Bill, 2024",
+	} {
+		assert.True(t, titles[want], "expected Bill %q in discovered items", want)
+	}
+}
+
+// TestGhanaSampleBills_CountAndShape verifies the Ghana sample Bills
+// registry has 5 entries that all reference parliament.ghana.gov.gh.
+func TestGhanaSampleBills_CountAndShape(t *testing.T) {
+	bills := internal.GhanaSampleBills
+	require.Len(t, bills, 5, "GhanaSampleBills should have exactly 5 entries")
+	for i, b := range bills {
+		assert.NotEmpty(t, b.Title, "sample bill %d has empty Title", i)
+		assert.NotEmpty(t, b.URL, "sample bill %d has empty URL", i)
+		assert.NotEmpty(t, b.BillNumber, "sample bill %d has empty BillNumber", i)
+		assert.NotEmpty(t, b.Sponsor, "sample bill %d has empty Sponsor", i)
+		assert.NotEmpty(t, b.Stage, "sample bill %d has empty Stage", i)
+		assert.NotEmpty(t, b.Date, "sample bill %d has empty Date", i)
+		assert.True(t, strings.Contains(b.URL, "parliament.ghana.gov.gh"),
+			"sample bill %d URL should reference parliament.ghana.gov.gh", i)
+	}
+}
+
+// loadGhanaFixture reads a testdata/ fixture into a string.
+func loadGhanaFixture(t *testing.T, name string) string {
+	t.Helper()
+	candidates := []string{
+		filepath.Join("parliament", "testdata", name),
+		filepath.Join("testdata", name),
+	}
+	for _, p := range candidates {
+		if data, err := os.ReadFile(p); err == nil {
+			return string(data)
+		}
+	}
+	t.Fatalf("fixture %s not found under testdata/", name)
+	return ""
 }

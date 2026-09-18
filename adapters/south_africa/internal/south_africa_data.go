@@ -832,3 +832,87 @@ func southAfricaStandingCommittees() []contracts.CommitteeDefinition {
 		{Code: "SEL_TPS", Name: "Select Committee on Transport, Public Service and Administration, Public Works and Infrastructure", House: HouseCodeNationalCouncilOfProvinces, Type: "select", Members: 9},
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Sample Bills (test fixtures)
+// ---------------------------------------------------------------------------
+
+// SouthAfricaSampleBills is a representative sample of recent South African
+// Parliament Bills, used to seed local fixtures (testdata/bills_na.html and
+// testdata/bills_ncop.html) and contract tests without touching the network.
+// Titles are realistic South African Bill titles drawn from publicly
+// published Bills on parliament.gov.za.
+//
+// Bills in South Africa originate in the National Assembly by default — the
+// NCOP's role is to concur (or, for Section 76 Bills, vote on provincial
+// mandates). The sample therefore primarily contains NA Bills, with one
+// tagged "NCOP" to exercise the bicameral discovery path.
+//
+// These records are values, not constants — they exist so test fixtures can
+// be regenerated deterministically and so the adapter's Parse step has a
+// known-shape input to extract from.
+var SouthAfricaSampleBills = []SouthAfricaSampleBill{
+	{
+		Title:              "The National Rail Bill, 2026",
+		BillNumber:         "B 12—2026",
+		Sponsor:            "Minister of Transport",
+		PortfolioCommittee: "Portfolio Committee on Transport",
+		Stage:              "NA Vote",
+		Date:               "01 March 2026",
+		URL:                "https://www.parliament.gov.za/bills-and-laws/b12-2026.pdf",
+		House:              "National Assembly",
+	},
+	{
+		Title:              "The Climate Change (Amendment) Bill, 2026",
+		BillNumber:         "B 18—2026",
+		Sponsor:            "Minister of Forestry, Fisheries and the Environment",
+		PortfolioCommittee: "Portfolio Committee on Environment, Forestry and Fisheries",
+		Stage:              "NCOP Concurrence",
+		Date:               "12 April 2026",
+		URL:                "https://www.parliament.gov.za/bills-and-laws/b18-2026.pdf",
+		House:              "National Assembly",
+	},
+	{
+		Title:              "The Public Procurement Bill, 2026",
+		BillNumber:         "B 22—2026",
+		Sponsor:            "Minister of Finance",
+		PortfolioCommittee: "Portfolio Committee on Finance",
+		Stage:              "Committee",
+		Date:               "05 May 2026",
+		URL:                "https://www.parliament.gov.za/bills-and-laws/b22-2026.pdf",
+		House:              "National Assembly",
+	},
+	{
+		Title:              "The Prevention of Combating of Corrupt Activities (Amendment) Bill, 2026",
+		BillNumber:         "B 27—2026",
+		Sponsor:            "Minister of Justice and Correctional Services",
+		PortfolioCommittee: "Portfolio Committee on Justice and Correctional Services",
+		Stage:              "Introduction",
+		Date:               "16 June 2026",
+		URL:                "https://www.parliament.gov.za/bills-and-laws/b27-2026.pdf",
+		House:              "National Assembly",
+	},
+	{
+		Title:              "The Electronic Communications (Amendment) Bill, 2026",
+		BillNumber:         "B 31—2026",
+		Sponsor:            "Minister of Communications and Digital Technologies",
+		PortfolioCommittee: "Portfolio Committee on Communications",
+		Stage:              "Mediation",
+		Date:               "08 August 2026",
+		URL:                "https://www.parliament.gov.za/bills-and-laws/b31-2026.pdf",
+		House:              "NCOP",
+	},
+}
+
+// SouthAfricaSampleBill is a single sample Bill record. Field names mirror the
+// bill-card HTML structure parsed by parliament.ParseBillsListing.
+type SouthAfricaSampleBill struct {
+	Title              string
+	BillNumber         string
+	Sponsor            string
+	PortfolioCommittee string
+	Stage              string
+	Date               string
+	URL                string
+	House              string
+}

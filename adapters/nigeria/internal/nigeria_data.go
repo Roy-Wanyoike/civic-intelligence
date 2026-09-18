@@ -942,3 +942,78 @@ func nigeriaStandingCommittees() []contracts.CommitteeDefinition {
 		{Code: CommitteeYouthSports, Name: "Youth and Sports", House: HouseCodeSenate, Type: "standing", Members: 17},
 	}
 }
+
+// NigeriaSampleBills is a representative sample of recent Nigerian National
+// Assembly Bills, used to seed local fixtures (testdata/bills_house.html and
+// testdata/bills_senate.html) and contract tests without touching the
+// network. Titles are realistic Nigerian Bill titles drawn from publicly
+// published House of Representatives and Senate Bills.
+//
+// Bills are bicameral: some originate in the House of Representatives (HB.
+// prefix), others in the Senate (SB. prefix). Both houses are represented in
+// this sample — the contract test (TestAdapter_DiscoverBills_ViaMockServer)
+// serves a fixture per chamber and verifies Discover returns Bills tagged
+// with the originating House.
+//
+// These records are values, not constants — they exist so test fixtures can
+// be regenerated deterministically and so the adapter's Parse step has a
+// known-shape input to extract from.
+var NigeriaSampleBills = []NigeriaSampleBill{
+	{
+		Title:      "The Electric Power Sector Reform (Amendment) Bill, 2024",
+		BillNumber: "HB. 1234",
+		Sponsor:    "Rep. Babajide Obanikoro (APC, Lagos)",
+		Stage:      "Second Reading",
+		Date:       "12 March 2024",
+		URL:        "https://nass.gov.ng/house/bills/HB-1234-2024.pdf",
+		House:      "House of Representatives",
+	},
+	{
+		Title:      "The Nigerian Minerals and Mining (Amendment) Bill, 2024",
+		BillNumber: "HB. 1567",
+		Sponsor:    "Rep. Aliyu Sani (PDP, Kaduna)",
+		Stage:      "Public Hearing",
+		Date:       "28 April 2024",
+		URL:        "https://nass.gov.ng/house/bills/HB-1567-2024.pdf",
+		House:      "House of Representatives",
+	},
+	{
+		Title:      "The Federal University of Technology (Establishment) Bill, 2024",
+		BillNumber: "HB. 1789",
+		Sponsor:    "Rep. Fatima Bello (APC, Kano)",
+		Stage:      "First Reading",
+		Date:       "06 June 2024",
+		URL:        "https://nass.gov.ng/house/bills/HB-1789-2024.pdf",
+		House:      "House of Representatives",
+	},
+	{
+		Title:      "The Electoral Act (Amendment) Bill, 2024",
+		BillNumber: "SB. 421",
+		Sponsor:    "Sen. Oluwole Bode (PDP, Oyo)",
+		Stage:      "Concurrence",
+		Date:       "11 July 2024",
+		URL:        "https://nass.gov.ng/senate/bills/SB-421-2024.pdf",
+		House:      "Senate",
+	},
+	{
+		Title:      "The Cybercrimes (Prohibition, Prevention) (Amendment) Bill, 2024",
+		BillNumber: "SB. 567",
+		Sponsor:    "Sen. Halima Musa (APC, Borno)",
+		Stage:      "Committee",
+		Date:       "18 September 2024",
+		URL:        "https://nass.gov.ng/senate/bills/SB-567-2024.pdf",
+		House:      "Senate",
+	},
+}
+
+// NigeriaSampleBill is a single sample Bill record. Field names mirror the
+// bill-card HTML structure parsed by parliament.ParseBillsListing.
+type NigeriaSampleBill struct {
+	Title      string
+	BillNumber string
+	Sponsor    string
+	Stage      string
+	Date       string
+	URL        string
+	House      string
+}
