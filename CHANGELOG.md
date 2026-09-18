@@ -6,6 +6,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Wave 5 Documentation Pass (this commit, branch `fix/wave5-docs-a`)
+
+#### Wave 5 forensic re-audit (5 audit teams, spec §79)
+
+Wave 5 performed the mandated Final Re-Audit cycle (spec §79) by dispatching
+five parallel audit teams against HEAD `dca1c78` (commit
+`fix(#212,#227): populate constitution chapters/articles + consolidate
+BillStageTransitionValidator (#244)`). Each team audited a disjoint spec slice:
+
+- `audit-team-1-report.md` — Spec §1-17 (Primary Objective → Core Civic Model). 62 unique gaps.
+- `audit-team-2-report.md` — Spec §18-34 (Public Debt Attribution → Homepage/Carousel). 75 unique gaps.
+- `audit-team-3-report.md` — Spec §35-52 (Visual Design → Observability). 69 unique gaps.
+- `audit-team-4-report.md` — Spec §53-70 (Security → Git History). 68 unique gaps.
+- `audit-team-5-report.md` — Spec §71-86 (Process · Completion Matrix · Final Gates). 37 unique gaps.
+- **Aggregate: 311 unique audit findings across the 5 audit-team reports.**
+
+The four P0 release blockers from audit-team-5:
+1. **P0-1** — No golden user journey tests (spec §74; 0 of 8 mandated journeys implemented).
+2. **P0-2** — No critical failure test (spec §75; `rg "critical.failure|CriticalFailure"` returns 0 hits in code).
+3. **P0-3** — OIDC verifier does not verify JWT signatures
+   (`services/api/internal/oidc/verifier.go:126` — `TODO(issue #59): verify the signature using the JWKS key matching header.Kid`).
+4. **P0-4** — E2E test runner cannot execute (`@playwright/test` + `@axe-core/playwright` not in `apps/web/package.json` devDependencies).
+
+#### Wave 5 documentation remediations (this commit, task ENG-E5)
+
+This commit closes the four documentation gaps that triggered Wave 5:
+
+- **#P1-1 / `MASTER_AUDIT.md` stale** — rewrote `MASTER_AUDIT.md` against
+  HEAD `dca1c78` (was auditing Phase 1 commit `a0638e7`; 91 commits / 26
+  issue-closing PRs merged since). The new audit groups post-Phase-1 work by
+  feature area (Simulation, Constitution+Government, Post-Assent, Public Debt,
+  Navbar, Bug fixes, Documentation) and cross-references all 5 audit-team
+  reports as evidence. Each feature area lists what's IMPLEMENTED, what's
+  IN_PROGRESS, what's BLOCKED. The Phase 1 baseline 22 findings are tracked
+  through to their current disposition (11 fixed, 9 partial, 2 operational).
+- **#P1-4 / §77 No-Fake-Completion rule not documented** — created
+  `docs/NO_FAKE_COMPLETION.md`. Documents the rule (a feature is only DONE when
+  all 14 criteria are met: Architecture, Domain model, Backend logic, Database
+  schema, API, Frontend UX, Integrations, Evidence/provenance, Tests, QA
+  verified, Security reviewed, Performance validated, Observability,
+  Documentation). Lists forbidden patterns (TODO, placeholder, mock, stub,
+  fake, hardcoded production value, commented-out implementation). Provides an
+  engineer sign-off checklist for PR descriptions.
+- **#§78 / Completion matrix missing** — created `docs/COMPLETION_MATRIX.md`.
+  Master matrix with all 17 spec-mandated columns (Feature | Requirement |
+  Domain | Implementation | API | Database | UI | Integration | Tests | QA |
+  Security | Performance | Observability | Documentation | Status | Evidence |
+  Issue | PR). Covers 45+ feature rows: Bill discovery, timeline, versions,
+  AI summary, Constitution, Government, Presidential terms, Acts, Post-assent
+  audit, Follow-a-Law, lineage, Public Debt, Loans, Grants, attribution,
+  Trending, Terminology, Search, Civic Feed, Briefing, Notifications, Trust,
+  Corrections, Scenarios, Citation validation, Contradiction engine, 6 country
+  adapters, OIDC, RBAC, rate limiting, observability (metrics + tracing +
+  Grafana), payments (M-Pesa + Stripe), PDF/DOCX extraction, Postgres
+  migrations, OpenAPI, ADRs, Golden user journeys, Critical failure test,
+  Integration tests, Contract tests, E2E tests, Performance tests, Chaos
+  tests, Disaster recovery tests, AI evaluation dataset. Only `VERIFIED`
+  counts as complete (§78). **Zero rows are at `VERIFIED`** — the platform is
+  not complete from the audit's perspective.
+- **#GAP-68-1 / Production gate checklist missing** — created
+  `docs/PRODUCTION_GATE.md`. Checklist with all 16 gates from §81 (BUILD,
+  UNIT TESTS, INTEGRATION TESTS, CONTRACT TESTS, E2E TESTS, AI EVALUATION,
+  DATA QUALITY, SECURITY, ACCESSIBILITY, PERFORMANCE, CHAOS, DISASTER
+  RECOVERY, OBSERVABILITY, DOCUMENTATION, UX REVIEW, PRODUCTION WORKFLOW).
+  For each gate: pass/fail/partial status, evidence cited, blocker reference.
+  **Aggregate: 1 PASS (DOCUMENTATION) · 4 PARTIAL · 11 FAIL · 0 UNVERIFIED.**
+  The audit must continue (spec §81).
+
+#### Wave 5 engineering remediations (other commits this session, separate worktrees)
+
+The following Wave 5 fixes were implemented in parallel worktrees
+(`wt-backend-a`, `wt-backend-b`, `wt-frontend-a`, `wt-frontend-b`, `wt-tests-a`)
+and are recorded in `worklog.md` entries ENG-A1 through ENG-D2:
+
+- **#201** (PR #233) — Parliament `DiscoverBills` infinite recursion (`fetchURL` delegating back to `Fetch`).
+- **#204** (PR #232) — `next build` failed on ESLint unused-import errors.
+- **#207** (PR #230) — `TestRunService_Run_RejectsNonReadyScenario` was tautological (seeded a DRAFT scenario in a different repo than `rs` used).
+- **#211, #214, #228** (PR #235) — Postgres migrations 019 (simulation), 020 (government), 021 (post-assent) — 25 new tables across 3 schemas, with immutability triggers, EXCLUDE USING gist temporal validity, and btree_gist extension.
+- **#213, #219** (PR #229) — `governments.go` and `public_debt.go` header comments listed unregistered endpoints.
+- **#215, #216, #217** (PR #243) — Post-assent endpoints now use domain logic (`AuditForAct`), real persisted subscriptions (Follow-a-Law creates a real `subscription_id`), and data-driven lineage (missing steps reported as `NOT_VERIFIED`, never inferred).
+- **#218** (PR #231) — `/acts/page.tsx` fetches from API instead of hardcoded array.
+- **#220, #221** (PR #239) — `/debt/loans` wired to repository + `ValidateAttribution` enforced.
+- **#222** (PR #240) — `GovernmentDebtSummary` carries the `NO_POLITICAL_PERFORMANCE_SCORE` canonical disclaimer.
+- **#202** (PR #236) — `ActRepository` in-memory implementation with seed + API wiring.
+- **#203** (PR #237) — `DebtRepository` in-memory implementation with seed + attribution validation.
+- **#209, #210** (PR #240) — Golden dataset (11 categories) + constraint evaluation grammar.
+- **#212, #227** (PR #244) — Constitution chapters/articles populated (20 curated articles / 9 chapters from Kenya Law); `BillStageTransitionValidator` consolidated to a single canonical `StageGraphValidator` implementation (`BillStateMachine` is now a thin wrapper).
+- **#223, #224, #225, #226** (PR #242) — CHANGELOG, API README, OpenAPI spec, developers page refreshed.
+
 ### Added — Post-Phase-1 (PRs #196–#241)
 
 #### Phase 18 — Simulation Infrastructure
