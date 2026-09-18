@@ -1,4 +1,3 @@
-// FIXME: verify with go build when Go available
 //
 // Activities for the Bill Processing Pipeline. Each activity is a thin,
 // side-effect-owning adapter around a domain/infrastructure dependency. They

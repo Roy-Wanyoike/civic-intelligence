@@ -18,7 +18,6 @@
 // ParseBillsListing): one <div class="bill-card"> per Bill, with optional
 // metadata spans for bill-number / sponsor / stage / date.
 //
-// FIXME: verify with go build when Go available
 package parliament
 
 import (

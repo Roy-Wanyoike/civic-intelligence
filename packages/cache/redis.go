@@ -1,4 +1,3 @@
-// FIXME: verify with go build when Go available
 //
 // Package cache is a thin, opinionated wrapper around github.com/redis/go-redis/v9.
 //

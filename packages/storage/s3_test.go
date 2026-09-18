@@ -1,4 +1,3 @@
-// FIXME: verify with go build when Go available
 package storage
 
 import (
@@ -90,7 +89,7 @@ func (m *mockMinio) StatObject(ctx context.Context, bucket, objectName string, o
 		return m.statFn(ctx, bucket, objectName, opts)
 	}
 	if _, ok := m.store[bucket+"/"+objectName]; ok {
-		return minio.ObjectInfo{Bucket: bucket, Key: objectName}, nil
+		return minio.ObjectInfo{Key: objectName}, nil
 	}
 	return minio.ObjectInfo{}, minio.ErrorResponse{Code: "NoSuchKey", BucketName: bucket, Key: objectName}
 }

@@ -19,7 +19,6 @@
 // any individual span) is still returned, with the corresponding fields left
 // empty. Malformed HTML never panics — it just yields fewer Bills.
 //
-// FIXME: verify with go build when Go available
 package parliament
 
 import (
