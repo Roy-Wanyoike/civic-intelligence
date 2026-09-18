@@ -5,14 +5,17 @@ import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { Providers } from '@/components/providers';
 import { ThemeProvider } from '@/components/theme-provider';
+import { CommandPalette } from '@/components/command-palette';
 import { ServiceWorkerRegister } from '@/components/service-worker-register';
+import { colors } from '@/lib/design-tokens';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
 import { GovernmentProvider } from '@/lib/government-context';
 import {
   DEFAULT_SELECTION,
   GOVERNMENT_COOKIE,
   type GovernmentSelection,
 } from '@/lib/government-defaults';
-import { colors } from '@/lib/design-tokens';
 
 export const metadata: Metadata = {
   title: {
@@ -43,10 +46,6 @@ export const viewport: Viewport = {
  * Read the persisted government selection cookie server-side so the very
  * first server render already reflects the user's previous choice (no
  * client-side hydration flicker for the GovernmentSelector breadcrumb).
- *
- * `cookies()` is sync in Next.js 14.2.x and async in Next.js 15; awaiting
- * it works in both. The cookie value is a JSON-encoded
- * `Partial<GovernmentSelection>` written by `government-context.tsx`.
  */
 async function readGovernmentSelection(): Promise<Partial<GovernmentSelection>> {
   try {
@@ -64,9 +63,12 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Spec §66 — resolve locale + messages on the server (reads the
+  // `civic-locale` cookie). Falls back to 'en' if the cookie is absent
+  // or unknown — see src/i18n/request.ts.
+  const locale = await getLocale();
+  const messages = await getMessages();
   const initialSelection = await readGovernmentSelection();
-  // Sanity-check the cookie payload against the known defaults so a
-  // corrupted/foreign cookie never crashes the layout.
   const safe: Partial<GovernmentSelection> = {
     countryCode: initialSelection.countryCode ?? DEFAULT_SELECTION.countryCode,
     countryName: initialSelection.countryName ?? DEFAULT_SELECTION.countryName,
@@ -81,21 +83,25 @@ export default async function RootLayout({
   };
 
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body>
         <a href="#main" className="skip-link">Skip to content</a>
-        <Providers>
-          <ThemeProvider>
-            <ServiceWorkerRegister />
-            <GovernmentProvider initialSelection={safe}>
-              <Header />
-              <main id="main" className="min-h-[60vh]">
-                {children}
-              </main>
-              <Footer />
-            </GovernmentProvider>
-          </ThemeProvider>
-        </Providers>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <Providers>
+            <ThemeProvider>
+              <ServiceWorkerRegister />
+              <GovernmentProvider initialSelection={safe}>
+                <Header />
+                <main id="main" className="min-h-[60vh]">
+                  {children}
+                </main>
+                <Footer />
+              </GovernmentProvider>
+              {/* Spec §37 — global Command Palette, mounted once */}
+              <CommandPalette />
+            </ThemeProvider>
+          </Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -1,0 +1,62 @@
+{
+  "nav": {
+    "home": "Nyumbani",
+    "ask": "Uliza",
+    "briefing": "Muhtasari",
+    "countries": "Nchi",
+    "explore": "Chunguza",
+    "search_placeholder": "Tafuta Muswada, sheria, uliza…",
+    "search_label": "Tafuta Muswada, sheria, au uliza swali",
+    "notifications": "Arifa",
+    "following": "Unazifuata",
+    "sponsor": "Msimamizi",
+    "open_menu": "Fungua menyu",
+    "close_menu": "Funga menyu",
+    "groups": {
+      "legislation": "Sheria",
+      "government": "Serikali",
+      "finance": "Fedha",
+      "intelligence": "Ujuzi",
+      "scenarios": "Hali Dhahania",
+      "resources": "Rasilimali"
+    },
+    "pages": {
+      "bills": "Muswada",
+      "acts": "Sheria",
+      "regulations": "Kanuni",
+      "policies": "Sera",
+      "committees": "Kamati",
+      "constitution": "Katiba",
+      "governments": "Serikali",
+      "institutions": "Taasisi",
+      "people": "Watu",
+      "participation": "Ushiriki",
+      "public_debt": "Deni la Umma",
+      "loans": "Mikopo",
+      "grants": "Ruzuku",
+      "what_changed": "Kilichobadilika",
+      "feed": "Mtiririko",
+      "trending": "Inavuma",
+      "research": "Utafiti",
+      "trust": "Uaminifu",
+      "reports": "Ripoti",
+      "what_if": "Je, Ikiwa?",
+      "daily_briefing": "Muhtasari wa Kila Siku",
+      "kenya_gazette": "Gazeti la Kenya",
+      "datasets": "Seti ya Data",
+      "dashboard": "Dashibodi",
+      "topics": "Mada",
+      "developers": "Watengenezaji",
+      "about": "Kuhusu"
+    }
+  },
+  "language": {
+    "label": "Lugha",
+    "english": "Kiingereza",
+    "kiswahili": "Kiswahili"
+  },
+  "command": {
+    "open": "Fungua komandi paleti",
+    "placeholder": "Andika komandi au tafuta…"
+  }
+}

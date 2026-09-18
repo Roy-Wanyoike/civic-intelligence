@@ -1,0 +1,62 @@
+{
+  "nav": {
+    "home": "Home",
+    "ask": "Ask",
+    "briefing": "Briefing",
+    "countries": "Countries",
+    "explore": "Explore",
+    "search_placeholder": "Search Bills, laws, ask…",
+    "search_label": "Search Bills, laws, or ask a question",
+    "notifications": "Notifications",
+    "following": "Following",
+    "sponsor": "Sponsor",
+    "open_menu": "Open menu",
+    "close_menu": "Close menu",
+    "groups": {
+      "legislation": "Legislation",
+      "government": "Government",
+      "finance": "Finance",
+      "intelligence": "Intelligence",
+      "scenarios": "Scenarios",
+      "resources": "Resources"
+    },
+    "pages": {
+      "bills": "Bills",
+      "acts": "Acts",
+      "regulations": "Regulations",
+      "policies": "Policies",
+      "committees": "Committees",
+      "constitution": "Constitution",
+      "governments": "Governments",
+      "institutions": "Institutions",
+      "people": "People",
+      "participation": "Participation",
+      "public_debt": "Public Debt",
+      "loans": "Loans",
+      "grants": "Grants",
+      "what_changed": "What Changed",
+      "feed": "Feed",
+      "trending": "Trending",
+      "research": "Research",
+      "trust": "Trust",
+      "reports": "Reports",
+      "what_if": "What If?",
+      "daily_briefing": "Daily Briefing",
+      "kenya_gazette": "Kenya Gazette",
+      "datasets": "Datasets",
+      "dashboard": "Dashboard",
+      "topics": "Topics",
+      "developers": "Developers",
+      "about": "About"
+    }
+  },
+  "language": {
+    "label": "Language",
+    "english": "English",
+    "kiswahili": "Kiswahili"
+  },
+  "command": {
+    "open": "Open command palette",
+    "placeholder": "Type a command or search…"
+  }
+}

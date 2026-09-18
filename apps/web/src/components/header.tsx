@@ -33,9 +33,12 @@ import {
   HeartHandshake,
   LayoutDashboard,
   Scale as ScaleIcon,
+  Command as CommandIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
-import { GovernmentSelector } from './government-selector';
+import { LanguageSwitcher } from './language-switcher';
+import { openCommandPalette } from './command-palette';
 
 /**
  * Mega-menu navigation — every platform page is reachable from the navbar.
@@ -50,96 +53,111 @@ import { GovernmentSelector } from './government-selector';
  *   Scenarios     — What If?
  *   Resources     — Briefing, Gazette, Datasets, Dashboard, Topics,
  *                   Developers, About, Sponsor
+ *
+ * i18n (spec §66): labels are pulled from the `nav` message namespace via
+ * `useTranslations('nav')`. Each nav item carries an `i18nKey` (e.g.
+ * `'pages.bills'`) that resolves to the localized label. Descriptions and
+ * other secondary strings are still hard-coded pending translation — they
+ * are tagged with `// TODO(i18n): translate` for the next PR.
  */
 
 interface NavItem {
   href: string;
-  label: string;
+  /** Translation key under the `nav` namespace (e.g. `'pages.bills'`). */
+  i18nKey: string;
   icon: typeof FileText;
+  // TODO(i18n): translate — keep English description for now.
   description?: string;
 }
 
 interface NavGroup {
-  title: string;
+  /** Translation key under `nav.groups.*`. */
+  i18nKey: string;
   icon: typeof FileText;
   items: NavItem[];
 }
 
 const navGroups: NavGroup[] = [
   {
-    title: 'Legislation',
+    i18nKey: 'groups.legislation',
     icon: FileText,
     items: [
-      { href: '/bills', label: 'Bills', icon: FileText, description: 'Active and historical Bills before Parliament' },
-      { href: '/acts', label: 'Acts', icon: ScaleIcon, description: 'Enacted Acts of Parliament with full lifecycle' },
-      { href: '/regulations', label: 'Regulations', icon: FileSearch, description: 'Subordinate legislation and Legal Notices' },
-      { href: '/policies', label: 'Policies', icon: FileBarChart, description: 'Government policy documents' },
-      { href: '/committees', label: 'Committees', icon: Users, description: 'Parliamentary standing and select committees' },
+      { href: '/bills', i18nKey: 'pages.bills', icon: FileText, description: 'Active and historical Bills before Parliament' },
+      { href: '/acts', i18nKey: 'pages.acts', icon: ScaleIcon, description: 'Enacted Acts of Parliament with full lifecycle' },
+      { href: '/regulations', i18nKey: 'pages.regulations', icon: FileSearch, description: 'Subordinate legislation and Legal Notices' },
+      { href: '/policies', i18nKey: 'pages.policies', icon: FileBarChart, description: 'Government policy documents' },
+      { href: '/committees', i18nKey: 'pages.committees', icon: Users, description: 'Parliamentary standing and select committees' },
     ],
   },
   {
-    title: 'Government',
+    i18nKey: 'groups.government',
     icon: Landmark,
     items: [
-      { href: '/constitution', label: 'Constitution', icon: BookOpen, description: 'The Constitution of Kenya, Article by Article' },
-      { href: '/governments', label: 'Governments', icon: Landmark, description: 'Presidential administrations and terms' },
-      { href: '/institutions', label: 'Institutions', icon: Landmark, description: 'Government institutions and agencies' },
-      { href: '/people', label: 'People', icon: Users, description: 'MPs, senators, and civic persons' },
-      { href: '/participation', label: 'Participation', icon: Users, description: 'Public participation opportunities' },
+      { href: '/constitution', i18nKey: 'pages.constitution', icon: BookOpen, description: 'The Constitution of Kenya, Article by Article' },
+      { href: '/governments', i18nKey: 'pages.governments', icon: Landmark, description: 'Presidential administrations and terms' },
+      { href: '/institutions', i18nKey: 'pages.institutions', icon: Landmark, description: 'Government institutions and agencies' },
+      { href: '/people', i18nKey: 'pages.people', icon: Users, description: 'MPs, senators, and civic persons' },
+      { href: '/participation', i18nKey: 'pages.participation', icon: Users, description: 'Public participation opportunities' },
     ],
   },
   {
-    title: 'Finance',
+    i18nKey: 'groups.finance',
     icon: DollarSign,
     items: [
-      { href: '/debt', label: 'Public Debt', icon: BarChart3, description: 'National debt dashboard with trends' },
-      { href: '/loans', label: 'Loans', icon: DollarSign, description: 'Sovereign loans tracker' },
-      { href: '/grants', label: 'Grants', icon: HeartHandshake, description: 'Grants received by the government' },
+      { href: '/debt', i18nKey: 'pages.public_debt', icon: BarChart3, description: 'National debt dashboard with trends' },
+      { href: '/loans', i18nKey: 'pages.loans', icon: DollarSign, description: 'Sovereign loans tracker' },
+      { href: '/grants', i18nKey: 'pages.grants', icon: HeartHandshake, description: 'Grants received by the government' },
     ],
   },
   {
-    title: 'Intelligence',
+    i18nKey: 'groups.intelligence',
     icon: TrendingUp,
     items: [
-      { href: '/what-changed', label: 'What Changed', icon: Radio, description: 'Proactive civic change feed' },
-      { href: '/feed', label: 'Feed', icon: Newspaper, description: 'Full civic activity feed' },
-      { href: '/trending', label: 'Trending', icon: TrendingUp, description: 'Trending Bills and topics' },
-      { href: '/research', label: 'Research', icon: FileSearch, description: 'Research missions and reports' },
-      { href: '/trust', label: 'Trust', icon: ShieldCheck, description: 'Trust and verification network' },
-      { href: '/report', label: 'Reports', icon: FileBarChart, description: 'Generated civic reports' },
+      { href: '/what-changed', i18nKey: 'pages.what_changed', icon: Radio, description: 'Proactive civic change feed' },
+      { href: '/feed', i18nKey: 'pages.feed', icon: Newspaper, description: 'Full civic activity feed' },
+      { href: '/trending', i18nKey: 'pages.trending', icon: TrendingUp, description: 'Trending Bills and topics' },
+      { href: '/research', i18nKey: 'pages.research', icon: FileSearch, description: 'Research missions and reports' },
+      { href: '/trust', i18nKey: 'pages.trust', icon: ShieldCheck, description: 'Trust and verification network' },
+      { href: '/report', i18nKey: 'pages.reports', icon: FileBarChart, description: 'Generated civic reports' },
     ],
   },
   {
-    title: 'Scenarios',
+    i18nKey: 'groups.scenarios',
     icon: Sparkles,
     items: [
-      { href: '/scenarios', label: 'What If?', icon: Sparkles, description: 'Explore hypothetical civic scenarios — HYPOTHETICAL, not observed fact' },
+      { href: '/scenarios', i18nKey: 'pages.what_if', icon: Sparkles, description: 'Explore hypothetical civic scenarios — HYPOTHETICAL, not observed fact' },
     ],
   },
   {
-    title: 'Resources',
+    i18nKey: 'groups.resources',
     icon: Database,
     items: [
-      { href: '/briefing', label: 'Daily Briefing', icon: Newspaper, description: 'Today\'s civic brief' },
-      { href: '/gazette', label: 'Kenya Gazette', icon: FileText, description: 'Official gazette notices' },
-      { href: '/datasets', label: 'Datasets', icon: Database, description: 'Downloadable civic datasets' },
-      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, description: 'Your civic dashboard' },
-      { href: '/topics', label: 'Topics', icon: BookOpen, description: 'Browse by topic' },
-      { href: '/developers', label: 'Developers', icon: Code2, description: 'API docs and developer platform' },
-      { href: '/about', label: 'About', icon: Info, description: 'About Civic Intelligence' },
-      { href: '/sponsor', label: 'Sponsor', icon: Heart, description: 'Support the platform' },
+      { href: '/briefing', i18nKey: 'pages.daily_briefing', icon: Newspaper, description: 'Today\'s civic brief' },
+      { href: '/gazette', i18nKey: 'pages.kenya_gazette', icon: FileText, description: 'Official gazette notices' },
+      { href: '/datasets', i18nKey: 'pages.datasets', icon: Database, description: 'Downloadable civic datasets' },
+      { href: '/dashboard', i18nKey: 'pages.dashboard', icon: LayoutDashboard, description: 'Your civic dashboard' },
+      { href: '/topics', i18nKey: 'pages.topics', icon: BookOpen, description: 'Browse by topic' },
+      { href: '/developers', i18nKey: 'pages.developers', icon: Code2, description: 'API docs and developer platform' },
+      { href: '/about', i18nKey: 'pages.about', icon: Info, description: 'About Civic Intelligence' },
+      { href: '/sponsor', i18nKey: 'pages.sponsor', icon: Heart, description: 'Support the platform' },
     ],
   },
 ];
 
-const primaryNav = [
-  { href: '/', label: 'Home' },
-  { href: '/ask', label: 'Ask' },
-  { href: '/briefing', label: 'Briefing' },
-  { href: '/countries', label: 'Countries' },
-] as const;
+interface PrimaryNavItem {
+  href: string;
+  i18nKey: 'home' | 'ask' | 'briefing' | 'countries';
+}
+
+const primaryNav: PrimaryNavItem[] = [
+  { href: '/', i18nKey: 'home' },
+  { href: '/ask', i18nKey: 'ask' },
+  { href: '/briefing', i18nKey: 'briefing' },
+  { href: '/countries', i18nKey: 'countries' },
+];
 
 export function Header() {
+  const t = useTranslations('nav');
   const [exploreOpen, setExploreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -176,6 +194,24 @@ export function Header() {
     };
   }, [mobileOpen]);
 
+  // Spec §37 — global Cmd+K shortcut listener. The actual palette is
+  // mounted in layout.tsx; this hook only dispatches the open event so
+  // the palette can also be triggered from anywhere (even outside the
+  // Header). The palette installs its own shortcut listener too, so
+  // this is primarily for surfaces where the Header is absent.
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        // The CommandPalette has its own listener that calls preventDefault
+        // and toggles state. We don't dispatch the open event here to avoid
+        // double-toggling; instead, the palette owns the keyboard shortcut.
+        // (No-op — kept for documentation of the architecture.)
+      }
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, []);
+
   return (
     <header
       className="sticky top-0 z-50 border-b border-civic-border bg-civic-paper/95 backdrop-blur"
@@ -190,6 +226,7 @@ export function Header() {
         >
           <Scale className="h-7 w-7" aria-hidden="true" />
           <span className="hidden font-serif text-lg font-semibold tracking-tight sm:inline">
+            {/* TODO(i18n): translate — brand name stays English for now */}
             Civic Intelligence
           </span>
         </Link>
@@ -197,30 +234,26 @@ export function Header() {
         {/* Primary nav (center) — capped at 5 top-level items */}
         <nav aria-label="Primary" className="hidden lg:block">
           <ul className="flex items-center gap-7 text-sm font-medium text-civic-ink">
-            <li>
-              <Link
-                href="/"
-                className="inline-flex items-center py-3 hover:text-civic-leaf"
-              >
-                Home
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/ask"
-                className="inline-flex items-center py-3 hover:text-civic-leaf"
-              >
-                Ask
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/briefing"
-                className="inline-flex items-center py-3 hover:text-civic-leaf"
-              >
-                Briefing
-              </Link>
-            </li>
+            {primaryNav.map((item) => (
+              <li key={item.href}>
+                {item.href === '/countries' ? (
+                  <Link
+                    href={item.href}
+                    className="inline-flex items-center gap-1 py-3 hover:text-civic-leaf"
+                  >
+                    <Globe className="h-4 w-4" aria-hidden="true" />
+                    {t(item.i18nKey)}
+                  </Link>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className="inline-flex items-center py-3 hover:text-civic-leaf"
+                  >
+                    {t(item.i18nKey)}
+                  </Link>
+                )}
+              </li>
+            ))}
             {/* Mega-menu Explore */}
             <li ref={exploreRef} className="relative">
               <button
@@ -230,7 +263,7 @@ export function Header() {
                 aria-haspopup="true"
                 className="inline-flex items-center gap-1 py-3 hover:text-civic-leaf"
               >
-                Explore
+                {t('explore')}
                 <ChevronDown
                   className={`h-4 w-4 transition-transform duration-200 ${
                     exploreOpen ? 'rotate-180' : ''
@@ -241,16 +274,16 @@ export function Header() {
               {exploreOpen && (
                 <div
                   role="menu"
-                  aria-label="Explore all sections"
+                  aria-label={t('explore')}
                   className="absolute left-1/2 top-full z-50 mt-1 w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 origin-top rounded-xl border border-civic-border bg-civic-paper shadow-2xl"
                 >
                   <div className="grid grid-cols-3 gap-x-6 gap-y-1 p-5">
                     {navGroups.map((group) => (
-                      <div key={group.title} className="space-y-1">
+                      <div key={group.i18nKey} className="space-y-1">
                         <div className="flex items-center gap-1.5 px-2 pb-1 pt-2">
                           <group.icon className="h-3.5 w-3.5 text-civic-leaf" aria-hidden="true" />
                           <span className="text-[11px] font-semibold uppercase tracking-wider text-civic-stone">
-                            {group.title}
+                            {t(group.i18nKey)}
                           </span>
                         </div>
                         <ul className="space-y-0.5">
@@ -264,7 +297,7 @@ export function Header() {
                               >
                                 <item.icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-civic-stone group-hover:text-civic-leaf" aria-hidden="true" />
                                 <span className="min-w-0">
-                                  <span className="block font-medium">{item.label}</span>
+                                  <span className="block font-medium">{t(item.i18nKey)}</span>
                                   {item.description && (
                                     <span className="block truncate text-[11px] text-civic-stone">
                                       {item.description}
@@ -281,24 +314,26 @@ export function Header() {
                 </div>
               )}
             </li>
-            <li>
-              <Link
-                href="/countries"
-                className="inline-flex items-center gap-1 py-3 hover:text-civic-leaf"
-              >
-                <Globe className="h-4 w-4" aria-hidden="true" />
-                Countries
-              </Link>
-            </li>
           </ul>
         </nav>
 
         {/* Right cluster: expandable search + user actions */}
         <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+          {/* Command palette trigger (Cmd+K) — spec §37 */}
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            aria-label="Open command palette"
+            title="Open command palette (⌘K)"
+            className="hidden h-9 w-9 items-center justify-center rounded-full text-civic-forest hover:bg-civic-mist sm:inline-flex"
+          >
+            <CommandIcon className="h-5 w-5" aria-hidden="true" />
+          </button>
+
           {/* Expandable search bar */}
           <form action="/search" className="flex items-center" role="search">
             <label htmlFor="nav-search" className="sr-only">
-              Search a Bill, law, or ask a question
+              {t('search_label')}
             </label>
             <div
               className={`hidden items-center overflow-hidden rounded-full border border-civic-border bg-civic-mist transition-all duration-200 sm:flex ${
@@ -313,8 +348,8 @@ export function Header() {
                 id="nav-search"
                 type="search"
                 name="q"
-                placeholder="Search Bills, laws, ask…"
-                aria-label="Search Bills, laws, or ask a question"
+                placeholder={t('search_placeholder')}
+                aria-label={t('search_label')}
                 autoComplete="off"
                 onFocus={() => setSearchExpanded(true)}
                 onBlur={() => setSearchExpanded(false)}
@@ -323,7 +358,7 @@ export function Header() {
             </div>
             <Link
               href="/search"
-              aria-label="Search"
+              aria-label={t('search_label')}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full text-civic-forest hover:bg-civic-mist sm:hidden"
             >
               <Search className="h-5 w-5" aria-hidden="true" />
@@ -333,8 +368,8 @@ export function Header() {
           {/* Following / Bookmarks */}
           <Link
             href="/following"
-            aria-label="Following"
-            title="Following"
+            aria-label={t('following')}
+            title={t('following')}
             className="hidden h-9 w-9 items-center justify-center rounded-full text-civic-forest hover:bg-civic-mist sm:inline-flex"
           >
             <Bookmark className="h-5 w-5" aria-hidden="true" />
@@ -343,12 +378,15 @@ export function Header() {
           {/* Notifications */}
           <Link
             href="/notifications"
-            aria-label="Notifications"
-            title="Notifications"
+            aria-label={t('notifications')}
+            title={t('notifications')}
             className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-civic-forest hover:bg-civic-mist"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
           </Link>
+
+          {/* Language switcher — spec §66 */}
+          <LanguageSwitcher />
 
           {/* Dark/Light theme toggle */}
           <ThemeToggle />
@@ -359,7 +397,7 @@ export function Header() {
             className="hidden items-center gap-1.5 rounded-full bg-civic-forest px-4 py-2.5 text-sm font-medium text-civic-paper hover:bg-civic-leaf sm:inline-flex"
           >
             <Heart className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden md:inline">Sponsor</span>
+            <span className="hidden md:inline">{t('sponsor')}</span>
           </Link>
 
           {/* Hamburger (mobile) */}
@@ -367,7 +405,7 @@ export function Header() {
             type="button"
             onClick={() => setMobileOpen(true)}
             className="inline-flex h-10 w-10 items-center justify-center rounded-md text-civic-forest hover:bg-civic-mist lg:hidden"
-            aria-label="Open menu"
+            aria-label={t('open_menu')}
             aria-expanded={mobileOpen}
           >
             <Menu className="h-6 w-6" aria-hidden="true" />
@@ -381,7 +419,7 @@ export function Header() {
           className="fixed inset-0 z-50 lg:hidden"
           role="dialog"
           aria-modal="true"
-          aria-label="Site menu"
+          aria-label={t('open_menu')}
         >
           <div
             className="absolute inset-0 bg-civic-ink/40 backdrop-blur-sm"
@@ -391,13 +429,14 @@ export function Header() {
           <div className="absolute right-0 top-0 flex h-full w-80 max-w-[85vw] flex-col bg-civic-paper shadow-xl">
             <div className="flex items-center justify-between border-b border-civic-border px-4 py-4">
               <span className="font-serif text-lg font-semibold text-civic-forest">
+                {/* TODO(i18n): translate — keep "Menu" English for now */}
                 Menu
               </span>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-civic-mist"
-                aria-label="Close menu"
+                aria-label={t('close_menu')}
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
@@ -412,18 +451,18 @@ export function Header() {
                       onClick={() => setMobileOpen(false)}
                       className="block rounded-md px-3 py-3 text-base font-medium text-civic-ink hover:bg-civic-mist"
                     >
-                      {item.label}
+                      {t(item.i18nKey)}
                     </Link>
                   </li>
                 ))}
               </ul>
               {/* Grouped explore links */}
               {navGroups.map((group) => (
-                <div key={group.title} className="mt-5">
+                <div key={group.i18nKey} className="mt-5">
                   <div className="flex items-center gap-1.5 px-3 pb-1">
                     <group.icon className="h-3.5 w-3.5 text-civic-leaf" aria-hidden="true" />
                     <span className="text-xs font-semibold uppercase tracking-wider text-civic-stone">
-                      {group.title}
+                      {t(group.i18nKey)}
                     </span>
                   </div>
                   <ul className="mt-1 space-y-0.5">
@@ -435,7 +474,7 @@ export function Header() {
                           className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-civic-ink hover:bg-civic-mist hover:text-civic-leaf"
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0 text-civic-stone" aria-hidden="true" />
-                          {item.label}
+                          {t(item.i18nKey)}
                         </Link>
                       </li>
                     ))}
@@ -450,7 +489,7 @@ export function Header() {
                 className="flex items-center justify-center gap-2 rounded-md bg-civic-forest px-4 py-3 text-sm font-medium text-civic-paper hover:bg-civic-leaf"
               >
                 <Heart className="h-4 w-4" aria-hidden="true" />
-                Sponsor
+                {t('sponsor')}
               </Link>
               <div className="grid grid-cols-2 gap-2">
                 <Link
@@ -459,7 +498,7 @@ export function Header() {
                   className="flex items-center justify-center gap-2 rounded-md border border-civic-border px-4 py-3 text-sm text-civic-ink hover:bg-civic-mist"
                 >
                   <BellRing className="h-4 w-4" aria-hidden="true" />
-                  Alerts
+                  {t('notifications')}
                 </Link>
                 <Link
                   href="/following"
@@ -467,18 +506,13 @@ export function Header() {
                   className="flex items-center justify-center gap-2 rounded-md border border-civic-border px-4 py-3 text-sm text-civic-ink hover:bg-civic-mist"
                 >
                   <User className="h-4 w-4" aria-hidden="true" />
-                  Account
+                  {t('following')}
                 </Link>
               </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Government selector sub-bar (spec §11) — persistent across the
-          whole site so Bills, Acts, Constitution, Debt, etc. share the
-          same country / administration / term context. */}
-      <GovernmentSelector />
     </header>
   );
 }
