@@ -284,6 +284,52 @@ type GovernmentDebtSummary struct {
 	Disclaimer          string
 }
 
+// LegislatureDebtSummary aggregates debt data for a single legislative
+// period (e.g. Kenya's 12th Parliament 2017-2022, 13th Parliament 2022-present).
+// Spec section 19 — each legislature/legislative period must surface:
+//
+//   - debt at beginning (DebtStockAtStart)
+//   - debt at end (DebtStockAtEnd)
+//   - new borrowing (TotalNewBorrowing) — sum of BorrowingAgreement original
+//     amounts with CONTRACTED_DURING attribution; NOT (end - start).
+//   - domestic borrowing (DomesticBorrowing)
+//   - external borrowing (ExternalBorrowing)
+//   - disbursements (Disbursements) — money actually released, distinct from
+//     new borrowing (Spec section 3).
+//   - repayments (Repayments) — principal paid back; Spec section 4 reminds
+//     callers that repayments occurring during this legislature do NOT
+//     change CONTRACTED_DURING attribution for the underlying agreements.
+//   - debt service (DebtService) — principal + interest + associated payments.
+//   - outstanding obligations (OutstandingObligations)
+//   - currency + source URLs + disclaimer
+//
+// CRITICAL ATTRIBUTION RULE (Spec section 35): the platform does NOT say
+// "The 13th Parliament borrowed KSh X". It says "The Government of Kenya
+// recorded KSh X in borrowing during the 13th Parliament." The legal
+// borrower is the Republic of Kenya, not a legislature or its members.
+//
+// As with GovernmentDebtSummary, NewBorrowing is NEVER computed as
+// (DebtStockAtEnd - DebtStockAtStart) — Spec section 9 forbids inferring
+// new borrowing from snapshot deltas (the delta includes FX movements,
+// valuation changes, repayments, refinancing, arrears, adjustments, and
+// disbursement timing).
+type LegislatureDebtSummary struct {
+	LegislatureID          ID
+	Period                  string // e.g. "13th Parliament (2022-Present)"
+	TotalNewBorrowing       *float64
+	DomesticBorrowing        *float64
+	ExternalBorrowing        *float64
+	Disbursements            *float64
+	Repayments               *float64
+	DebtService              *float64
+	DebtStockAtStart         *float64
+	DebtStockAtEnd           *float64
+	OutstandingObligations   *float64
+	Currency                 string
+	SourceURLs               []string
+	Disclaimer               string
+}
+
 // NO_POLITICAL_PERFORMANCE_SCORE is the canonical disclaimer attached to
 // every debt summary. Spec section 37.
 const NO_POLITICAL_PERFORMANCE_SCORE = `This summary provides factual fiscal records only. The platform does not

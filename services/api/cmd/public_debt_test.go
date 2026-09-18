@@ -195,6 +195,99 @@ func TestGovernmentDebt_UnknownAdministration_Returns404(t *testing.T) {
         }
 }
 
+// TestLegislatureDebt_ReturnsSummary verifies that the per-legislature debt
+// endpoint (GAP-19-1, Spec section 19) returns the seeded summary with the
+// documented fields: debt at beginning/end, new borrowing, domestic/external
+// split, disbursements, repayments, debt service, outstanding obligations,
+// currency, source URLs, and disclaimer.
+//
+// CRITICAL ATTRIBUTION RULE (Spec section 35): the disclaimer must NOT say
+// "the 13th Parliament borrowed KSh X". The legal borrower is the Republic
+// of Kenya.
+func TestLegislatureDebt_ReturnsSummary(t *testing.T) {
+        req := httptest.NewRequest(http.MethodGet, "/api/v1/debt/legislatures/legislature-ke-13", nil)
+        rec := httptest.NewRecorder()
+
+        makeDebtRouter(newTestDebtRepo(t))(rec, req)
+
+        if rec.Code != http.StatusOK {
+                t.Fatalf("expected 200; got %d", rec.Code)
+        }
+        var resp struct {
+                LegislatureID         string   `json:"legislature_id"`
+                Period                 string   `json:"period"`
+                TotalNewBorrowing      *float64 `json:"total_new_borrowing"`
+                DomesticBorrowing      *float64 `json:"domestic_borrowing"`
+                ExternalBorrowing      *float64 `json:"external_borrowing"`
+                Disbursements          *float64 `json:"disbursements"`
+                Repayments             *float64 `json:"repayments"`
+                DebtService            *float64 `json:"debt_service"`
+                DebtStockAtStart       *float64 `json:"debt_stock_at_start"`
+                DebtStockAtEnd         *float64 `json:"debt_stock_at_end"`
+                OutstandingObligations *float64 `json:"outstanding_obligations"`
+                Currency               string   `json:"currency"`
+                SourceURLs             []string `json:"source_urls"`
+                Disclaimer             string   `json:"disclaimer"`
+        }
+        _ = json.NewDecoder(rec.Body).Decode(&resp)
+
+        if resp.LegislatureID != "legislature-ke-13" {
+                t.Errorf("expected legislature-ke-13; got %s", resp.LegislatureID)
+        }
+        if resp.Period == "" {
+                t.Error("expected non-empty period")
+        }
+        if resp.DebtStockAtStart == nil || resp.DebtStockAtEnd == nil {
+                t.Error("expected debt_stock_at_start and debt_stock_at_end")
+        }
+        if resp.TotalNewBorrowing == nil {
+                t.Error("expected total_new_borrowing")
+        }
+        if resp.DomesticBorrowing == nil || resp.ExternalBorrowing == nil {
+                t.Error("expected domestic + external borrowing split")
+        }
+        if resp.Disbursements == nil || resp.Repayments == nil || resp.DebtService == nil {
+                t.Error("expected disbursements, repayments, debt_service")
+        }
+        if resp.OutstandingObligations == nil {
+                t.Error("expected outstanding_obligations")
+        }
+        if resp.Currency != "KES" {
+                t.Errorf("expected currency KES; got %s", resp.Currency)
+        }
+        if len(resp.SourceURLs) == 0 {
+                t.Error("expected at least one source URL (evidence-first)")
+        }
+        // CRITICAL: disclaimer must NOT say "the 13th Parliament borrowed".
+        if containsStr(resp.Disclaimer, "13th Parliament borrowed") {
+                t.Errorf("disclaimer must not attribute borrowing to a Parliament; got: %q", resp.Disclaimer)
+        }
+        // The canonical NO_POLITICAL_PERFORMANCE_SCORE constant (Spec
+        // section 37) must be appended to the per-legislature disclaimer.
+        if !containsStr(resp.Disclaimer, legislation.NO_POLITICAL_PERFORMANCE_SCORE) {
+                t.Errorf("expected disclaimer to contain the canonical NO_POLITICAL_PERFORMANCE_SCORE constant; got: %q", resp.Disclaimer)
+        }
+        if !containsStr(resp.Disclaimer, "best borrower") {
+                t.Errorf("expected disclaimer to contain the canonical phrase 'best borrower'; got: %q", resp.Disclaimer)
+        }
+}
+
+// TestLegislatureDebt_UnknownLegislature_Returns404 verifies the handler
+// does not fabricate a summary for an unknown legislature. The platform
+// surfaces a 404 rather than inventing numbers — Spec section 28 (the
+// platform never silently resolves conflicts; it surfaces uncertainty for
+// human review).
+func TestLegislatureDebt_UnknownLegislature_Returns404(t *testing.T) {
+        req := httptest.NewRequest(http.MethodGet, "/api/v1/debt/legislatures/legislature-does-not-exist", nil)
+        rec := httptest.NewRecorder()
+
+        makeDebtRouter(newTestDebtRepo(t))(rec, req)
+
+        if rec.Code != http.StatusNotFound {
+                t.Errorf("expected 404; got %d", rec.Code)
+        }
+}
+
 // TestDebtLoans_ReturnsSeededAgreements verifies that the loans endpoint
 // returns the seeded borrowing agreements (sourced from public press releases:
 // IMF, World Bank, AfDB, China Exim Bank, Eurobonds).

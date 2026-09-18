@@ -67,6 +67,7 @@ type (
         DebtEvidenceRef          = domain.DebtEvidenceRef
         FiscalReconciliationConflict = domain.FiscalReconciliationConflict
         GovernmentDebtSummary    = domain.GovernmentDebtSummary
+        LegislatureDebtSummary   = domain.LegislatureDebtSummary
         DebtRepository           = domain.DebtRepository
         DebtFilter               = domain.DebtFilter
         CreditorCategory         = domain.CreditorCategory

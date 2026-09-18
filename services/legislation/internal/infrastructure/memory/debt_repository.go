@@ -62,6 +62,12 @@ type DebtRepository struct {
 	// summaries is keyed by AdministrationID. Spec section 7, 37.
 	summaries map[domain.ID]domain.GovernmentDebtSummary
 
+	// legislatureSummaries is keyed by LegislatureID. Spec section 19, 37.
+	// Each legislature/Parliamentary term carries its own debt summary so
+	// the platform can surface per-legislature debt views without
+	// re-attributing sovereign borrowing to the Parliament itself.
+	legislatureSummaries map[domain.ID]domain.LegislatureDebtSummary
+
 	// conflicts is an append-only slice. Spec section 28 — the platform
 	// never silently resolves conflicts; they are surfaced for review.
 	conflicts []domain.FiscalReconciliationConflict
@@ -74,10 +80,11 @@ func NewDebtRepository() *DebtRepository {
 		disbursements: map[domain.ID][]domain.DebtDisbursement{},
 		repayments:    map[domain.ID][]domain.DebtRepayment{},
 		services:      map[domain.ID]domain.DebtService{},
-		snapshots:     map[domain.ID]domain.PublicDebtSnapshot{},
-		snapshotKeys:  map[string]domain.ID{},
-		summaries:     map[domain.ID]domain.GovernmentDebtSummary{},
-		conflicts:     []domain.FiscalReconciliationConflict{},
+		snapshots:            map[domain.ID]domain.PublicDebtSnapshot{},
+		snapshotKeys:         map[string]domain.ID{},
+		summaries:            map[domain.ID]domain.GovernmentDebtSummary{},
+		legislatureSummaries: map[domain.ID]domain.LegislatureDebtSummary{},
+		conflicts:            []domain.FiscalReconciliationConflict{},
 	}
 }
 
@@ -257,6 +264,33 @@ func (r *DebtRepository) RecordGovernmentDebtSummary(_ context.Context, summary 
 		return fmt.Errorf("%w: %s", domain.ErrGovernmentDebtSummaryAlreadyExists, summary.AdministrationID)
 	}
 	r.summaries[summary.AdministrationID] = summary
+	return nil
+}
+
+// GetLegislatureDebtSummary returns the cached summary for a legislature
+// (Parliamentary term). Returns domain.ErrLegislatureDebtSummaryNotFound if
+// no summary exists.
+func (r *DebtRepository) GetLegislatureDebtSummary(_ context.Context, legislatureID domain.ID) (*domain.LegislatureDebtSummary, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	s, ok := r.legislatureSummaries[legislatureID]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", domain.ErrLegislatureDebtSummaryNotFound, legislatureID)
+	}
+	out := s
+	return &out, nil
+}
+
+// RecordLegislatureDebtSummary stores a computed legislature summary.
+// Returns domain.ErrLegislatureDebtSummaryAlreadyExists if a summary for the
+// same LegislatureID is already present.
+func (r *DebtRepository) RecordLegislatureDebtSummary(_ context.Context, summary domain.LegislatureDebtSummary) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.legislatureSummaries[summary.LegislatureID]; exists {
+		return fmt.Errorf("%w: %s", domain.ErrLegislatureDebtSummaryAlreadyExists, summary.LegislatureID)
+	}
+	r.legislatureSummaries[summary.LegislatureID] = summary
 	return nil
 }
 

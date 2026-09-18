@@ -137,6 +137,82 @@ not calculate debt performance scores or rank governments.`,
         },
 }
 
+// KenyaLegislatureDebtSummaries is the authoritative per-legislature debt
+// summary. Spec section 19, 37. Each entry covers one Parliamentary term
+// (Kenya's Parliament sits for 5-year terms; the 12th Parliament sat
+// 2017-2022 and the 13th Parliament sits 2022-present).
+//
+// Each summary surfaces:
+//   - DebtStockAtStart / DebtStockAtEnd — closest preceding + most recent
+//     CBK observations for the legislature's window.
+//   - TotalNewBorrowing — sum of BorrowingAgreement original amounts with
+//     CONTRACTED_DURING attribution during the legislature. This is NOT
+//     (end - start) — Spec section 9 forbids that inference because the
+//     delta also includes FX movements, valuation changes, repayments,
+//     refinancing, arrears, adjustments, and disbursement timing.
+//   - DomesticBorrowing / ExternalBorrowing — split of TotalNewBorrowing.
+//   - Disbursements — money actually released during the legislature.
+//     Spec section 3 distinguishes disbursements from new borrowing.
+//   - Repayments — principal paid back during the legislature. Spec section
+//     4: repayments occurring during this legislature do NOT change the
+//     CONTRACTED_DURING attribution of the underlying agreements.
+//   - DebtService — principal + interest + associated payments.
+//   - OutstandingObligations — total debt outstanding at end of legislature.
+//
+// CRITICAL ATTRIBUTION RULE: every summary explicitly states that the
+// legal borrower is the Republic of Kenya (NOT a Parliament or its
+// members) and disclaims any political performance score.
+var KenyaLegislatureDebtSummaries = []legislation.LegislatureDebtSummary{
+        {
+                LegislatureID:           "legislature-ke-12",
+                Period:                   "12th Parliament (2017-2022)",
+                TotalNewBorrowing:        ptrFloat(3.86e12),
+                DomesticBorrowing:        ptrFloat(1.77e12),
+                ExternalBorrowing:        ptrFloat(2.09e12),
+                Disbursements:            ptrFloat(3.21e12),
+                Repayments:               ptrFloat(1.40e12),
+                DebtService:              ptrFloat(1.40e12),
+                DebtStockAtStart:         ptrFloat(3.85e12), // 2017-06-30 CBK observation
+                DebtStockAtEnd:           ptrFloat(7.71e12), // 2022-06-30 CBK observation
+                OutstandingObligations:   ptrFloat(7.71e12),
+                Currency:                 "KES",
+                SourceURLs: []string{
+                        cbkSourceURL,
+                        treasuryAnnualReport2022_23,
+                },
+                Disclaimer: `The Government of Kenya recorded KSh 3.86 trillion in new borrowing
+during the 12th Parliament (2017-2022). This is NOT "the 12th Parliament
+borrowed KSh 3.86T" — the legal borrower is the Republic of Kenya, and
+borrowing is attributed by CONTRACTED_DURING, not by the legislative
+period in which it occurred. The platform does not calculate debt
+performance scores or rank parliaments.`,
+        },
+        {
+                LegislatureID:           "legislature-ke-13",
+                Period:                   "13th Parliament (2022-Present)",
+                TotalNewBorrowing:        ptrFloat(2.88e12),
+                DomesticBorrowing:        ptrFloat(1.17e12),
+                ExternalBorrowing:        ptrFloat(1.71e12),
+                Disbursements:            ptrFloat(2.21e12),
+                Repayments:               ptrFloat(1.36e12),
+                DebtService:              ptrFloat(1.36e12),
+                DebtStockAtStart:         ptrFloat(7.71e12), // 2022-06-30 CBK observation
+                DebtStockAtEnd:           ptrFloat(10.59e12), // 2024-06-30 CBK observation
+                OutstandingObligations:   ptrFloat(10.59e12),
+                Currency:                 "KES",
+                SourceURLs: []string{
+                        cbkSourceURL,
+                        treasuryAnnualReport2023_24,
+                },
+                Disclaimer: `The Government of Kenya recorded KSh 2.88 trillion in new borrowing
+during the 13th Parliament (2022-present). This is NOT "the 13th Parliament
+borrowed KSh 2.88T" — the legal borrower is the Republic of Kenya, and
+borrowing is attributed by CONTRACTED_DURING, not by the legislative
+period in which it occurred. The platform does not calculate debt
+performance scores or rank parliaments.`,
+        },
+}
+
 // KenyaBorrowingAgreements is a non-exhaustive list of Kenya's most
 // significant borrowing agreements since 2013. Each entry is sourced from
 // the creditor's or the Treasury's own public press release. The list is
@@ -377,8 +453,8 @@ func DebtDashboardFigures() (debtService, debtToGDP float64) {
 }
 
 // SeedDebt seeds a DebtRepository with Kenya's authoritative public-debt
-// observations, per-administration summaries, and sample borrowing
-// agreements. It is intended to be passed to
+// observations, per-administration summaries, per-legislature summaries,
+// and sample borrowing agreements. It is intended to be passed to
 // legislation.WireDebtRepository.
 //
 // The seeder is idempotent in the sense that re-running it returns the
@@ -393,6 +469,12 @@ func DebtDashboardFigures() (debtService, debtToGDP float64) {
 // CONTRACTED_DURING. Each agreement's GovernmentAdministrationID is
 // validated against KenyaAdministrations by the API service via
 // legislation.ValidateAttribution (issue #221).
+//
+// Spec section 19: per-legislature summaries (KenyaLegislatureDebtSummaries)
+// surface debt at beginning/end, new borrowing, domestic/external split,
+// disbursements, repayments, debt service, and outstanding obligations
+// for each Parliamentary term. The summary does NOT attribute sovereign
+// borrowing to a Parliament.
 func SeedDebt(repo legislation.DebtRepository) error {
         ctx := context.Background()
         for _, snap := range KenyaDebtSnapshots {
@@ -403,6 +485,11 @@ func SeedDebt(repo legislation.DebtRepository) error {
         for _, summary := range KenyaGovernmentDebtSummaries {
                 if err := repo.RecordGovernmentDebtSummary(ctx, summary); err != nil {
                         return fmt.Errorf("seed summary %s: %w", summary.AdministrationID, err)
+                }
+        }
+        for _, legSummary := range KenyaLegislatureDebtSummaries {
+                if err := repo.RecordLegislatureDebtSummary(ctx, legSummary); err != nil {
+                        return fmt.Errorf("seed legislature summary %s: %w", legSummary.LegislatureID, err)
                 }
         }
         for _, agreement := range KenyaBorrowingAgreements {
