@@ -263,6 +263,17 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+        // Cross-country Civic Comparison (task ENG-I3). 5 endpoints under
+        // /api/v1/compare/* let users compare legislation, government
+        // structure, public debt, and civic indicators across the 6
+        // supported countries (KE, UG, TZ, GH, NG, ZA). Every response
+        // carries the comparisonDisclaimer ("the platform does not rank
+        // countries"); the makeCompareRouter threads the DebtRepository
+        // through so the /compare/debt endpoint can pull Kenya's live CBK +
+        // Treasury observations when available.
+        apiHandler.HandleFunc("/api/v1/compare", makeCompareRouter(debtRepo))
+        apiHandler.HandleFunc("/api/v1/compare/", makeCompareRouter(debtRepo))
+
         // Middleware chain (outermost → innermost):
         //   RequestID (GAP-67-1)     — generates / propagates X-Request-Id; logs every
         //                             request start + completion with the id attached
