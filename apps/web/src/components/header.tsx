@@ -35,6 +35,7 @@ import {
   Scale as ScaleIcon,
 } from 'lucide-react';
 import { ThemeToggle } from './theme-toggle';
+import { GovernmentSelector } from './government-selector';
 
 /**
  * Mega-menu navigation — every platform page is reachable from the navbar.
@@ -473,6 +474,11 @@ export function Header() {
           </div>
         </div>
       )}
+
+      {/* Government selector sub-bar (spec §11) — persistent across the
+          whole site so Bills, Acts, Constitution, Debt, etc. share the
+          same country / administration / term context. */}
+      <GovernmentSelector />
     </header>
   );
 }
