@@ -1,9 +1,12 @@
 module github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana
 
-go 1.22
+go 1.23
+
+toolchain go1.23.4
 
 require (
 	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts v0.0.0
+	github.com/Roy-Wanyoike/civic-intelligence/services/legislation v0.0.0
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/net v0.30.0
 )
@@ -14,4 +17,9 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/Roy-Wanyoike/civic-intelligence/packages/contracts => ../../packages/contracts
+replace (
+	github.com/Roy-Wanyoike/civic-intelligence => ../..
+	github.com/Roy-Wanyoike/civic-intelligence/packages/contracts => ../../packages/contracts
+	github.com/Roy-Wanyoike/civic-intelligence/packages/observability => ../../packages/observability
+	github.com/Roy-Wanyoike/civic-intelligence/services/legislation => ../../services/legislation
+)
