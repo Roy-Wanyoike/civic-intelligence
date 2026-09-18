@@ -33,13 +33,36 @@ type Config struct {
         OIDCIssuer      string        `env:"OIDC_ISSUER" default:"http://localhost:8081/realms/civic"`
         OIDCAudience    string        `env:"OIDC_AUDIENCE" default:"civic-intelligence"`
         OIDCJWKSURL     string        `env:"OIDC_JWKS_URL" default:"http://localhost:8081/realms/civic/protocol/openid-connect/certs"`
-        DevMode         bool          `env:"DEV_MODE" default:"true"`
+        // DevMode gates the DevVerifier (which trusts JWT payloads WITHOUT
+        // signature verification). The default is `false` (P0-3 / audit-team-5
+        // gate #8 item 5) — production deployments MUST leave this off. Local
+        // development opts in by setting DEV_MODE=true. The runtime log line
+        // emits a WARNING when DevMode is true so an accidental production
+        // override is visible in logs.
+        DevMode         bool          `env:"DEV_MODE" default:"false"`
         ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" default:"15s"`
 
         // AIServiceURL is the base URL of the Python AI service (FastAPI).
         // Used by the bill summarizer, Q&A proxy, and impact-analysis endpoints.
         // Defaults to the local dev address (port 8000).
         AIServiceURL string `env:"AI_SERVICE_URL" default:"http://localhost:8000"`
+
+        // CORSAllowedOrigins is a comma-separated list of origins permitted to
+        // make cross-origin requests. Empty (the default) disables CORS — the
+        // frontend and API must share an origin. Production deployments serving
+        // the frontend from a different host (e.g. app.civicintelligence.com →
+        // api.civicintelligence.com) MUST set this to the frontend origin.
+        CORSAllowedOrigins string `env:"CORS_ALLOWED_ORIGINS" default:""`
+
+        // TracerEndpoint is the OTel collector endpoint (e.g.
+        // "localhost:4317"). Empty (the default) disables tracing — the API
+        // falls back to the NopTracer. Production deployments SHOULD set this
+        // to enable distributed tracing through Tempo.
+        TracerEndpoint string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" default:""`
+
+        // TracerServiceName overrides the OTel resource service.name attribute.
+        // Defaults to "civic-api" when empty.
+        TracerServiceName string `env:"OTEL_SERVICE_NAME" default:"civic-api"`
 }
 
 func main() {
@@ -62,6 +85,28 @@ func main() {
 
         // Build the metric registry for observability.
         metrics := observability.NewMetricRegistry()
+
+        // Initialise the tracer. When TracerEndpoint is configured, the API
+        // uses a real OpenTelemetry tracer that exports to the OTel collector
+        // (production gate #13). When the endpoint is empty (the default), the
+        // API falls back to NopTracer — useful for unit tests + local dev.
+        tracerServiceName := cfg.TracerServiceName
+        if tracerServiceName == "" {
+                tracerServiceName = "civic-api"
+        }
+        if cfg.TracerEndpoint != "" {
+                shutdown, err := observability.InitOTelTracer(context.Background(), tracerServiceName, cfg.TracerEndpoint)
+                if err != nil {
+                        log.Printf("WARN: OTel tracer init failed (%v); falling back to NopTracer", err)
+                } else {
+                        defer func() {
+                                _ = shutdown(context.Background())
+                        }()
+                        log.Printf("OTel tracer initialised: service=%s endpoint=%s", tracerServiceName, cfg.TracerEndpoint)
+                }
+        } else {
+                log.Printf("OTel tracer disabled (OTEL_EXPORTER_OTLP_ENDPOINT not set) — using NopTracer")
+        }
 
         // Build the debt repository (issue #203). The repository is seeded
         // with Kenya's authoritative CBK + Treasury observations via
@@ -219,20 +264,35 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
         // Middleware chain (outermost → innermost):
-        //   RequestID (GAP-67-1)  — generates / propagates X-Request-Id; logs every
-        //                          request start + completion with the id attached
-        //   OptionalAuth          — verifies bearer token if present (P0-3)
-        //   MetricsMiddleware      — Prometheus counter + latency histogram
-        //   RateLimit             — 300 req/min per IP
-        //   apiHandler            — the actual route mux
+        //   RequestID (GAP-67-1)     — generates / propagates X-Request-Id; logs every
+        //                             request start + completion with the id attached
+        //   CORS                     — handles preflight + sets Access-Control-* headers
+        //                             for allowlisted origins (gate #8 item: CORS)
+        //   OptionalAuth             — verifies bearer token if present (P0-3)
+        //   MetricsMiddleware        — Prometheus counter + latency histogram (gate #13)
+        //   SecurityHeaders          — X-Content-Type-Options, X-Frame-Options,
+        //                             X-XSS-Protection, HSTS, Referrer-Policy (gate #8)
+        //   PerPathRateLimiter       — per-path rate limits: AI 10/min, search 60/min,
+        //                             default 300/min (gate #8 item 4)
+        //   apiHandler               — the actual route mux
         //
         // RequestID is intentionally OUTERMOST so every log line emitted by the
         // inner middlewares (auth rejections, rate-limit 429s, etc.) carries the
-        // correlation id.
-        rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
-        metered := observability.MetricsMiddleware(metrics, rateLimited)
+        // correlation id. SecurityHeaders is INSIDE metrics + auth so auth
+        // rejection (401) responses also carry the headers (otherwise an attacker
+        // could fingerprint the auth layer by header absence). PerPathRateLimiter
+        // is innermost so it has the final say before the handler — a 429 still
+        // goes through SecurityHeaders (gets the headers) and metrics (counts).
+        corsCfg := middleware.DefaultCORSConfig()
+        if cfg.CORSAllowedOrigins != "" {
+                corsCfg.AllowedOrigins = splitCSV(cfg.CORSAllowedOrigins)
+        }
+        rateLimiter := middleware.NewPerPathRateLimiter(nil)
+        secured := middleware.SecurityHeaders(rateLimiter.Middleware(apiHandler))
+        metered := observability.MetricsMiddleware(metrics, secured)
         authed := middleware.OptionalAuth(verifier)(metered)
-        mux.Handle("/api/v1/", middleware.RequestID(nil)(authed))
+        corsed := middleware.CORSMiddleware(corsCfg)(authed)
+        mux.Handle("/api/v1/", middleware.RequestID(nil)(corsed))
 
         // Build the server.
         srv := &http.Server{
@@ -1261,6 +1321,24 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
         w.Header().Set("Content-Type", "application/json")
         w.WriteHeader(status)
         _ = json.NewEncoder(w).Encode(map[string]string{"error": code, "message": message})
+}
+
+// splitCSV parses a comma-separated string into a slice, trimming whitespace
+// from each element and dropping empties. Used for env vars like
+// CORS_ALLOWED_ORIGINS="https://app.civicintelligence.com, https://admin.civicintelligence.com".
+func splitCSV(s string) []string {
+        if s == "" {
+                return nil
+        }
+        parts := strings.Split(s, ",")
+        out := make([]string, 0, len(parts))
+        for _, p := range parts {
+                p = strings.TrimSpace(p)
+                if p != "" {
+                        out = append(out, p)
+                }
+        }
+        return out
 }
 
 // maxPageSize caps the page_size query parameter at the value documented in
