@@ -34,6 +34,7 @@ import {
   LayoutDashboard,
   Scale as ScaleIcon,
   Command as CommandIcon,
+  CalendarDays,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
@@ -116,6 +117,7 @@ const navGroups: NavGroup[] = [
       { href: '/what-changed', i18nKey: 'pages.what_changed', icon: Radio, description: 'Proactive civic change feed' },
       { href: '/feed', i18nKey: 'pages.feed', icon: Newspaper, description: 'Full civic activity feed' },
       { href: '/trending', i18nKey: 'pages.trending', icon: TrendingUp, description: 'Trending Bills and topics' },
+      { href: '/calendar', i18nKey: 'pages.calendar', icon: CalendarDays, description: 'Civic calendar — sessions, committees, gazette dates' },
       { href: '/research', i18nKey: 'pages.research', icon: FileSearch, description: 'Research missions and reports' },
       { href: '/trust', i18nKey: 'pages.trust', icon: ShieldCheck, description: 'Trust and verification network' },
       { href: '/report', i18nKey: 'pages.reports', icon: FileBarChart, description: 'Generated civic reports' },
@@ -134,6 +136,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/briefing', i18nKey: 'pages.daily_briefing', icon: Newspaper, description: 'Today\'s civic brief' },
       { href: '/gazette', i18nKey: 'pages.kenya_gazette', icon: FileText, description: 'Official gazette notices' },
+      { href: '/gazette/alerts', i18nKey: 'pages.gazette_alerts', icon: BellRing, description: 'Subscribe to keywords in the Kenya Gazette' },
       { href: '/datasets', i18nKey: 'pages.datasets', icon: Database, description: 'Downloadable civic datasets' },
       { href: '/dashboard', i18nKey: 'pages.dashboard', icon: LayoutDashboard, description: 'Your civic dashboard' },
       { href: '/topics', i18nKey: 'pages.topics', icon: BookOpen, description: 'Browse by topic' },

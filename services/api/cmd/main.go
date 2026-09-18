@@ -218,6 +218,26 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+        // Civic Calendar (task ENG-K1 — Feature 1). The calendarStore is a
+        // package-level in-memory store seeded with 26 realistic Kenya
+        // Parliament events spanning ~3 months. In production this would
+        // be a civic_calendar.events SQL repository populated by the
+        // ingestion service from parliament.go.ke + kenyalaw.go.ke.
+        SeedCalendarSampleData(calendarStore, calendarAnchor)
+        apiHandler.HandleFunc("/api/v1/calendar", makeCalendarHandler(calendarStore))
+        apiHandler.HandleFunc("/api/v1/calendar/today", makeCalendarHandler(calendarStore))
+        apiHandler.HandleFunc("/api/v1/calendar/upcoming", makeCalendarHandler(calendarStore))
+
+        // Gazette Alerts (task ENG-K1 — Feature 2). The gazetteAlertStore
+        // holds keyword subscriptions + a seed set of 13 published Kenya
+        // Gazette notices. Matches are computed on demand against
+        // already-published notices only (drafts never match). In
+        // production this would be a gazette.alerts + gazette.notices
+        // SQL repository populated by the ingestion service.
+        SeedGazetteSampleNotices(gazetteAlertStore, calendarAnchor)
+        apiHandler.HandleFunc("/api/v1/gazette/alerts", makeGazetteAlertsHandler(gazetteAlertStore))
+        apiHandler.HandleFunc("/api/v1/gazette/alerts/", makeGazetteAlertDetailHandler(gazetteAlertStore))
+
         // Middleware chain (outermost → innermost):
         //   RequestID (GAP-67-1)  — generates / propagates X-Request-Id; logs every
         //                          request start + completion with the id attached

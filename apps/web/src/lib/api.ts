@@ -368,3 +368,199 @@ export async function listTrustSources(opts: {
 export async function getTrustSource(id: string): Promise<TrustSource> {
   return getJSON(`/api/v1/sources/${encodeURIComponent(id)}`);
 }
+
+// ----- Civic Calendar (task ENG-K1 — Feature 1) -----
+//
+// The calendar surfaces upcoming parliamentary sessions, committee
+// meetings, bill readings, public-participation deadlines, gazette
+// publications, court hearings, and budget presentations. Events are
+// read-only (no auth required); the "Subscribe to event" button posts a
+// follow via createSubscription, which DOES require auth.
+
+export type CalendarEventType =
+  | 'parliament_session'
+  | 'committee_meeting'
+  | 'bill_reading'
+  | 'public_participation'
+  | 'gazette_publication'
+  | 'court_hearing'
+  | 'budget_presentation';
+
+export const CALENDAR_EVENT_TYPES: CalendarEventType[] = [
+  'parliament_session',
+  'committee_meeting',
+  'bill_reading',
+  'public_participation',
+  'gazette_publication',
+  'court_hearing',
+  'budget_presentation',
+];
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  /** YYYY-MM-DD */
+  date: string;
+  type: CalendarEventType;
+  description?: string;
+  source_url?: string;
+  country: string;
+  institution?: string;
+}
+
+/**
+ * GET /api/v1/calendar?month=YYYY-MM&country=KE — events for a month.
+ * Pass `types` to filter by event type (comma-separated).
+ */
+export async function listCalendarEvents(params: {
+  month?: string; // YYYY-MM (defaults to current month on the server)
+  country?: string; // ISO-2 code (defaults to "KE")
+  types?: CalendarEventType[];
+} = {}): Promise<{ month: string; items: CalendarEvent[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.month) qs.set('month', params.month);
+  if (params.country) qs.set('country', params.country);
+  if (params.types && params.types.length > 0) qs.set('types', params.types.join(','));
+  return getJSON(`/api/v1/calendar?${qs.toString()}`);
+}
+
+/** GET /api/v1/calendar/today?country=KE — today's events. */
+export async function listCalendarToday(params: {
+  country?: string;
+  types?: CalendarEventType[];
+} = {}): Promise<{ date: string; items: CalendarEvent[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.country) qs.set('country', params.country);
+  if (params.types && params.types.length > 0) qs.set('types', params.types.join(','));
+  return getJSON(`/api/v1/calendar/today?${qs.toString()}`);
+}
+
+/** GET /api/v1/calendar/upcoming?country=KE&limit=10 — upcoming events. */
+export async function listCalendarUpcoming(params: {
+  country?: string;
+  limit?: number;
+  types?: CalendarEventType[];
+} = {}): Promise<{ items: CalendarEvent[]; total: number; limit: number }> {
+  const qs = new URLSearchParams();
+  if (params.country) qs.set('country', params.country);
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.types && params.types.length > 0) qs.set('types', params.types.join(','));
+  return getJSON(`/api/v1/calendar/upcoming?${qs.toString()}`);
+}
+
+// ----- Gazette Alerts (task ENG-K1 — Feature 2) -----
+//
+// Citizens subscribe to keywords in the Kenya Gazette. When a matching
+// legal notice is published, they get notified. Alerts are matched ONLY
+// against gazette notices already published (gazette_date <= today) —
+// drafts / future-dated notices never match.
+
+export interface GazetteAlert {
+  id: string;
+  user_id: string;
+  keywords: string[];
+  country: string;
+  created_at: string;
+  match_count: number;
+}
+
+export interface GazetteNotice {
+  id: string;
+  title: string;
+  /** YYYY-MM-DD */
+  gazette_date: string;
+  notice_number: string;
+  volume?: string;
+  summary?: string;
+  source_url: string;
+  authority?: string;
+  matched_keywords?: string[];
+  country: string;
+  body_text?: string;
+}
+
+/**
+ * POST /api/v1/gazette/alerts — create a keyword alert.
+ *
+ * Pass `userId` explicitly to use the alert feature before identity (#20)
+ * ships. When the caller is authenticated, the principal's user_id takes
+ * precedence (the body's user_id is ignored to prevent cross-user alert
+ * creation).
+ */
+export async function createGazetteAlert(params: {
+  keywords: string[];
+  userId: string;
+  country?: string;
+  token?: string;
+}): Promise<GazetteAlert> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const resp = await fetch('/api/v1/gazette/alerts', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      keywords: params.keywords,
+      user_id: params.userId,
+      country: params.country ?? 'KE',
+    }),
+  });
+  if (!resp.ok) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'Create alert failed', detail);
+  }
+  return resp.json();
+}
+
+/**
+ * GET /api/v1/gazette/alerts?user_id=... — list the caller's alerts.
+ * Each alert carries a `match_count` field that's computed on demand
+ * against currently-published gazette notices.
+ */
+export async function listGazetteAlerts(params: {
+  userId: string;
+  token?: string;
+}): Promise<{ items: GazetteAlert[]; total: number }> {
+  const qs = new URLSearchParams({ user_id: params.userId });
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const resp = await fetch(`/api/v1/gazette/alerts?${qs.toString()}`, { headers });
+  if (!resp.ok) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'List alerts failed', detail);
+  }
+  return resp.json();
+}
+
+/** DELETE /api/v1/gazette/alerts/{id} — delete an alert. */
+export async function deleteGazetteAlert(params: {
+  id: string;
+  userId: string;
+  token?: string;
+}): Promise<void> {
+  const qs = new URLSearchParams({ user_id: params.userId });
+  const headers: Record<string, string> = {};
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const resp = await fetch(`/api/v1/gazette/alerts/${encodeURIComponent(params.id)}?${qs.toString()}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!resp.ok && resp.status !== 204) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'Delete alert failed', detail);
+  }
+}
+
+/**
+ * GET /api/v1/gazette/alerts/{id}/matches — list gazette notices matching
+ * the alert's keywords. The caller does NOT need to be the alert owner;
+ * match results are derived from already-published gazette notices (which
+ * are public information).
+ */
+export async function listGazetteAlertMatches(params: {
+  id: string;
+}): Promise<{ alert_id: string; items: GazetteNotice[]; total: number; note: string }> {
+  return getJSON(`/api/v1/gazette/alerts/${encodeURIComponent(params.id)}/matches`);
+}
