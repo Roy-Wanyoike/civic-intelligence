@@ -19,6 +19,7 @@ import (
 
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_law"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya/kenya_seed"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/registry"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/auth"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/config"
         "github.com/Roy-Wanyoike/civic-intelligence/packages/observability"
@@ -82,6 +83,16 @@ func main() {
 
         // Build the Kenya Law adapter for real Bill discovery.
         kenyaLaw := kenya_law.NewAdapter(nil, "CivicIntelligence/0.1 (+https://github.com/Roy-Wanyoike/civic-intelligence)")
+
+        // Register every shipped country adapter (Kenya, Uganda, Tanzania,
+        // Ghana, Nigeria, South Africa) with the central registry. Future
+        // code (e.g. the bills + acts handlers) looks adapters up by
+        // country code via registry.GetAdapter so the API layer never has
+        // to know which specific adapters are installed. See
+        // CONTRIBUTING.md "Adding a New Country" for the contributor
+        // workflow.
+        registry.MustRegisterDefault()
+        log.Printf("registered %d country adapters in the registry", len(registry.SupportedCountries()))
 
         // Build the metric registry for observability.
         metrics := observability.NewMetricRegistry()
@@ -210,6 +221,12 @@ func main() {
 
         // Civic Feed — public.
         apiHandler.HandleFunc("/api/v1/feed", makeCivicFeedHandler(kenyaLaw))
+
+        // Countries — public metadata for every adapter registered with the
+        // central registry (adapters/registry). The frontend Government
+        // Selector fetches this list so the dropdown reflects the
+        // registered adapters. See countries.go for the handler.
+        apiHandler.HandleFunc("/api/v1/countries", handleCountriesList)
 
         // Sponsor — M-Pesa + Card payment endpoints.
         apiHandler.HandleFunc("/api/v1/sponsor/mpesa", handleMpesaSponsor)

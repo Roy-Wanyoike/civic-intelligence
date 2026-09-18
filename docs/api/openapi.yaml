@@ -594,6 +594,40 @@ paths:
                   administrations: { type: array, items: { $ref: '#/components/schemas/Administration' } }
                   count: { type: integer }
 
+  /countries:
+    get:
+      tags: [governments]
+      summary: List supported countries
+      description: |
+        Returns metadata for every country adapter registered with the
+        central registry (adapters/registry). The list is sorted by ISO
+        3166-1 alpha-2 code. The frontend Government Selector uses this
+        endpoint to render its country dropdown.
+
+        Adding a new country? Register it in adapters/registry (see
+        CONTRIBUTING.md "Adding a New Country") and it shows up here
+        automatically — no change to the OpenAPI spec is required.
+      responses:
+        '200':
+          description: Supported countries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  countries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string, description: 'ISO 3166-1 alpha-2 country code (e.g. "KE")' }
+                        name: { type: string, description: 'Human-readable country name' }
+                        flag_emoji: { type: string, description: 'Unicode flag emoji' }
+                        parliament_name: { type: string, description: 'Name of the national legislature' }
+                        legislature_type: { type: string, enum: [unicameral, bicameral] }
+                  count: { type: integer }
+                  source_registry: { type: string, description: 'Name of the Go package backing the response' }
+
   /governments/{id}:
     get:
       tags: [governments]
