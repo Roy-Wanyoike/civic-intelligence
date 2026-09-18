@@ -2045,3 +2045,89 @@ components:
 
 security:
   - bearerAuth: []
+
+  /brief/generate:
+    post:
+      tags: [brief]
+      summary: Generate a personalized brief
+      description: Generates a personalized civic brief based on followed topics, institutions, and Bills.
+      responses:
+        '200':
+          description: Generated brief
+  /brief:
+    get:
+      tags: [brief]
+      summary: Get today's civic brief
+      description: Returns today's personalized civic brief, generated on-demand if not yet created.
+      responses:
+        '200':
+          description: Today's brief
+    post:
+      tags: [brief]
+      summary: Generate a personalized brief
+      description: Generates a personalized civic brief based on followed topics, institutions, and Bills.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id: { type: string }
+                followed_topics: { type: array, items: { type: string } }
+                followed_institutions: { type: array, items: { type: string } }
+                followed_bills: { type: array, items: { type: string } }
+                country: { type: string }
+      responses:
+        '200':
+          description: Generated brief
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /brief/today:
+    get:
+      tags: [brief]
+      summary: Get today's brief
+      responses:
+        '200':
+          description: Today's brief
+
+  /brief/archive:
+    get:
+      tags: [brief]
+      summary: List past briefs
+      responses:
+        '200':
+          description: List of archived briefs
+
+  /brief/{id}:
+    get:
+      tags: [brief]
+      summary: Get a specific brief by ID
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The brief
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /compare:
+    get:
+      tags: [compare]
+      summary: Compare countries across dimensions
+      description: Cross-country civic comparison — government structure, legislation, debt, indicators. The platform does not rank countries.
+      parameters:
+        - { in: query, name: countries, required: false, schema: { type: string }, description: "Comma-separated country codes (KE,UG,TZ,GH,NG,ZA)" }
+      responses:
+        '200':
+          description: Comparison data
+
+  /compare/{id}:
+    get:
+      tags: [compare]
+      summary: Get a specific comparison dimension
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Comparison data for the dimension
+        '404': { $ref: '#/components/responses/NotFound' }

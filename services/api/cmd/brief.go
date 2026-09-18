@@ -1069,3 +1069,31 @@ func makeBriefDetailHandler(store *briefStore) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, b)
 	}
 }
+
+// makeBriefRouter routes /api/v1/brief/* to the appropriate handler.
+// Mirrors the pattern used by makeDebtRouter, makeActRouter, etc.
+func makeBriefRouter(adapter *kenya_law.Adapter, aiServiceURL string) http.HandlerFunc {
+	store := newBriefStore()
+	generateH := makeBriefGenerateHandler(adapter, aiServiceURL, store)
+	todayH := makeBriefTodayHandler(adapter, aiServiceURL, store)
+	archiveH := makeBriefArchiveHandler(store)
+	detailH := makeBriefDetailHandler(store)
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/brief")
+		path = strings.TrimPrefix(path, "/")
+		switch {
+		case path == "" || path == "/":
+			if r.Method == http.MethodPost {
+				generateH(w, r)
+			} else {
+				todayH(w, r)
+			}
+		case path == "today":
+			todayH(w, r)
+		case path == "archive":
+			archiveH(w, r)
+		default:
+			detailH(w, r)
+		}
+	}
+}

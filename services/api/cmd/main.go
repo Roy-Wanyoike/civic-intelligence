@@ -274,7 +274,6 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
-<<<<<<< HEAD
         // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
         // differentiator: a visual relationship explorer that traces how
         // Bills, Acts, Institutions, People, Constitution Articles, and
@@ -284,18 +283,13 @@ func main() {
         // institutions + committees).
         apiHandler.HandleFunc("/api/v1/graph", makeGraphRouter())
         apiHandler.HandleFunc("/api/v1/graph/", makeGraphRouter())
-=======
-        // Cross-country Civic Comparison (task ENG-I3). 5 endpoints under
+
+        // Cross-country Civic Comparison (ENG-I3). 5 endpoints under
         // /api/v1/compare/* let users compare legislation, government
         // structure, public debt, and civic indicators across the 6
-        // supported countries (KE, UG, TZ, GH, NG, ZA). Every response
-        // carries the comparisonDisclaimer ("the platform does not rank
-        // countries"); the makeCompareRouter threads the DebtRepository
-        // through so the /compare/debt endpoint can pull Kenya's live CBK +
-        // Treasury observations when available.
+        // supported countries.
         apiHandler.HandleFunc("/api/v1/compare", makeCompareRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/compare/", makeCompareRouter(debtRepo))
->>>>>>> feat/wave9-civic-compare
 
         // Middleware chain (outermost → innermost):
         //   RequestID (GAP-67-1)     — generates / propagates X-Request-Id; logs every
