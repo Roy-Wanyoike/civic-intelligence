@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bills | Parliament of Uganda</title>
+    <link rel="stylesheet" href="/themes/parliament/css/style.css" />
+</head>
+<body class="path-business-bills">
+    <header id="header">
+        <div class="container">
+            <a href="/" title="Parliament of Uganda" rel="home" class="logo">
+                <img src="/themes/parliament/logo.png" alt="Parliament of Uganda" />
+            </a>
+            <nav class="main-menu">
+                <ul class="menu">
+                    <li class="menu-item"><a href="/">Home</a></li>
+                    <li class="menu-item"><a href="/about">About Parliament</a></li>
+                    <li class="menu-item"><a href="/members">Members of Parliament</a></li>
+                    <li class="menu-item active"><a href="/business">Business</a></li>
+                    <li class="menu-item"><a href="/hansard">Hansard</a></li>
+                    <li class="menu-item"><a href="/committees">Committees</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="breadcrumb">
+        <div class="container">
+            <a href="/">Home</a> &raquo; <a href="/business">Business</a> &raquo; Bills
+        </div>
+    </div>
+
+    <main id="main" class="main-content">
+        <div class="container">
+            <h1>Bills</h1>
+            <p class="lead">The following Bills are currently before the Parliament of Uganda or have been passed into law. Click on a Bill title for more details.</p>
+
+            <div class="filter-bar">
+                <form method="get" action="/business/bills">
+                    <label for="filter-stage">Filter by stage:</label>
+                    <select id="filter-stage" name="stage">
+                        <option value="">All stages</option>
+                        <option value="first-reading">First Reading</option>
+                        <option value="second-reading">Second Reading</option>
+                        <option value="committee-stage">Committee Stage</option>
+                        <option value="third-reading">Third Reading</option>
+                        <option value="presidential-assent">Presidential Assent</option>
+                    </select>
+                    <button type="submit">Apply</button>
+                </form>
+            </div>
+
+            <table class="bills-listing">
+                <thead>
+                    <tr>
+                        <th>Bill No.</th>
+                        <th>Title</th>
+                        <th>Sponsor</th>
+                        <th>Stage</th>
+                        <th>Publication Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="odd">
+                        <td>The Bill No. 12 of 2024</td>
+                        <td><a href="/business/bills/national-coffee-bill-2024">The National Coffee Bill, 2024</a></td>
+                        <td>Hon. Minister of Agriculture, Animal Industry and Fisheries</td>
+                        <td>Second Reading</td>
+                        <td>2024-03-15</td>
+                    </tr>
+                    <tr class="even">
+                        <td>The Bill No. 8 of 2023</td>
+                        <td><a href="/business/bills/traffic-road-safety-amendment-bill-2023">The Traffic and Road Safety (Amendment) Bill, 2023</a></td>
+                        <td>Hon. Minister of Works and Transport</td>
+                        <td>Committee Stage</td>
+                        <td>2023-11-20</td>
+                    </tr>
+                    <tr class="odd">
+                        <td>The Bill No. 5 of 2024</td>
+                        <td><a href="/business/bills/anti-corruption-amendment-bill-2024">The Anti-Corruption (Amendment) Bill, 2024</a></td>
+                        <td>Hon. Attorney General</td>
+                        <td>First Reading</td>
+                        <td>2024-06-10</td>
+                    </tr>
+                    <tr class="even">
+                        <td>The Bill No. 15 of 2024</td>
+                        <td><a href="/business/bills/public-finance-management-amendment-bill-2024">The Public Finance Management (Amendment) Bill, 2024</a></td>
+                        <td>Hon. Minister of Finance, Planning and Economic Development</td>
+                        <td>Third Reading</td>
+                        <td>2024-09-25</td>
+                    </tr>
+                    <tr class="odd">
+                        <td>The Bill No. 3 of 2023</td>
+                        <td><a href="/business/bills/data-protection-privacy-amendment-bill-2023">The Data Protection and Privacy (Amendment) Bill, 2023</a></td>
+                        <td>Hon. Minister of Information, Communications Technology and National Guidance</td>
+                        <td>Presidential Assent</td>
+                        <td>2023-12-05</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="pager">
+                <ul class="pagination">
+                    <li class="pager-current">Page 1 of 1</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer id="footer">
+        <div class="container">
+            <p>&copy; 2024 Parliament of Uganda. All rights reserved.</p>
+            <p>Parliament Building, Parliamentary Avenue, Kampala, Uganda</p>
+        </div>
+    </footer>
+</body>
+</html>

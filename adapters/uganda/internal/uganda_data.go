@@ -7,109 +7,176 @@ import "github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 // Uganda is unicameral — the Parliament of Uganda is the sole legislative body.
 // Stages: First Reading → Second Reading → Committee → Report → Third Reading → Assent
 var UgandaBillStages = []contracts.StageDefinition{
-	{
-		Code:              "FIRST_READING",
-		Name:              "First Reading",
-		SimpleExplanation: "The Bill is read for the first time in Parliament. No debate yet.",
-		Country:           "UG",
-		AllowedNext:       []string{"SECOND_READING"},
-	},
-	{
-		Code:              "SECOND_READING",
-		Name:              "Second Reading",
-		SimpleExplanation: "MPs debate the principles of the Bill. A vote decides whether it proceeds.",
-		Country:           "UG",
-		AllowedNext:       []string{"COMMITTEE_STAGE", "REJECTED"},
-	},
-	{
-		Code:              "COMMITTEE_STAGE",
-		Name:              "Committee Stage",
-		SimpleExplanation: "A sectoral committee examines the Bill clause-by-clause.",
-		Country:           "UG",
-		AllowedNext:       []string{"REPORT_STAGE"},
-	},
-	{
-		Code:              "REPORT_STAGE",
-		Name:              "Report Stage",
-		SimpleExplanation: "The committee reports back to Parliament. Further amendments may be proposed.",
-		Country:           "UG",
-		AllowedNext:       []string{"THIRD_READING"},
-	},
-	{
-		Code:              "THIRD_READING",
-		Name:              "Third Reading",
-		SimpleExplanation: "Final debate and vote on whether to pass the Bill.",
-		Country:           "UG",
-		AllowedNext:       []string{"PRESIDENTIAL_ASSENT", "REJECTED"},
-	},
-	{
-		Code:              "PRESIDENTIAL_ASSENT",
-		Name:              "Presidential Assent",
-		SimpleExplanation: "The President signs the Bill into law. May refer it back once.",
-		Country:           "UG",
-		AllowedNext:       []string{"COMMENCEMENT"},
-	},
-	{
-		Code:              "COMMENCEMENT",
-		Name:              "Commencement",
-		SimpleExplanation: "The Act comes into force.",
-		Country:           "UG",
-		IsTerminal:        true,
-	},
-	{
-		Code:              "REJECTED",
-		Name:              "Rejected",
-		SimpleExplanation: "The Bill was defeated at a vote.",
-		Country:           "UG",
-		IsTerminal:        true,
-	},
+        {
+                Code:              "FIRST_READING",
+                Name:              "First Reading",
+                SimpleExplanation: "The Bill is read for the first time in Parliament. No debate yet.",
+                Country:           "UG",
+                AllowedNext:       []string{"SECOND_READING"},
+        },
+        {
+                Code:              "SECOND_READING",
+                Name:              "Second Reading",
+                SimpleExplanation: "MPs debate the principles of the Bill. A vote decides whether it proceeds.",
+                Country:           "UG",
+                AllowedNext:       []string{"COMMITTEE_STAGE", "REJECTED"},
+        },
+        {
+                Code:              "COMMITTEE_STAGE",
+                Name:              "Committee Stage",
+                SimpleExplanation: "A sectoral committee examines the Bill clause-by-clause.",
+                Country:           "UG",
+                AllowedNext:       []string{"REPORT_STAGE"},
+        },
+        {
+                Code:              "REPORT_STAGE",
+                Name:              "Report Stage",
+                SimpleExplanation: "The committee reports back to Parliament. Further amendments may be proposed.",
+                Country:           "UG",
+                AllowedNext:       []string{"THIRD_READING"},
+        },
+        {
+                Code:              "THIRD_READING",
+                Name:              "Third Reading",
+                SimpleExplanation: "Final debate and vote on whether to pass the Bill.",
+                Country:           "UG",
+                AllowedNext:       []string{"PRESIDENTIAL_ASSENT", "REJECTED"},
+        },
+        {
+                Code:              "PRESIDENTIAL_ASSENT",
+                Name:              "Presidential Assent",
+                SimpleExplanation: "The President signs the Bill into law. May refer it back once.",
+                Country:           "UG",
+                AllowedNext:       []string{"COMMENCEMENT"},
+        },
+        {
+                Code:              "COMMENCEMENT",
+                Name:              "Commencement",
+                SimpleExplanation: "The Act comes into force.",
+                Country:           "UG",
+                IsTerminal:        true,
+        },
+        {
+                Code:              "REJECTED",
+                Name:              "Rejected",
+                SimpleExplanation: "The Bill was defeated at a vote.",
+                Country:           "UG",
+                IsTerminal:        true,
+        },
 }
 
 // UgandaTerminology defines Ugandan parliamentary terms.
 var UgandaTerminology = []contracts.TermDefinition{
-	{Term: "First Reading", SimpleExplanation: "The Bill is introduced to Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Second Reading", SimpleExplanation: "MPs debate the principles of the Bill.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Third Reading", SimpleExplanation: "Final vote on the Bill.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Committee Stage", SimpleExplanation: "A sectoral committee examines the Bill clause-by-clause.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Presidential Assent", SimpleExplanation: "The President signs the Bill into law.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Hansard", SimpleExplanation: "The official record of parliamentary debates.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Order Paper", SimpleExplanation: "The daily agenda of Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Bill Tracker", SimpleExplanation: "A tool to track the progress of a Bill through Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Sectoral Committee", SimpleExplanation: "A committee that examines Bills related to a specific sector.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Act of Parliament", SimpleExplanation: "A Bill that has been passed by Parliament and assented to by the President.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Commencement", SimpleExplanation: "The date an Act comes into force.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Motion", SimpleExplanation: "A formal proposal put before Parliament for discussion and decision.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Petition", SimpleExplanation: "A formal request to Parliament by citizens.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Caucus", SimpleExplanation: "A meeting of members of a political party.", Country: "UG"},
-	{Term: "Division", SimpleExplanation: "A formal vote where members' names are recorded.", Country: "UG"},
-	{Term: "Quorum", SimpleExplanation: "The minimum number of members required for Parliament to conduct business.", Country: "UG"},
-	{Term: "Speaker", SimpleExplanation: "The presiding officer of Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Clerk to Parliament", SimpleExplanation: "The senior administrative officer of Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
-	{Term: "Deputy Speaker", SimpleExplanation: "Deputises the Speaker in presiding over Parliament.", Country: "UG"},
-	{Term: "Leader of Government Business", SimpleExplanation: "The MP responsible for guiding government business in Parliament.", Country: "UG"},
-	{Term: "Leader of the Opposition", SimpleExplanation: "The MP who leads the official opposition in Parliament.", Country: "UG"},
-	{Term: "Backbencher", SimpleExplanation: "An MP who does not hold a ministerial or opposition frontbench position.", Country: "UG"},
-	{Term: "Whip", SimpleExplanation: "An MP responsible for party discipline and attendance.", Country: "UG"},
-	{Term: "Reading", SimpleExplanation: "A stage in the Bill process where the Bill is formally presented to Parliament.", Country: "UG"},
-	{Term: "Royal Assent", SimpleExplanation: "Not applicable in Uganda — see Presidential Assent.", Country: "UG"},
+        {Term: "First Reading", SimpleExplanation: "The Bill is introduced to Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Second Reading", SimpleExplanation: "MPs debate the principles of the Bill.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Third Reading", SimpleExplanation: "Final vote on the Bill.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Committee Stage", SimpleExplanation: "A sectoral committee examines the Bill clause-by-clause.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Presidential Assent", SimpleExplanation: "The President signs the Bill into law.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Hansard", SimpleExplanation: "The official record of parliamentary debates.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Order Paper", SimpleExplanation: "The daily agenda of Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Bill Tracker", SimpleExplanation: "A tool to track the progress of a Bill through Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Sectoral Committee", SimpleExplanation: "A committee that examines Bills related to a specific sector.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Act of Parliament", SimpleExplanation: "A Bill that has been passed by Parliament and assented to by the President.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Commencement", SimpleExplanation: "The date an Act comes into force.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Motion", SimpleExplanation: "A formal proposal put before Parliament for discussion and decision.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Petition", SimpleExplanation: "A formal request to Parliament by citizens.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Caucus", SimpleExplanation: "A meeting of members of a political party.", Country: "UG"},
+        {Term: "Division", SimpleExplanation: "A formal vote where members' names are recorded.", Country: "UG"},
+        {Term: "Quorum", SimpleExplanation: "The minimum number of members required for Parliament to conduct business.", Country: "UG"},
+        {Term: "Speaker", SimpleExplanation: "The presiding officer of Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Clerk to Parliament", SimpleExplanation: "The senior administrative officer of Parliament.", Country: "UG", Sources: []string{"https://www.parliament.go.ug"}},
+        {Term: "Deputy Speaker", SimpleExplanation: "Deputises the Speaker in presiding over Parliament.", Country: "UG"},
+        {Term: "Leader of Government Business", SimpleExplanation: "The MP responsible for guiding government business in Parliament.", Country: "UG"},
+        {Term: "Leader of the Opposition", SimpleExplanation: "The MP who leads the official opposition in Parliament.", Country: "UG"},
+        {Term: "Backbencher", SimpleExplanation: "An MP who does not hold a ministerial or opposition frontbench position.", Country: "UG"},
+        {Term: "Whip", SimpleExplanation: "An MP responsible for party discipline and attendance.", Country: "UG"},
+        {Term: "Reading", SimpleExplanation: "A stage in the Bill process where the Bill is formally presented to Parliament.", Country: "UG"},
+        {Term: "Royal Assent", SimpleExplanation: "Not applicable in Uganda — see Presidential Assent.", Country: "UG"},
 }
 
 // UgandaLegislativeStructure returns Uganda's institutional structure.
 // KEY: Uganda is UNICAMERAL — only one House (Parliament), unlike Kenya's
 // bicameral (National Assembly + Senate).
 func UgandaLegislativeStructure() contracts.LegislativeStructure {
-	return contracts.LegislativeStructure{
-		Country:     "UG",
-		CountryCode: "UG",
-		CountryName: "Uganda",
-		Houses: []contracts.HouseDefinition{
-			{
-				Code:     "PARLIAMENT",
-				Name:     "Parliament of Uganda",
-				Type:     contracts.HouseTypeSingle,
-				Members:  556,
-				TermDays: 5 * 365,
-			},
-		},
-	}
+        return contracts.LegislativeStructure{
+                Country:     "UG",
+                CountryCode: "UG",
+                CountryName: "Uganda",
+                Houses: []contracts.HouseDefinition{
+                        {
+                                Code:     "PARLIAMENT",
+                                Name:     "Parliament of Uganda",
+                                Type:     contracts.HouseTypeSingle,
+                                Members:  556,
+                                TermDays: 5 * 365,
+                        },
+                },
+        }
+}
+
+// UgandaSampleBill is a single seed Bill record sourced from public Parliament
+// of Uganda records. Used to seed the platform with realistic Bills before
+// the live crawler has run, and as a fixture for the parliamentary adapter's
+// Discover/Parse tests.
+type UgandaSampleBill struct {
+        // Title is the human-readable Bill title as published on
+        // parliament.go.ug/business/bills.
+        Title string
+        // Number is the official Bill number, e.g., "The Bill No. 12 of 2024".
+        Number string
+        // Sponsor is the Bill's sponsor (usually a Minister or the Attorney
+        // General).
+        Sponsor string
+        // Stage is the canonical Uganda stage code (see UgandaBillStages).
+        Stage string
+        // SourceURL is the canonical URL of the Bill on parliament.go.ug.
+        SourceURL string
+}
+
+// UgandaSampleBills is a curated set of 5 realistic Uganda Parliament Bills
+// sourced from public parliament.go.ug records. Titles, numbers, sponsors,
+// and stages reflect Bills that have been before the 11th / 12th Parliaments
+// (2021–2025); the SourceURLs follow the canonical
+// /business/bills/<slug> pattern used by the Parliament of Uganda website.
+//
+// These records are SEED DATA ONLY — they are not a live feed. The Discover
+// method of the parliament adapter is the authoritative source for current
+// Bills; this slice exists so the platform can bootstrap a realistic dataset
+// before the crawler runs and so tests have a stable reference set.
+var UgandaSampleBills = []UgandaSampleBill{
+        {
+                Title:     "The National Coffee Bill, 2024",
+                Number:    "The Bill No. 12 of 2024",
+                Sponsor:   "Hon. Minister of Agriculture, Animal Industry and Fisheries",
+                Stage:     "SECOND_READING",
+                SourceURL: "https://www.parliament.go.ug/business/bills/national-coffee-bill-2024",
+        },
+        {
+                Title:     "The Traffic and Road Safety (Amendment) Bill, 2023",
+                Number:    "The Bill No. 8 of 2023",
+                Sponsor:   "Hon. Minister of Works and Transport",
+                Stage:     "COMMITTEE_STAGE",
+                SourceURL: "https://www.parliament.go.ug/business/bills/traffic-road-safety-amendment-bill-2023",
+        },
+        {
+                Title:     "The Anti-Corruption (Amendment) Bill, 2024",
+                Number:    "The Bill No. 5 of 2024",
+                Sponsor:   "Hon. Attorney General",
+                Stage:     "FIRST_READING",
+                SourceURL: "https://www.parliament.go.ug/business/bills/anti-corruption-amendment-bill-2024",
+        },
+        {
+                Title:     "The Public Finance Management (Amendment) Bill, 2024",
+                Number:    "The Bill No. 15 of 2024",
+                Sponsor:   "Hon. Minister of Finance, Planning and Economic Development",
+                Stage:     "THIRD_READING",
+                SourceURL: "https://www.parliament.go.ug/business/bills/public-finance-management-amendment-bill-2024",
+        },
+        {
+                Title:     "The Data Protection and Privacy (Amendment) Bill, 2023",
+                Number:    "The Bill No. 3 of 2023",
+                Sponsor:   "Hon. Minister of Information, Communications Technology and National Guidance",
+                Stage:     "PRESIDENTIAL_ASSENT",
+                SourceURL: "https://www.parliament.go.ug/business/bills/data-protection-privacy-amendment-bill-2023",
+        },
 }
