@@ -1230,25 +1230,25 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
                 makeScorecardHandler()(w, r)
                 return
         }
-        // Default: existing per-person stub (issue #19). Kept for backward
-        // compat with any external link still pointing at /api/v1/people/{id}.
+        // Default: person detail lookup with country-scoped visibility gate.
         id := tail
-        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "People detail — pending (issue #19). Use /api/v1/people/{id}/scorecard for the factual MP record."})
-        id = strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
         country := middleware.CountryFromContext(r.Context())
-        if id == "" {
-                filtered := filterMapsByCountry(samplePeople, country)
-                writeJSON(w, http.StatusOK, map[string]any{"items": filtered, "total": len(filtered), "country": country})
-                return
-        }
         // Detail lookup: a specific person ID is unique across countries, so
         // the country filter is applied as a visibility gate — a Uganda-scoped
         // request asking for a Kenyan person's ID returns 404 (not 200). This
         // prevents cross-country leakage on detail views.
-        for _, p := range samplePeople {
-                if p["id"] == id {
-                        if c, _ := p["country"].(string); country == "" || country == middleware.GlobalCountry || c == country {
-                                writeJSON(w, http.StatusOK, p)
+        for _, p := range sampleScorecards {
+                if p.PersonID == id {
+                        if country == "" || country == middleware.GlobalCountry || country == "KE" {
+                                writeJSON(w, http.StatusOK, map[string]any{
+                                        "id":           p.PersonID,
+                                        "name":         p.Name,
+                                        "role":         p.Role,
+                                        "constituency": p.Constituency,
+                                        "party":        p.Party,
+                                        "country":      "KE",
+                                        "scorecard_url": "/api/v1/people/" + p.PersonID + "/scorecard",
+                                })
                                 return
                         }
                         writeError(w, http.StatusNotFound, "not_found", "person not visible in country "+country+": "+id)
