@@ -12,6 +12,7 @@ import (
         "net/http"
         "os"
         "os/signal"
+        "strconv"
         "strings"
         "syscall"
         "time"
@@ -217,9 +218,21 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+        // Middleware chain (outermost → innermost):
+        //   RequestID (GAP-67-1)  — generates / propagates X-Request-Id; logs every
+        //                          request start + completion with the id attached
+        //   OptionalAuth          — verifies bearer token if present (P0-3)
+        //   MetricsMiddleware      — Prometheus counter + latency histogram
+        //   RateLimit             — 300 req/min per IP
+        //   apiHandler            — the actual route mux
+        //
+        // RequestID is intentionally OUTERMOST so every log line emitted by the
+        // inner middlewares (auth rejections, rate-limit 429s, etc.) carries the
+        // correlation id.
         rateLimited := middleware.RateLimit(300, time.Minute)(apiHandler)
         metered := observability.MetricsMiddleware(metrics, rateLimited)
-        mux.Handle("/api/v1/", middleware.OptionalAuth(verifier)(metered))
+        authed := middleware.OptionalAuth(verifier)(metered)
+        mux.Handle("/api/v1/", middleware.RequestID(nil)(authed))
 
         // Build the server.
         srv := &http.Server{
@@ -1039,10 +1052,14 @@ func handleInstitutions(w http.ResponseWriter, r *http.Request) {
 // --- Loans + Grants ---
 
 func handleLoansList(w http.ResponseWriter, r *http.Request) {
+        page, pageSize := parsePagination(r)
         writeJSON(w, http.StatusOK, map[string]any{
-                "items": []any{},
-                "total": 0,
-                "note":  "Loans — pending database connection (issue #93)",
+                "items":     []any{},
+                "total":     0,
+                "page":      page,
+                "page_size": pageSize,
+                "has_next":  false,
+                "note":      "Loans — pending database connection (issue #93)",
         })
 }
 
@@ -1052,10 +1069,14 @@ func handleLoanDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGrantsList(w http.ResponseWriter, r *http.Request) {
+        page, pageSize := parsePagination(r)
         writeJSON(w, http.StatusOK, map[string]any{
-                "items": []any{},
-                "total": 0,
-                "note":  "Grants — pending database connection (issue #93)",
+                "items":     []any{},
+                "total":     0,
+                "page":      page,
+                "page_size": pageSize,
+                "has_next":  false,
+                "note":      "Grants — pending database connection (issue #93)",
         })
 }
 
@@ -1152,9 +1173,12 @@ func toActResponse(a legislation.Act) actResponse {
 func handleActsList(w http.ResponseWriter, r *http.Request) {
         q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
         status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+        page, pageSize := parsePagination(r)
 
         // Query the repository for all acts. Search + status filtering is
-        // applied in-memory to preserve the existing API contract.
+        // applied in-memory to preserve the existing API contract; pagination
+        // is applied AFTER filtering so page/page_size refer to the filtered
+        // set (matching the OpenAPI contract: total = count of matching acts).
         acts, err := actRepo.ListActs(r.Context(), legislation.ActFilter{})
         if err != nil {
                 writeError(w, http.StatusInternalServerError, "internal_error", "failed to list acts")
@@ -1176,11 +1200,16 @@ func handleActsList(w http.ResponseWriter, r *http.Request) {
                 items = append(items, resp)
         }
 
+        total := len(items)
+        paged, hasNext := paginate(items, page, pageSize)
         writeJSON(w, http.StatusOK, map[string]any{
-                "items":  items,
-                "total":  len(items),
-                "source": "kenyalaw.org",
-                "note":   "Sample data — full ingestion pending (issue #19). Every entry links to a verified Kenya Law source.",
+                "items":     paged,
+                "total":     total,
+                "page":      page,
+                "page_size": pageSize,
+                "has_next":  hasNext,
+                "source":    "kenyalaw.org",
+                "note":      "Sample data — full ingestion pending (issue #19). Every entry links to a verified Kenya Law source.",
         })
 }
 
@@ -1234,42 +1263,112 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
         _ = json.NewEncoder(w).Encode(map[string]string{"error": code, "message": message})
 }
 
+// maxPageSize caps the page_size query parameter at the value documented in
+// docs/api/openapi.yaml (maximum: 100). Going above this lets a single
+// request monopolise the in-memory slice builders + the JSON encoder, so we
+// clamp rather than honour absurd values.
+const maxPageSize = 100
+
+// defaultPageSize matches the OpenAPI default (20). Kept as a constant so
+// callers can reference it without magic numbers.
+const defaultPageSize = 20
+
+// parsePagination extracts the page + page_size query parameters with the
+// OpenAPI defaults (page=1, page_size=20) and the documented cap
+// (page_size <= 100). Out-of-range values are clamped, not rejected, so the
+// API stays forgiving for clients that send slightly wrong inputs (e.g.
+// page=0, page_size=-1).
+//
+// This closes GAP-67-2 — pagination params were documented in OpenAPI but
+// silently ignored by handlers.
+//
+// FIXME: verify with go build when Go available.
+func parsePagination(r *http.Request) (page, pageSize int) {
+        page = parseIntDefault(r.URL.Query().Get("page"), 1)
+        if page < 1 {
+                page = 1
+        }
+        pageSize = parseIntDefault(r.URL.Query().Get("page_size"), defaultPageSize)
+        if pageSize < 1 {
+                pageSize = defaultPageSize
+        }
+        if pageSize > maxPageSize {
+                pageSize = maxPageSize
+        }
+        return page, pageSize
+}
+
+// paginate returns the slice of items corresponding to the requested page,
+// along with a hasNext flag. total is the count BEFORE pagination (the full
+// filtered set); callers should report it in the response's "total" field.
+//
+// Generic in T so callers keep static typing (e.g. []actResponse stays
+// []actResponse, no []any round-trip).
+func paginate[T any](items []T, page, pageSize int) (paged []T, hasNext bool) {
+        start := (page - 1) * pageSize
+        if start >= len(items) {
+                return []T{}, false
+        }
+        end := start + pageSize
+        if end > len(items) {
+                end = len(items)
+        }
+        return items[start:end], end < len(items)
+}
+
+// parseIntDefault parses an integer query parameter, returning the default
+// if the value is empty or unparseable. Used by parsePagination.
+func parseIntDefault(s string, def int) int {
+        if s == "" {
+                return def
+        }
+        n, err := strconv.Atoi(s)
+        if err != nil {
+                return def
+        }
+        return n
+}
+
 
 // --- Civic Feed (#113) ---
 
 func makeCivicFeedHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
-        // For now, return the most recent bills as feed items.
-        // In production, this would aggregate events from all civic domains.
-        ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-        defer cancel()
+                // For now, return the most recent bills as feed items.
+                // In production, this would aggregate events from all civic domains.
+                ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+                defer cancel()
 
-        bills, err := adapter.DiscoverBills(ctx)
-        if err != nil {
-                writeJSON(w, http.StatusOK, map[string]any{"items": []any{}, "note": "feed unavailable"})
-                return
-        }
+                page, pageSize := parsePagination(r)
 
-        items := make([]map[string]any, 0, len(bills))
-        for i, b := range bills {
-                if i >= 20 {
-                        break
+                bills, err := adapter.DiscoverBills(ctx)
+                if err != nil {
+                        writeJSON(w, http.StatusOK, map[string]any{"items": []any{}, "note": "feed unavailable"})
+                        return
                 }
-                items = append(items, map[string]any{
-                        "kind":         "bill_published",
-                        "title":        b.Title,
-                        "house":        b.House,
-                        "date":         b.PublicationDate.Format("2006-01-02"),
-                        "source_url":   b.URL,
-                        "description":  "New Bill published on Kenya Law",
-                        "significance": "medium",
-                })
-        }
 
+                items := make([]map[string]any, 0, len(bills))
+                for _, b := range bills {
+                        items = append(items, map[string]any{
+                                "kind":         "bill_published",
+                                "title":        b.Title,
+                                "house":        b.House,
+                                "date":         b.PublicationDate.Format("2006-01-02"),
+                                "source_url":   b.URL,
+                                "description":  "New Bill published on Kenya Law",
+                                "significance": "medium",
+                        })
+                }
+
+                total := len(items)
+                paged, hasNext := paginate(items, page, pageSize)
                 writeJSON(w, http.StatusOK, map[string]any{
-                        "items": items,
-                        "total": len(items),
-                        "source": "new.kenyalaw.org",
+                        "items":     paged,
+                        "total":     total,
+                        "page":      page,
+                        "page_size": pageSize,
+                        "has_next":  hasNext,
+                        "source":    "new.kenyalaw.org",
                 })
         }
 }
@@ -1277,6 +1376,7 @@ func makeCivicFeedHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
 // --- Policies (#118) ---
 
 func handlePoliciesList(w http.ResponseWriter, r *http.Request) {
+        page, pageSize := parsePagination(r)
         policies := []map[string]any{
                 {
                         "id":             "ke-policy-digital-economy",
@@ -1306,140 +1406,88 @@ func handlePoliciesList(w http.ResponseWriter, r *http.Request) {
                         "summary":        "Programme to provide affordable healthcare to all Kenyan citizens.",
                 },
         }
-        writeJSON(w, http.StatusOK, map[string]any{"items": policies, "total": len(policies)})
+        total := len(policies)
+        paged, hasNext := paginate(policies, page, pageSize)
+        writeJSON(w, http.StatusOK, map[string]any{
+                "items":     paged,
+                "total":     total,
+                "page":      page,
+                "page_size": pageSize,
+                "has_next":  hasNext,
+        })
 }
 
 
 // --- Sponsor (#137) ---
+//
+// GAP-53-1 audit finding: the /sponsor/mpesa and /sponsor/card endpoints
+// returned fake "success" responses without calling Daraja or Stripe. They
+// now return 501 Not Implemented with a clear "do not use in production"
+// message and emit a WARN log line per hit so traffic to these stubs is
+// visible in observability dashboards. The callback / webhook endpoints
+// are similarly stubbed — they cannot verify Safaricom / Stripe payloads
+// without the upstream integrations, so they also return 501 rather than
+// silently echoing "received".
 
-// handleMpesaSponsor initiates an M-Pesa STK Push via the Safaricom Daraja API.
+// paymentPendingMessage is the canonical error body returned by all
+// unimplemented sponsor endpoints. Kept as a constant so callers cannot
+// drift on wording.
+const paymentPendingMessage = "Payment integration pending — do not use in production"
+
+// handleMpesaSponsor was the M-Pesa STK Push stub. Until the Safaricom
+// Daraja integration is wired (MPESA_CONSUMER_KEY/SECRET/SHORTCODE/
+// PASSKEY/CALLBACK_URL env vars), this endpoint returns 501.
 // POST /api/v1/sponsor/mpesa
-// Body: {"phone": "0712345678", "amount": 500}
-// Response: {"status": "pending", "message": "Check your phone for the M-Pesa prompt"}
 func handleMpesaSponsor(w http.ResponseWriter, r *http.Request) {
         if r.Method != http.MethodPost {
                 writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
                 return
         }
-
-        var req struct {
-                Phone  string `json:"phone"`
-                Amount int    `json:"amount"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-                writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
-                return
-        }
-
-        if req.Phone == "" || req.Amount < 1 {
-                writeError(w, http.StatusBadRequest, "bad_request", "phone and amount (min 1) required")
-                return
-        }
-
-        // In production, this would call the Safaricom Daraja API:
-        // 1. Get OAuth token from Safaricom
-        // 2. Send STK Push request to the phone number
-        // 3. Return the checkout request ID
-        //
-        // For now, return a success response indicating the STK push was initiated.
-        // The actual Daraja API integration requires:
-        //   - MPESA_CONSUMER_KEY env var
-        //   - MPESA_CONSUMER_SECRET env var
-        //   - MPESA_SHORTCODE env var (paybill/till number)
-        //   - MPESA_PASSKEY env var
-        //   - MPESA_CALLBACK_URL env var
-
-        writeJSON(w, http.StatusOK, map[string]any{
-                "status":  "pending",
-                "message": "M-Pesa STK Push initiated. Check your phone to confirm the payment of KES " + fmt.Sprintf("%d", req.Amount) + ".",
-                "phone":   req.Phone,
-                "amount":  req.Amount,
-                "note":    "In production, this calls the Safaricom Daraja STK Push API. Configure MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY env vars.",
-        })
+        log.Printf("WARN: /api/v1/sponsor/mpesa hit but Daraja (M-Pesa) integration is not wired (GAP-53-1) — returning 501 Not Implemented. request_id=%s",
+                middleware.RequestIDFromRequest(r))
+        writeError(w, http.StatusNotImplemented, "not_implemented", paymentPendingMessage)
 }
 
-// handleMpesaCallback handles the M-Pesa STK Push callback from Safaricom.
+// handleMpesaCallback was the M-Pesa STK Push callback stub. Without the
+// Daraja integration the request body cannot be authenticated as a
+// genuine Safaricom callback, so we fail closed.
 // POST /api/v1/sponsor/mpesa/callback
-// This endpoint is called by Safaricom's servers after the user confirms/denies the payment.
 func handleMpesaCallback(w http.ResponseWriter, r *http.Request) {
         if r.Method != http.MethodPost {
                 writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
                 return
         }
-
-        // Parse the callback from Safaricom Daraja API
-        // In production, this would:
-        // 1. Parse the callback JSON
-        // 2. Verify the payment was successful
-        // 3. Record the sponsorship in the database
-        // 4. Send a receipt email
-        // 5. Return 200 OK to Safaricom
-
-        writeJSON(w, http.StatusOK, map[string]any{
-                "status": "received",
-        })
+        log.Printf("WARN: /api/v1/sponsor/mpesa/callback hit but Daraja integration is not wired (GAP-53-1) — returning 501 Not Implemented. request_id=%s",
+                middleware.RequestIDFromRequest(r))
+        writeError(w, http.StatusNotImplemented, "not_implemented", paymentPendingMessage)
 }
 
-// handleCardSponsor creates a Stripe Checkout session for card payments.
+// handleCardSponsor was the Stripe Checkout stub. Until the Stripe
+// integration is wired (STRIPE_SECRET_KEY env var), this endpoint returns
+// 501 instead of a fake checkout URL.
 // POST /api/v1/sponsor/card
-// Body: {"amount": 500, "email": "you@example.com"}
-// Response: {"checkout_url": "https://checkout.stripe.com/..."}
 func handleCardSponsor(w http.ResponseWriter, r *http.Request) {
         if r.Method != http.MethodPost {
                 writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
                 return
         }
-
-        var req struct {
-                Amount int    `json:"amount"`
-                Email  string `json:"email"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-                writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
-                return
-        }
-
-        if req.Amount < 1 {
-                writeError(w, http.StatusBadRequest, "bad_request", "amount (min 1) required")
-                return
-        }
-
-        // In production, this would create a Stripe Checkout Session:
-        // 1. Initialize Stripe client with STRIPE_SECRET_KEY env var
-        // 2. Create a checkout session with:
-        //    - amount (converted to KES cents)
-        //    - currency: kes
-        //    - success_url: https://civic-intelligence.vercel.app/sponsor?status=success
-        //    - cancel_url: https://civic-intelligence.vercel.app/sponsor?status=cancelled
-        //    - customer_email (if provided)
-        // 3. Return the checkout URL
-
-        // For now, return a placeholder checkout URL
-        writeJSON(w, http.StatusOK, map[string]any{
-                "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_placeholder_" + fmt.Sprintf("%d", req.Amount),
-                "amount":       req.Amount,
-                "currency":     "KES",
-                "note":         "In production, this creates a real Stripe Checkout session. Configure STRIPE_SECRET_KEY env var.",
-        })
+        log.Printf("WARN: /api/v1/sponsor/card hit but Stripe integration is not wired (GAP-53-1) — returning 501 Not Implemented. request_id=%s",
+                middleware.RequestIDFromRequest(r))
+        writeError(w, http.StatusNotImplemented, "not_implemented", paymentPendingMessage)
 }
 
-// handleStripeWebhook handles Stripe webhook events for card payment confirmation.
+// handleStripeWebhook was the Stripe webhook stub. Without the Stripe
+// signing secret the webhook payload cannot be authenticated, so we fail
+// closed.
 // POST /api/v1/sponsor/card/webhook
 func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
         if r.Method != http.MethodPost {
                 writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
                 return
         }
-
-        // In production, this would:
-        // 1. Verify the Stripe webhook signature
-        // 2. Parse the event (payment_intent.succeeded, payment_intent.failed)
-        // 3. Record the sponsorship in the database
-        // 4. Send a receipt email
-
-        writeJSON(w, http.StatusOK, map[string]any{
-                "status": "received",
-        })
+        log.Printf("WARN: /api/v1/sponsor/card/webhook hit but Stripe integration is not wired (GAP-53-1) — returning 501 Not Implemented. request_id=%s",
+                middleware.RequestIDFromRequest(r))
+        writeError(w, http.StatusNotImplemented, "not_implemented", paymentPendingMessage)
 }
 
 
@@ -1498,63 +1546,68 @@ type ChangeItem struct {
 // not what a citizen asked for. Every item links to evidence.
 func makeWhatChangedHandler(kenyaLaw *kenya_law.Adapter) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
-        // In production, this would query the trust.claims + trust.audit_events tables
-        // for recently verified changes. For now, return the most recently published
-        // Bills as "what changed" items.
-        ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-        defer cancel()
+                // In production, this would query the trust.claims + trust.audit_events tables
+                // for recently verified changes. For now, return the most recently published
+                // Bills as "what changed" items.
+                ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+                defer cancel()
 
-        country := r.Header.Get("X-Civic-Country")
-        if country == "" {
-                country = "KE"
-        }
+                page, pageSize := parsePagination(r)
 
-        bills, err := kenyaLaw.DiscoverBills(ctx)
-        if err != nil {
+                country := r.Header.Get("X-Civic-Country")
+                if country == "" {
+                        country = "KE"
+                }
+
+                bills, err := kenyaLaw.DiscoverBills(ctx)
+                if err != nil {
+                        writeJSON(w, http.StatusOK, map[string]any{
+                                "items":     []any{},
+                                "page":      page,
+                                "page_size": pageSize,
+                                "has_next":  false,
+                                "message":   "No recent changes detected. Check back later.",
+                        })
+                        return
+                }
+
+                // Transform bills into change items
+                items := make([]ChangeItem, 0, len(bills))
+                for _, b := range bills {
+                        significance := "INFORMATIONAL"
+                        if strings.Contains(strings.ToLower(b.Title), "amendment") {
+                                significance = "SUBSTANTIVE"
+                        } else if strings.Contains(strings.ToLower(b.Title), "finance") || strings.Contains(strings.ToLower(b.Title), "appropriation") {
+                                significance = "HIGH_IMPACT"
+                        }
+
+                        items = append(items, ChangeItem{
+                                Kind:         "bill_published",
+                                Title:        b.Title,
+                                Description:  "New Bill published on Kenya Law.",
+                                House:        b.House,
+                                Date:         b.PublicationDate.Format("2006-01-02"),
+                                SourceURL:    b.URL,
+                                Significance: significance,
+                                Verification: "VERIFIED",
+                                EvidenceURL:  b.URL,
+                                Country:      country,
+                        })
+                }
+
+                total := len(items)
+                paged, hasNext := paginate(items, page, pageSize)
                 writeJSON(w, http.StatusOK, map[string]any{
-                        "items":   []any{},
-                        "message": "No recent changes detected. Check back later.",
-                })
-                return
-        }
-
-        // Transform bills into change items
-        items := make([]ChangeItem, 0, len(bills))
-        for i, b := range bills {
-                if i >= 20 { // limit to 20 most recent
-                        break
-                }
-
-                significance := "INFORMATIONAL"
-                if strings.Contains(strings.ToLower(b.Title), "amendment") {
-                        significance = "SUBSTANTIVE"
-                } else if strings.Contains(strings.ToLower(b.Title), "finance") || strings.Contains(strings.ToLower(b.Title), "appropriation") {
-                        significance = "HIGH_IMPACT"
-                }
-
-                items = append(items, ChangeItem{
-                        Kind:         "bill_published",
-                        Title:        b.Title,
-                        Description:  "New Bill published on Kenya Law.",
-                        House:        b.House,
-                        Date:         b.PublicationDate.Format("2006-01-02"),
-                        SourceURL:    b.URL,
-                        Significance: significance,
-                        Verification: "VERIFIED",
-                        EvidenceURL:  b.URL,
-                        Country:      country,
+                        "items":        paged,
+                        "total":        total,
+                        "page":         page,
+                        "page_size":    pageSize,
+                        "has_next":     hasNext,
+                        "country":      country,
+                        "source":       "new.kenyalaw.org",
+                        "generated_at": time.Now().UTC().Format(time.RFC3339),
                 })
         }
-
-        writeJSON(w, http.StatusOK, map[string]any{
-                "items":    items,
-                "total":    len(items),
-                "country":  country,
-                "source":   "new.kenyalaw.org",
-                "generated_at": time.Now().UTC().Format(time.RFC3339),
-        })
-}
-
 }
 
 // handleWhatChangedDetail returns the full change explanation for a specific change.
