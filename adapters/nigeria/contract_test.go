@@ -5,12 +5,19 @@ package nigeria_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria/internal"
+	"github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria/parliament"
 	"github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Compile-time assertion: NigeriaAdapter satisfies contracts.LegislativeSourceAdapter.
@@ -332,14 +339,131 @@ func TestNigeriaAdapter_NormalizeSourceItem_HouseMapping(t *testing.T) {
 	assert.Equal(t, internal.HouseCodeSenate, item2.House)
 }
 
-// Test 18: Discover returns an empty slice without error (skeleton behaviour).
+// Test 18: Discover does not panic when invoked without a mock server.
+// In sandbox environments the HTTP call will fail (no network access to
+// nass.gov.ng); either an error or an empty slice is acceptable. The
+// authoritative behavior test is TestAdapter_DiscoverBills_ViaMockServer.
 func TestNigeriaAdapter_Discover(t *testing.T) {
 	a := nigeria.NewNigeriaAdapter(nigeria.Dependencies{})
 	items, err := a.Discover(context.Background())
-	assert.NoError(t, err)
-	assert.NotNil(t, items)
-	// Skeleton returns an empty slice; full crawling is a follow-up issue.
-	assert.Empty(t, items)
+	_ = items
+	_ = err
+	// Either success-with-items (if the network were available) or
+	// error/empty (in the sandbox) is acceptable; a panic is not.
+}
+
+// TestAdapter_DiscoverBills_ViaMockServer serves the House and Senate Bills
+// fixtures from a local HTTP server and verifies the parliament adapter
+// discovers Bills from BOTH chambers (Nigeria is bicameral).
+func TestAdapter_DiscoverBills_ViaMockServer(t *testing.T) {
+	houseHTML := loadNigeriaFixture(t, "bills_house.html")
+	senateHTML := loadNigeriaFixture(t, "bills_senate.html")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/house/bills", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(houseHTML))
+	})
+	mux.HandleFunc("/senate/bills", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(senateHTML))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	a := parliament.NewAdapter(srv.Client(), "CivicIntelligence/0.1-test")
+	a.SetHouseBillsURLForTest(srv.URL + "/house/bills")
+	a.SetSenateBillsURLForTest(srv.URL + "/senate/bills")
+
+	items, err := a.Discover(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, items, "Discover should return Bills from the fixtures")
+
+	// Verify every item carries the Nigeria country code, a non-empty URL +
+	// Title + DiscoveredAt, and a House field set to either House of
+	// Representatives or Senate.
+	housesFound := map[string]int{}
+	for i, item := range items {
+		assert.Equal(t, "NG", item.CountryCode, "item %d has wrong CountryCode", i)
+		assert.Equal(t, "bill", item.DocumentType, "item %d has wrong DocumentType", i)
+		assert.Equal(t, contracts.SourceItemBill, item.SourceType, "item %d has wrong SourceType", i)
+		assert.NotEmpty(t, item.URL, "item %d has empty URL", i)
+		assert.NotEmpty(t, item.Title, "item %d has empty Title", i)
+		assert.False(t, item.DiscoveredAt.IsZero(), "item %d has empty DiscoveredAt", i)
+		switch item.House {
+		case "House of Representatives", "Senate":
+			housesFound[item.House]++
+		default:
+			t.Errorf("item %d has unexpected House %q", i, item.House)
+		}
+		assert.Equal(t, "National Assembly of Nigeria", item.Metadata["institution"],
+			"item %d has wrong institution metadata", i)
+	}
+
+	// Verify BOTH houses are represented.
+	assert.Greater(t, housesFound["House of Representatives"], 0,
+		"should find at least one House of Representatives Bill")
+	assert.Greater(t, housesFound["Senate"], 0,
+		"should find at least one Senate Bill")
+
+	// Verify the sample Bills (by title) — confirms the parser extracted
+	// every <div class="bill-card"> in BOTH fixtures.
+	titles := map[string]bool{}
+	for _, item := range items {
+		titles[item.Title] = true
+	}
+	for _, want := range []string{
+		"The Electric Power Sector Reform (Amendment) Bill, 2024",
+		"The Nigerian Minerals and Mining (Amendment) Bill, 2024",
+		"The Federal University of Technology (Establishment) Bill, 2024",
+		"The Electoral Act (Amendment) Bill, 2024",
+		"The Cybercrimes (Prohibition, Prevention) (Amendment) Bill, 2024",
+	} {
+		assert.True(t, titles[want], "expected Bill %q in discovered items", want)
+	}
+}
+
+// TestNigeriaSampleBills_CountAndShape verifies the Nigeria sample Bills
+// registry has 5 entries, with both chambers represented.
+func TestNigeriaSampleBills_CountAndShape(t *testing.T) {
+	bills := internal.NigeriaSampleBills
+	require.Len(t, bills, 5, "NigeriaSampleBills should have exactly 5 entries")
+	houseCount, senateCount := 0, 0
+	for i, b := range bills {
+		assert.NotEmpty(t, b.Title, "sample bill %d has empty Title", i)
+		assert.NotEmpty(t, b.URL, "sample bill %d has empty URL", i)
+		assert.NotEmpty(t, b.BillNumber, "sample bill %d has empty BillNumber", i)
+		assert.NotEmpty(t, b.Sponsor, "sample bill %d has empty Sponsor", i)
+		assert.NotEmpty(t, b.Stage, "sample bill %d has empty Stage", i)
+		assert.NotEmpty(t, b.Date, "sample bill %d has empty Date", i)
+		assert.NotEmpty(t, b.House, "sample bill %d has empty House", i)
+		assert.True(t, strings.Contains(b.URL, "nass.gov.ng"),
+			"sample bill %d URL should reference nass.gov.ng", i)
+		switch b.House {
+		case "House of Representatives":
+			houseCount++
+		case "Senate":
+			senateCount++
+		}
+	}
+	assert.Greater(t, houseCount, 0, "should have at least one House of Representatives sample Bill")
+	assert.Greater(t, senateCount, 0, "should have at least one Senate sample Bill")
+}
+
+// loadNigeriaFixture reads a testdata/ fixture into a string.
+func loadNigeriaFixture(t *testing.T, name string) string {
+	t.Helper()
+	candidates := []string{
+		filepath.Join("parliament", "testdata", name),
+		filepath.Join("testdata", name),
+	}
+	for _, p := range candidates {
+		if data, err := os.ReadFile(p); err == nil {
+			return string(data)
+		}
+	}
+	t.Fatalf("fixture %s not found under testdata/", name)
+	return ""
 }
 
 // Test 19: Fetch rejects an empty URL with a clear error.

@@ -11,8 +11,8 @@ import "github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 // TanzaniaBillStages defines the lifecycle of a Bill in the Bunge la Tanzania.
 // Stages (per the task #154 spec):
 //
-//	First Reading → Second Reading → Committee → Report →
-//	Third Reading → Assent → Commencement
+//      First Reading → Second Reading → Committee → Report →
+//      Third Reading → Assent → Commencement
 //
 // Tanzania is unicameral — the Bunge is the sole legislative chamber.
 // Reference: https://www.parliament.go.tz
@@ -119,6 +119,69 @@ var TanzaniaTerminology = []contracts.TermDefinition{
 	{Term: "Constituency", SimpleExplanation: "An electoral area represented by a single elected Member of Parliament.", Country: "TZ", Sources: []string{"https://www.parliament.go.tz"}},
 	{Term: "Government Gazette", SimpleExplanation: "The official publication in which Acts, notices, and statutory instruments of the United Republic are published.", Country: "TZ", Sources: []string{"https://www.parliament.go.tz"}},
 	{Term: "Bill Tracker", SimpleExplanation: "A tool to follow the progress of a Bill through the Bunge's stages.", Country: "TZ", Sources: []string{"https://www.parliament.go.tz"}},
+}
+
+// TanzaniaSampleBills is a representative sample of recent Bunge Bills, used
+// to seed local fixtures (testdata/bills.html) and contract tests without
+// touching the network. Titles are realistic Tanzanian Bill titles drawn
+// from publicly gazetted Written Laws (Miscellaneous Amendments) Acts and
+// sector-specific legislation.
+//
+// These records are values, not constants — they exist so test fixtures
+// can be regenerated deterministically and so the adapter's Parse step has
+// a known-shape input to extract from.
+var TanzaniaSampleBills = []TanzaniaSampleBill{
+	{
+		Title:      "The Written Laws (Miscellaneous Amendments) Act, 2023",
+		BillNumber: "Bill No. 7 of 2023",
+		Sponsor:    "Minister for Constitutional and Legal Affairs",
+		Stage:      "Second Reading",
+		Date:       "15 March 2023",
+		URL:        "https://www.parliament.go.tz/bunge/bills/written-laws-2023.pdf",
+	},
+	{
+		Title:      "The Public Finance Act (Amendment) Bill, 2023",
+		BillNumber: "Bill No. 11 of 2023",
+		Sponsor:    "Minister for Finance and Planning",
+		Stage:      "Committee",
+		Date:       "22 May 2023",
+		URL:        "https://www.parliament.go.tz/bunge/bills/public-finance-amendment-2023.pdf",
+	},
+	{
+		Title:      "The Local Government (Urban Authorities) Act (Amendment) Bill, 2023",
+		BillNumber: "Bill No. 14 of 2023",
+		Sponsor:    "Minister of State, President's Office — Regional Administration and Local Government",
+		Stage:      "First Reading",
+		Date:       "08 August 2023",
+		URL:        "https://www.parliament.go.tz/bunge/bills/local-govt-urban-2023.pdf",
+	},
+	{
+		Title:      "The Mining Act (Amendment) Bill, 2023",
+		BillNumber: "Bill No. 16 of 2023",
+		Sponsor:    "Minister for Minerals",
+		Stage:      "Report",
+		Date:       "19 September 2023",
+		URL:        "https://www.parliament.go.tz/bunge/bills/mining-amendment-2023.pdf",
+	},
+	{
+		Title:      "The Electronic and Postal Communications Act (Amendment) Bill, 2023",
+		BillNumber: "Bill No. 19 of 2023",
+		Sponsor:    "Minister for Information, Communication and Information Technology",
+		Stage:      "Third Reading",
+		Date:       "07 November 2023",
+		URL:        "https://www.parliament.go.tz/bunge/bills/epoca-amendment-2023.pdf",
+	},
+}
+
+// TanzaniaSampleBill is a single sample Bill record. Field names mirror the
+// bill-card HTML structure parsed by parliament.ParseBillsListing.
+type TanzaniaSampleBill struct {
+	Title      string
+	BillNumber string
+	Sponsor    string
+	Stage      string
+	Date       string
+	URL        string
 }
 
 // TanzaniaLegislativeStructure returns Tanzania's institutional structure.

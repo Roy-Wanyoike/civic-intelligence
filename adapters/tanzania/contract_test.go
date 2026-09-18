@@ -8,13 +8,19 @@ package tanzania_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania"
+	"github.com/Roy-Wanyoke/civic-intelligence/adapters/tanzania"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania/internal"
+	"github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania/parliament"
 	"github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Compile-time assertion: TanzaniaAdapter satisfies contracts.LegislativeSourceAdapter.
@@ -202,10 +208,92 @@ func TestTanzaniaAdapter_NormalizeSourceItem(t *testing.T) {
 	assert.Equal(t, "TZ", item.CountryCode)
 }
 
-// 16. Discover returns an empty slice (skeleton adapter) without error.
-func TestTanzaniaAdapter_DiscoverReturnsEmpty(t *testing.T) {
-	a := tanzania.NewTanzaniaAdapter()
+// 16. Discover returns the Bunge Bills served by a mock parliament.go.tz
+//     server. The fixture (testdata/bills.html) is parsed by the parliament
+//     adapter's ParseBillsListing; every returned SourceItem carries a URL,
+//     a Title, the Bunge house code, and a DiscoveredAt timestamp.
+func TestAdapter_DiscoverBills_ViaMockServer(t *testing.T) {
+	html := loadTanzaniaFixture(t, "bills.html")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/bunge/bills", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(html))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	a := parliament.NewAdapter(srv.Client(), "CivicIntelligence/0.1-test")
+	// Override the bills URL to point at the mock server.
+	a.SetBillsURLForTest(srv.URL + "/bunge/bills")
+
 	items, err := a.Discover(context.Background())
-	assert.NoError(t, err)
-	assert.Empty(t, items, "skeleton Discover should return an empty slice")
+	require.NoError(t, err)
+	require.NotEmpty(t, items, "Discover should return Bills from the fixture")
+
+	// Verify every item carries the Tanzania country code, the Bunge house,
+	// and a non-empty URL + DiscoveredAt timestamp.
+	for i, item := range items {
+		assert.Equal(t, "TZ", item.CountryCode, "item %d has wrong CountryCode", i)
+		assert.Equal(t, "bill", item.DocumentType, "item %d has wrong DocumentType", i)
+		assert.Equal(t, contracts.SourceItemBill, item.SourceType, "item %d has wrong SourceType", i)
+		assert.NotEmpty(t, item.URL, "item %d has empty URL", i)
+		assert.NotEmpty(t, item.Title, "item %d has empty Title", i)
+		assert.False(t, item.DiscoveredAt.IsZero(), "item %d has empty DiscoveredAt", i)
+		assert.Equal(t, "Bunge la Tanzania", item.House, "item %d has wrong House", i)
+		// Metadata should record the house + institution.
+		assert.Equal(t, "Bunge la Tanzania", item.Metadata["house"], "item %d has wrong house metadata", i)
+		assert.Equal(t, "Parliament of Tanzania", item.Metadata["institution"], "item %d has wrong institution metadata", i)
+	}
+
+	// Verify the sample Bills are present (by title) — confirms the parser
+	// extracted every <div class="bill-card"> in the fixture.
+	titles := map[string]bool{}
+	for _, item := range items {
+		titles[item.Title] = true
+	}
+	for _, want := range []string{
+		"The Written Laws (Miscellaneous Amendments) Act, 2023",
+		"The Public Finance Act (Amendment) Bill, 2023",
+		"The Local Government (Urban Authorities) Act (Amendment) Bill, 2023",
+		"The Mining Act (Amendment) Bill, 2023",
+		"The Electronic and Postal Communications Act (Amendment) Bill, 2023",
+	} {
+		assert.True(t, titles[want], "expected Bill %q in discovered items", want)
+	}
+}
+
+// 17. The Tanzania-specific sample Bills registry has 5 entries — enough to
+//     seed a local fixture without touching the network.
+func TestTanzaniaSampleBills_CountAndShape(t *testing.T) {
+	bills := internal.TanzaniaSampleBills
+	require.Len(t, bills, 5, "TanzaniaSampleBills should have exactly 5 entries")
+	for i, b := range bills {
+		assert.NotEmpty(t, b.Title, "sample bill %d has empty Title", i)
+		assert.NotEmpty(t, b.URL, "sample bill %d has empty URL", i)
+		assert.NotEmpty(t, b.BillNumber, "sample bill %d has empty BillNumber", i)
+		assert.NotEmpty(t, b.Sponsor, "sample bill %d has empty Sponsor", i)
+		assert.NotEmpty(t, b.Stage, "sample bill %d has empty Stage", i)
+		assert.NotEmpty(t, b.Date, "sample bill %d has empty Date", i)
+		assert.True(t, strings.Contains(b.URL, "parliament.go.tz"),
+			"sample bill %d URL should reference parliament.go.tz", i)
+	}
+}
+
+// loadTanzaniaFixture reads a testdata/ fixture into a string.
+func loadTanzaniaFixture(t *testing.T, name string) string {
+	t.Helper()
+	// Try the parliament sub-package's testdata/ first; fall back to the
+	// tanzania package root for callers that placed fixtures there.
+	candidates := []string{
+		filepath.Join("parliament", "testdata", name),
+		filepath.Join("testdata", name),
+	}
+	for _, p := range candidates {
+		if data, err := os.ReadFile(p); err == nil {
+			return string(data)
+		}
+	}
+	t.Fatalf("fixture %s not found under testdata/", name)
+	return ""
 }

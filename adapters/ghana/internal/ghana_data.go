@@ -103,6 +103,68 @@ var GhanaTerminology = []contracts.TermDefinition{
 	{Term: "Dissolution of Parliament", SimpleExplanation: "The end of a Parliament's term before a general election; all seats become vacant.", Country: "GH"},
 }
 
+// GhanaSampleBills is a representative sample of recent Ghana Parliament
+// Bills, used to seed local fixtures (testdata/bills.html) and contract
+// tests without touching the network. Titles are realistic Ghanaian Bill
+// titles drawn from publicly published Bills.
+//
+// These records are values, not constants — they exist so test fixtures can
+// be regenerated deterministically and so the adapter's Parse step has a
+// known-shape input to extract from.
+var GhanaSampleBills = []GhanaSampleBill{
+	{
+		Title:      "The Right to Information (Amendment) Bill, 2024",
+		BillNumber: "Bill No. 12 of 2024",
+		Sponsor:    "Minister for Justice and Attorney-General",
+		Stage:      "Consideration Stage",
+		Date:       "12 March 2024",
+		URL:        "https://parliament.ghana.gov.gh/business/bills/rti-amendment-2024.pdf",
+	},
+	{
+		Title:      "The Minerals Income Tax (Amendment) Bill, 2024",
+		BillNumber: "Bill No. 18 of 2024",
+		Sponsor:    "Minister for Finance",
+		Stage:      "Second Reading",
+		Date:       "27 February 2024",
+		URL:        "https://parliament.ghana.gov.gh/business/bills/minerals-income-tax-2024.pdf",
+	},
+	{
+		Title:      "The Public Universities Bill, 2024",
+		BillNumber: "Bill No. 22 of 2024",
+		Sponsor:    "Minister for Education",
+		Stage:      "First Reading",
+		Date:       "06 May 2024",
+		URL:        "https://parliament.ghana.gov.gh/business/bills/public-universities-2024.pdf",
+	},
+	{
+		Title:      "The Cyber Security (Amendment) Bill, 2024",
+		BillNumber: "Bill No. 27 of 2024",
+		Sponsor:    "Minister for Communications and Digitalisation",
+		Stage:      "Third Reading",
+		Date:       "18 July 2024",
+		URL:        "https://parliament.ghana.gov.gh/business/bills/cyber-security-amendment-2024.pdf",
+	},
+	{
+		Title:      "The Companies (Amendment) Bill, 2024",
+		BillNumber: "Bill No. 31 of 2024",
+		Sponsor:    "Minister for Justice and Attorney-General",
+		Stage:      "Assent",
+		Date:       "02 October 2024",
+		URL:        "https://parliament.ghana.gov.gh/business/bills/companies-amendment-2024.pdf",
+	},
+}
+
+// GhanaSampleBill is a single sample Bill record. Field names mirror the
+// bill-card HTML structure parsed by parliament.ParseBillsListing.
+type GhanaSampleBill struct {
+	Title      string
+	BillNumber string
+	Sponsor    string
+	Stage      string
+	Date       string
+	URL        string
+}
+
 // GhanaLegislativeStructure returns Ghana's institutional structure.
 // KEY: Ghana is UNICAMERAL — only one House (Parliament), unlike Kenya's
 // bicameral (National Assembly + Senate). The Parliament of Ghana has 275
