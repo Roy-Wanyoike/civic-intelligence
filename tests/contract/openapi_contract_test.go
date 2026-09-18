@@ -153,7 +153,7 @@ func normalizeRoute(route string) string {
                         "/subscriptions", "/notifications", "/sources", "/corrections",
                         "/debt", "/terminology", "/people", "/committees", "/institutions",
                         "/loans", "/grants", "/provenance", "/evidence", "/claims",
-                        "/constitution/articles":
+                        "/constitution/articles", "/graph":
                         // The sub-router serves {id}-style sub-resources. Return the
                         // base so the caller can verify "at least one path starting
                         // with base/" exists in openapi.

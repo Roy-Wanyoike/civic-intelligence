@@ -90,6 +90,7 @@ const NAV_GROUPS = [
       { href: '/what-changed', label: 'What Changed' },
       { href: '/feed', label: 'Feed' },
       { href: '/trending', label: 'Trending' },
+      { href: '/graph', label: 'Knowledge Graph' },
       { href: '/research', label: 'Research' },
       { href: '/trust', label: 'Trust' },
       { href: '/report', label: 'Reports' },

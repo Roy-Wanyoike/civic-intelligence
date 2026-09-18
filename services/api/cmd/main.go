@@ -263,6 +263,16 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+        // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
+        // differentiator: a visual relationship explorer that traces how
+        // Bills, Acts, Institutions, People, Constitution Articles, and
+        // Government borrowing are connected. The graph is built once at
+        // package init from the existing seed data (acts, administrations,
+        // constitution articles, borrowing agreements, sample people +
+        // institutions + committees).
+        apiHandler.HandleFunc("/api/v1/graph", makeGraphRouter())
+        apiHandler.HandleFunc("/api/v1/graph/", makeGraphRouter())
+
         // Middleware chain (outermost → innermost):
         //   RequestID (GAP-67-1)     — generates / propagates X-Request-Id; logs every
         //                             request start + completion with the id attached

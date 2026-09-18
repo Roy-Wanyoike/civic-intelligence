@@ -951,6 +951,110 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/LegislatureDebtSummary' } } }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /graph:
+    get:
+      tags: [graph]
+      summary: Civic Knowledge Graph summary
+      description: |
+        The Civic Knowledge Graph is the platform's signature differentiator:
+        a visual relationship explorer that traces how Bills, Acts,
+        Institutions, People, Constitution Articles, Administrations, and
+        Government borrowing are connected. The bare `/graph` endpoint
+        returns a metadata summary (total node + edge counts broken down
+        by type) tagged with `reality_layer: FACT` — every node carries
+        the same `source_url` as the underlying entity so a citizen can
+        verify any relationship against the authoritative Kenya Law / CBK /
+        Treasury source.
+      responses:
+        '200':
+          description: Graph summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_nodes: { type: integer }
+                  total_edges: { type: integer }
+                  node_types: { type: object, additionalProperties: { type: integer } }
+                  edge_types: { type: object, additionalProperties: { type: integer } }
+                  reality_layer: { type: string, example: FACT }
+                  disclaimer: { type: string }
+
+  /graph/nodes:
+    get:
+      tags: [graph]
+      summary: List graph nodes (optionally filtered by type)
+      parameters:
+        - { in: query, name: type, schema: { type: string, enum: [bill, act, institution, person, constitution_article, administration, presidential_term, legislature, committee, creditor, borrowing_agreement] } }
+        - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 200 } }
+        - { in: query, name: q, schema: { type: string }, description: Case-insensitive label substring filter }
+      responses:
+        '200':
+          description: Graph nodes
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+
+  /graph/node/{id}:
+    get:
+      tags: [graph]
+      summary: Get a single node with its direct relationships (depth=1)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Node + direct neighbours
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /graph/relationships:
+    get:
+      tags: [graph]
+      summary: Get relationships from a node up to N hops deep (BFS)
+      description: |
+        Depth is clamped to [1, 3] to bound response size. The response
+        uses the standard `GraphResponse` shape with `metadata.depth`
+        reporting the requested (clamped) depth.
+      parameters:
+        - { in: query, name: id, required: true, schema: { type: string } }
+        - { in: query, name: depth, schema: { type: integer, default: 1, minimum: 1, maximum: 3 } }
+      responses:
+        '200':
+          description: Subgraph reachable within the requested depth
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /graph/search:
+    get:
+      tags: [graph]
+      summary: Search graph nodes by label / properties
+      parameters:
+        - { in: query, name: q, required: true, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 200 } }
+      responses:
+        '200':
+          description: Matching nodes (depth=0)
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /graph/paths:
+    get:
+      tags: [graph]
+      summary: Find shortest path between two nodes (BFS, undirected)
+      description: |
+        Returns the shortest connection between two nodes. The graph is
+        traversed as undirected so a citizen asking "how is this Bill
+        connected to this President" gets the answer regardless of edge
+        direction. Returns 404 if no path exists.
+      parameters:
+        - { in: query, name: from, required: true, schema: { type: string } }
+        - { in: query, name: to, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Path nodes + edges
+          content: { application/json: { schema: { $ref: '#/components/schemas/GraphResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /loans:
     get:
       tags: [loans]
@@ -1883,6 +1987,34 @@ components:
         payload: { type: object }
         read_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+
+    GraphNode:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [bill, act, institution, person, constitution_article, administration, presidential_term, legislature, committee, creditor, borrowing_agreement] }
+        label: { type: string }
+        properties: { type: object, additionalProperties: true }
+
+    GraphEdge:
+      type: object
+      properties:
+        source: { type: string }
+        target: { type: string }
+        type: { type: string, enum: [ORIGINATES_FROM, SPONSORED_BY, BELONGS_TO, ASSESSED_BY, CITES, ESTABLISHES, GOVERNED_BY, ASSESNTED_BY, BORROWED_BY, CONTRACTED_DURING, MEMBER_OF, LEADS] }
+        properties: { type: object, additionalProperties: true }
+
+    GraphResponse:
+      type: object
+      properties:
+        nodes: { type: array, items: { $ref: '#/components/schemas/GraphNode' } }
+        edges: { type: array, items: { $ref: '#/components/schemas/GraphEdge' } }
+        metadata:
+          type: object
+          properties:
+            total_nodes: { type: integer }
+            total_edges: { type: integer }
+            depth: { type: integer, description: "Traversal depth (0 = no traversal, 1-3 = BFS hops, edge count = path length)" }
 
   responses:
     Health:
