@@ -2165,3 +2165,124 @@ security:
         '200':
           description: Comparison data for the dimension
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /people:
+    get:
+      tags: [people]
+      summary: List people (MPs, officials)
+      responses:
+        '200':
+          description: List of civic persons
+
+  /people/{id}:
+    get:
+      tags: [people]
+      summary: Get a person by ID
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Person details
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /people/{id}/scorecard:
+    get:
+      tags: [people]
+      summary: MP factual scorecard (no rankings)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: MP scorecard with factual records
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /constituencies:
+    get:
+      tags: [constituencies]
+      summary: List constituencies/counties
+      responses:
+        '200':
+          description: List of constituencies
+
+  /constituencies/{id}:
+    get:
+      tags: [constituencies]
+      summary: Constituency dashboard
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Constituency detail with civic data
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /calendar:
+    get:
+      tags: [calendar]
+      summary: Civic calendar events
+      parameters:
+        - { in: query, name: month, required: false, schema: { type: string }, description: "YYYY-MM format" }
+        - { in: query, name: country, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Calendar events
+
+  /calendar/today:
+    get:
+      tags: [calendar]
+      summary: Today's civic events
+      responses:
+        '200':
+          description: Today's events
+
+  /calendar/upcoming:
+    get:
+      tags: [calendar]
+      summary: Upcoming civic events
+      parameters:
+        - { in: query, name: limit, required: false, schema: { type: integer } }
+      responses:
+        '200':
+          description: Upcoming events
+
+  /gazette/alerts:
+    get:
+      tags: [gazette]
+      summary: List gazette keyword alerts
+      responses:
+        '200':
+          description: List of alerts
+    post:
+      tags: [gazette]
+      summary: Create a gazette keyword alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keywords: { type: array, items: { type: string } }
+                user_id: { type: string }
+      responses:
+        '200':
+          description: Created alert
+
+  /gazette/alerts/{id}:
+    delete:
+      tags: [gazette]
+      summary: Delete a gazette alert
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Deleted
+        '404': { $ref: '#/components/responses/NotFound' }
+    get:
+      tags: [gazette]
+      summary: Get gazette notices matching an alert
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Matching gazette notices
+        '404': { $ref: '#/components/responses/NotFound' }
