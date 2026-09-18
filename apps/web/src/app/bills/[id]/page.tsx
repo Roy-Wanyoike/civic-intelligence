@@ -6,9 +6,15 @@ import {
   MessageCircle,
   Bell,
   AlertCircle,
+  ShieldCheck,
+  FileSearch,
+  Link2,
+  ScrollText,
+  Lightbulb,
 } from 'lucide-react';
 import { TimelineView } from '@/components/timeline';
 import { BillAskPanel } from '@/components/bill-ask-panel';
+import { RealityBadge } from '@/components/reality-labels';
 import { getJSON_ as getJSON, ApiError } from '@/lib/api';
 import { mockTimeline } from '@/lib/mock-data';
 import type { Bill, BillEvent } from '@/lib/types';
@@ -247,6 +253,125 @@ export default async function BillDetailPage({
             )}
           </section>
 
+          {/* Evidence chain — surfaces the Source → Document → Evidence →
+              Fact → Claim → Explanation traceability chain. Closes UX FAIL #8:
+              the Bill detail page previously had no Evidence section; the only
+              way to reach the chain was via /trust. The events returned by
+              /api/v1/bills/{id}/timeline are the verified-event stream that
+              feeds the chain. */}
+          <section aria-labelledby="evidence-heading">
+            <div className="flex items-center justify-between">
+              <h2
+                id="evidence-heading"
+                className="font-serif text-xl font-semibold text-civic-forest"
+              >
+                Evidence chain
+              </h2>
+              <Link
+                href={`/trust?bill_id=${encodeURIComponent(bill.id)}`}
+                className="text-sm text-civic-leaf hover:underline"
+              >
+                Trust network →
+              </Link>
+            </div>
+            <p className="mt-2 text-sm text-civic-stone">
+              Every verified event on this Bill traces back through an
+              evidence chain. The chain documents how each claim is grounded
+              in an authoritative source. The steps below are derived from
+              the timeline events fetched from{' '}
+              <code className="rounded bg-civic-mist px-1 py-0.5 text-xs">
+                /api/v1/bills/{bill.id}/timeline
+              </code>
+              .
+            </p>
+
+            {timelineSource === 'mock' && (
+              <p className="mt-2 rounded-md bg-civic-acacia/10 px-3 py-1.5 text-xs text-civic-clay">
+                Evidence chain rendered from sample data — connect the Go API
+                (port 9000) for the real verified-event stream.
+              </p>
+            )}
+
+            {timelineEvents.length === 0 ? (
+              <p className="mt-3 rounded-lg border border-dashed border-civic-border p-4 text-sm text-civic-stone">
+                No evidence chain available yet. Once the Bill has been
+                published on kenyalaw.org, its publication event becomes the
+                first link in the chain.
+              </p>
+            ) : (
+              <ol className="mt-4 space-y-3">
+                {timelineEvents.slice(0, 5).map((ev, idx) => (
+                  <li
+                    key={ev.id ?? `${ev.event_type}-${idx}`}
+                    className="rounded-lg border border-civic-border bg-civic-paper p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-civic-stone">
+                      <span className="rounded-full bg-civic-mist px-2 py-0.5 font-medium uppercase tracking-wide">
+                        {ev.event_type.replace(/_/g, ' ')}
+                      </span>
+                      {ev.date && <span>{ev.date}</span>}
+                      {ev.confidence && (
+                        <span className="rounded-full bg-civic-leaf/10 px-2 py-0.5 text-civic-leaf">
+                          {ev.confidence} confidence
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Chain steps */}
+                    <ol className="mt-3 space-y-2 text-sm">
+                      <ChainStep
+                        icon={Link2}
+                        label="Source"
+                        badge="EVIDENCE"
+                        text={ev.source_url ? hostname(ev.source_url) : 'Kenya Law Reports'}
+                        href={ev.source_url ?? undefined}
+                      />
+                      <ChainStep
+                        icon={FileText}
+                        label="Document"
+                        badge="EVIDENCE"
+                        text={
+                          ev.source_url
+                            ? `Bill detail — ${bill.identifier}`
+                            : `Bill publication — ${bill.identifier}`
+                        }
+                        href={ev.source_url ?? undefined}
+                      />
+                      <ChainStep
+                        icon={ScrollText}
+                        label="Evidence"
+                        badge="EVIDENCE"
+                        text={ev.note ?? `Verified event record sourced from kenyalaw.org.`}
+                      />
+                      <ChainStep
+                        icon={FileSearch}
+                        label="Fact"
+                        badge="FACT"
+                        text={`${ev.event_type.replace(/_/g, ' ')} occurred${ev.date ? ` on ${ev.date}` : ''}.`}
+                      />
+                      <ChainStep
+                        icon={Lightbulb}
+                        label="Claim"
+                        badge="FACT"
+                        text={ev.description || `Bill ${bill.identifier} progressed to ${ev.event_type.replace(/_/g, ' ')}.`}
+                      />
+                      <ChainStep
+                        icon={ShieldCheck}
+                        label="Explanation"
+                        badge="EVIDENCE"
+                        text={
+                          ev.house
+                            ? `Event recorded in the ${ev.house}.`
+                            : 'Event observed and recorded against the source document.'
+                        }
+                      />
+                    </ol>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+
           {/* Ask about this Bill */}
           <section>
             <h2 className="font-serif text-xl font-semibold text-civic-forest">Ask about this Bill</h2>
@@ -306,4 +431,69 @@ export default async function BillDetailPage({
       </div>
     </article>
   );
+}
+
+/**
+ * ChainStep renders one row in the Source → Document → Evidence → Fact →
+ * Claim → Explanation trace. Each step is labelled with a RealityBadge so
+ * the user can see whether the step is a verified FACT, an EVIDENCE
+ * anchor, or (in future) a SIMULATION/UNKNOWN layer.
+ */
+function ChainStep({
+  icon: Icon,
+  label,
+  text,
+  badge,
+  href,
+}: {
+  icon: typeof FileText;
+  label: string;
+  text: string;
+  badge: 'FACT' | 'EVIDENCE' | 'ASSUMPTION' | 'SIMULATION' | 'UNKNOWN' | 'LIMITATION' | 'HYPOTHETICAL';
+  href?: string;
+}) {
+  const inner = (
+    <>
+      <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-civic-stone" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-civic-ink">
+            {label}
+          </span>
+          <RealityBadge kind={badge} />
+        </div>
+        <p className="mt-0.5 text-sm text-civic-stone">{text}</p>
+      </div>
+    </>
+  );
+  if (href) {
+    return (
+      <li>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-start gap-2 rounded-md p-1.5 transition hover:bg-civic-mist"
+        >
+          {inner}
+        </a>
+      </li>
+    );
+  }
+  return <li className="flex items-start gap-2">{inner}</li>;
+}
+
+/**
+ * hostname extracts the registrable hostname from a URL string. Used to
+ * label the "Source" step of the evidence chain without leaking the full
+ * (often long) source URL. Falls back to the original string on parse
+ * failure.
+ */
+function hostname(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }

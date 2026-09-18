@@ -34,6 +34,7 @@ import {
   LayoutDashboard,
   Scale as ScaleIcon,
   Command as CommandIcon,
+  LogIn,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
@@ -95,6 +96,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/constitution', i18nKey: 'pages.constitution', icon: BookOpen, description: 'The Constitution of Kenya, Article by Article' },
       { href: '/governments', i18nKey: 'pages.governments', icon: Landmark, description: 'Presidential administrations and terms' },
+      { href: '/legislatures', i18nKey: 'pages.legislatures', icon: Landmark, description: 'Parliaments — 11th, 12th, 13th — with Bills, Acts, committees' },
       { href: '/institutions', i18nKey: 'pages.institutions', icon: Landmark, description: 'Government institutions and agencies' },
       { href: '/people', i18nKey: 'pages.people', icon: Users, description: 'MPs, senators, and civic persons' },
       { href: '/participation', i18nKey: 'pages.participation', icon: Users, description: 'Public participation opportunities' },
@@ -391,6 +393,19 @@ export function Header() {
           {/* Dark/Light theme toggle */}
           <ThemeToggle />
 
+          {/* Sign In — links to /auth/signin (issue #108). Real auth is
+              handled via Keycloak OIDC; the page renders a placeholder form
+              that explains the flow. */}
+          <Link
+            href="/auth/signin"
+            aria-label="Sign in"
+            title="Sign in"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-civic-border px-3 text-sm font-medium text-civic-ink transition hover:border-civic-leaf hover:text-civic-leaf"
+          >
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Sign in</span>
+          </Link>
+
           {/* Sponsor */}
           <Link
             href="/sponsor"
@@ -483,6 +498,14 @@ export function Header() {
               ))}
             </nav>
             <div className="space-y-2 border-t border-civic-border px-4 py-4">
+              <Link
+                href="/auth/signin"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center justify-center gap-2 rounded-md border border-civic-border bg-civic-paper px-4 py-3 text-sm font-medium text-civic-ink hover:border-civic-leaf hover:text-civic-leaf"
+              >
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+                Sign in
+              </Link>
               <Link
                 href="/sponsor"
                 onClick={() => setMobileOpen(false)}

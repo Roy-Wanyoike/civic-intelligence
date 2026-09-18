@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function CountryPage() {
   const countries = [
     { code: 'KE', name: 'Kenya', active: true },
-    { code: 'UG', name: 'Uganda', active: false },
+    { code: 'UG', name: 'Uganda', active: true },
     { code: 'TZ', name: 'Tanzania', active: true },
     { code: 'GH', name: 'Ghana', active: false },
     { code: 'NG', name: 'Nigeria', active: true },
