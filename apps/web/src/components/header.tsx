@@ -34,6 +34,7 @@ import {
   LayoutDashboard,
   Scale as ScaleIcon,
   Command as CommandIcon,
+  MapPin,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
@@ -97,6 +98,7 @@ const navGroups: NavGroup[] = [
       { href: '/governments', i18nKey: 'pages.governments', icon: Landmark, description: 'Presidential administrations and terms' },
       { href: '/institutions', i18nKey: 'pages.institutions', icon: Landmark, description: 'Government institutions and agencies' },
       { href: '/people', i18nKey: 'pages.people', icon: Users, description: 'MPs, senators, and civic persons' },
+      { href: '/constituencies', i18nKey: 'pages.constituencies', icon: MapPin, description: 'Per-constituency civic dashboards (MP, bills, budget, projects)' },
       { href: '/participation', i18nKey: 'pages.participation', icon: Users, description: 'Public participation opportunities' },
     ],
   },
