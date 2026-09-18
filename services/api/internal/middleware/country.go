@@ -2,14 +2,15 @@
 //
 // country.go — country-scoping middleware (task ENG-J1).
 //
-// The platform serves 6 countries (Kenya, Uganda, Tanzania, Ghana, Nigeria,
-// South Africa) from a single codebase. A user from Uganda should see
-// Ugandan Bills, Acts, Institutions, People, and Debt — not Kenyan ones.
-// The frontend Government Selector (apps/web/src/components/government-selector.tsx)
-// sets the X-Civic-Country header on every API call; this middleware reads
-// that header, validates it against the supported-country list, stores it on
-// the request context, and echoes it back on the response so the frontend
-// knows which country was ultimately used.
+// The platform serves 10 countries (Kenya, Uganda, Tanzania, Ghana, Nigeria,
+// South Africa, Rwanda, Zambia, Senegal, Egypt) from a single codebase. A user
+// from Uganda should see Ugandan Bills, Acts, Institutions, People, and Debt —
+// not Kenyan ones. The frontend Government Selector
+// (apps/web/src/components/government-selector.tsx) sets the X-Civic-Country
+// header on every API call; this middleware reads that header, validates it
+// against the supported-country list, stores it on the request context, and
+// echoes it back on the response so the frontend knows which country was
+// ultimately used.
 //
 // Resolution order (first non-empty wins):
 //
@@ -22,7 +23,7 @@
 //
 // The special value "ALL" is the "global / cross-country dashboard" mode.
 // It is intended for the /compare, /indicators, /dashboard, and /graph
-// endpoints that return data across all 6 countries at once. For list
+// endpoints that return data across all 10 countries at once. For list
 // endpoints (/acts, /people, …) "ALL" returns data from every country —
 // the handler decides whether that is meaningful.
 //
@@ -33,10 +34,10 @@
 package middleware
 
 import (
-	"context"
-	"encoding/json"
-	"net/http"
-	"strings"
+        "context"
+        "encoding/json"
+        "net/http"
+        "strings"
 )
 
 // CountryHeader is the canonical HTTP header name for the country scope.
@@ -56,7 +57,7 @@ const DefaultCountry = "KE"
 
 // GlobalCountry is the special country code that means "all countries".
 // It is used by the /compare, /indicators, /dashboard, and /graph endpoints
-// to return data across all 6 countries at once (the "dashboard" view).
+// to return data across all 10 countries at once (the "dashboard" view).
 // For list endpoints (/acts, /people, …) it returns data from every
 // country — the handler decides whether that is meaningful.
 const GlobalCountry = "ALL"
@@ -69,7 +70,10 @@ const GlobalCountry = "ALL"
 // The middleware deliberately does NOT auto-discover adapters — a country
 // is "supported" only when it is in this list, which forces an explicit
 // enablement step (see ENG-J1 / CONTRIBUTING.md).
-var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA"}
+//
+// Wave 12 (ENG-L1, 2026) added Rwanda (RW), Zambia (ZM), Senegal (SN),
+// and Egypt (EG) — bringing the platform from 6 to 10 supported countries.
+var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG"}
 
 // countryCtxKey is the typed context key for country storage. A distinct
 // type avoids collisions with other packages' context keys (and with the
@@ -79,12 +83,12 @@ type countryCtxKey struct{}
 // CountryFromContext returns the country code stored on ctx, or DefaultCountry
 // ("KE") if none is present. Handlers call this to scope their responses:
 //
-//	country := middleware.CountryFromContext(r.Context())
-//	if country == middleware.GlobalCountry {
-//	    // return data across all countries (dashboard view)
-//	} else {
-//	    // filter the response by `country`
-//	}
+//      country := middleware.CountryFromContext(r.Context())
+//      if country == middleware.GlobalCountry {
+//          // return data across all countries (dashboard view)
+//      } else {
+//          // filter the response by `country`
+//      }
 //
 // The helper never returns the empty string — even for code invoked
 // outside an HTTP request (background jobs, tests that did not chain
@@ -93,10 +97,10 @@ type countryCtxKey struct{}
 // instead of crashing on a nil/empty country — which is the historical
 // behaviour the rest of the codebase expects.
 func CountryFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(countryCtxKey{}).(string); ok && v != "" {
-		return v
-	}
-	return DefaultCountry
+        if v, ok := ctx.Value(countryCtxKey{}).(string); ok && v != "" {
+                return v
+        }
+        return DefaultCountry
 }
 
 // WithCountry returns a new context carrying the supplied country code.
@@ -104,27 +108,27 @@ func CountryFromContext(ctx context.Context) string {
 // (mirroring the WithRequestID pattern in request_id.go).
 //
 // The supplied code is NOT validated here — callers are expected to
-// pass a known-good code (KE, UG, TZ, GH, NG, ZA, or ALL). The
-// middleware itself performs validation before calling WithCountry.
+// pass a known-good code (KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG, or ALL).
+// The middleware itself performs validation before calling WithCountry.
 func WithCountry(ctx context.Context, code string) context.Context {
-	return context.WithValue(ctx, countryCtxKey{}, code)
+        return context.WithValue(ctx, countryCtxKey{}, code)
 }
 
 // IsSupportedCountry reports whether code is one of the supported country
-// codes (KE, UG, TZ, GH, NG, ZA) or the special GlobalCountry ("ALL").
-// The check is case-insensitive on the input — callers routinely pass
-// lowercase values from URL query strings — but the canonicalised
-// uppercase form is what is stored on the context.
+// codes (KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG) or the special
+// GlobalCountry ("ALL"). The check is case-insensitive on the input —
+// callers routinely pass lowercase values from URL query strings — but the
+// canonicalised uppercase form is what is stored on the context.
 func IsSupportedCountry(code string) bool {
-	if code == GlobalCountry {
-		return true
-	}
-	for _, c := range SupportedCountries {
-		if c == code {
-			return true
-		}
-	}
-	return false
+        if code == GlobalCountry {
+                return true
+        }
+        for _, c := range SupportedCountries {
+                if c == code {
+                        return true
+                }
+        }
+        return false
 }
 
 // resolveCountry picks the country code for the request, applying the
@@ -132,13 +136,13 @@ func IsSupportedCountry(code string) bool {
 // upper-cased so downstream code can compare against the canonical
 // constants without worrying about case.
 func resolveCountry(r *http.Request) string {
-	if h := strings.TrimSpace(r.Header.Get(CountryHeader)); h != "" {
-		return strings.ToUpper(h)
-	}
-	if q := strings.TrimSpace(r.URL.Query().Get(CountryQueryParam)); q != "" {
-		return strings.ToUpper(q)
-	}
-	return DefaultCountry
+        if h := strings.TrimSpace(r.Header.Get(CountryHeader)); h != "" {
+                return strings.ToUpper(h)
+        }
+        if q := strings.TrimSpace(r.URL.Query().Get(CountryQueryParam)); q != "" {
+                return strings.ToUpper(q)
+        }
+        return DefaultCountry
 }
 
 // Country is middleware that scopes every request to a single country (or
@@ -160,21 +164,21 @@ func resolveCountry(r *http.Request) string {
 // country header — the frontend can attribute the throttle to the right
 // country in its telemetry).
 func Country(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		code := resolveCountry(r)
-		if !IsSupportedCountry(code) {
-			writeCountryError(w, code)
-			return
-		}
-		// Echo the resolved code on the response BEFORE calling next so
-		// even a handler that panics or short-circuits (e.g. auth 401)
-		// still carries the header — the frontend can always trust the
-		// response header to know which country scope was active.
-		w.Header().Set(CountryHeader, code)
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                code := resolveCountry(r)
+                if !IsSupportedCountry(code) {
+                        writeCountryError(w, code)
+                        return
+                }
+                // Echo the resolved code on the response BEFORE calling next so
+                // even a handler that panics or short-circuits (e.g. auth 401)
+                // still carries the header — the frontend can always trust the
+                // response header to know which country scope was active.
+                w.Header().Set(CountryHeader, code)
 
-		ctx := WithCountry(r.Context(), code)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+                ctx := WithCountry(r.Context(), code)
+                next.ServeHTTP(w, r.WithContext(ctx))
+        })
 }
 
 // writeCountryError writes the canonical 400 response for an unsupported
@@ -182,13 +186,13 @@ func Country(next http.Handler) http.Handler {
 // shape) and lists the supported codes so a misconfigured client sees an
 // actionable error rather than a vague "bad request".
 func writeCountryError(w http.ResponseWriter, supplied string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"error":               "invalid_country",
-		"message":             "X-Civic-Country must be one of: KE, UG, TZ, GH, NG, ZA (or ALL for the global dashboard view)",
-		"supplied":            supplied,
-		"supported_countries": SupportedCountries,
-		"global_country":     GlobalCountry,
-	})
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusBadRequest)
+        _ = json.NewEncoder(w).Encode(map[string]any{
+                "error":               "invalid_country",
+                "message":             "X-Civic-Country must be one of: KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG (or ALL for the global dashboard view)",
+                "supplied":            supplied,
+                "supported_countries": SupportedCountries,
+                "global_country":     GlobalCountry,
+        })
 }

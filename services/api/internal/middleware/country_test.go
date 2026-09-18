@@ -136,6 +136,10 @@ func TestCountry_CaseInsensitive(t *testing.T) {
                 {"gh", "GH"},
                 {"ng", "NG"},
                 {"za", "ZA"},
+                {"rw", "RW"},
+                {"zm", "ZM"},
+                {"sn", "SN"},
+                {"eg", "EG"},
                 {"all", GlobalCountry},
         }
         for _, tc := range cases {
@@ -203,14 +207,14 @@ func TestCountry_InvalidReturns400(t *testing.T) {
         if body.Supplied != "XX" {
                 t.Errorf("expected supplied=XX echoed back, got %q", body.Supplied)
         }
-        if len(body.SupportedCountries) != 6 {
-                t.Errorf("expected 6 supported countries, got %d", len(body.SupportedCountries))
+        if len(body.SupportedCountries) != 10 {
+                t.Errorf("expected 10 supported countries, got %d", len(body.SupportedCountries))
         }
         if body.GlobalCountry != GlobalCountry {
                 t.Errorf("expected global_country=ALL, got %q", body.GlobalCountry)
         }
         // Verify the supported list contains the expected codes in order.
-        expected := []string{"KE", "UG", "TZ", "GH", "NG", "ZA"}
+        expected := []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG"}
         for i, c := range expected {
                 if i >= len(body.SupportedCountries) || body.SupportedCountries[i] != c {
                         t.Errorf("supported_countries[%d] = %q, want %q", i, body.SupportedCountries[i], c)
@@ -303,7 +307,7 @@ func TestCountryFromContext_DefaultsToKenyaForNilParent(t *testing.T) {
 // are inverses — every supported code stored by the helper is recoverable
 // (including the special GlobalCountry).
 func TestWithCountry_RoundTrip(t *testing.T) {
-        cases := []string{"KE", "UG", "TZ", "GH", "NG", "ZA", GlobalCountry}
+        cases := []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG", GlobalCountry}
         for _, code := range cases {
                 ctx := WithCountry(context.Background(), code)
                 if got := CountryFromContext(ctx); got != code {
