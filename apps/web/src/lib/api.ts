@@ -1,5 +1,8 @@
 // Tiny typed fetch client for the BFF + AI service.
 // We don't pull in heavier HTTP libs to keep the bundle small.
+//
+// Shared API types — mirror the Go BFF + Python AI service contracts.
+// In production these are generated from openapi.yaml via openapi-typescript.
 
 import type {
   AIResponse,
@@ -7,6 +10,8 @@ import type {
   BillEvent,
   BillSummary,
   BillVersion,
+  BriefArchiveEntry,
+  CivicBrief,
   DailyBriefing,
   SearchResult,
 } from './types';
@@ -107,6 +112,42 @@ export async function search(q: string, opts: {
 export async function getBriefing(date?: string): Promise<DailyBriefing> {
   const qs = date ? `?date=${date}` : '';
   return getJSON(`/api/v1/briefing${qs}`);
+}
+
+// ----- Civic Daily Brief (task ENG-I2) -----
+//
+// The personalised Civic Daily Brief lives under /api/v1/brief/* on the Go
+// BFF. Every item in every section carries an evidence_url — the brief
+// never presents a claim without a primary source. The AI summary carries
+// a disclaimer that the frontend renders next to the ASSUMPTION reality
+// badge.
+
+export interface BriefGenerateRequest {
+  user_id?: string;
+  followed_topics?: string[];
+  followed_institutions?: string[];
+  followed_bills?: string[];
+  country?: string;
+}
+
+/** POST /api/v1/brief/generate — generate (and persist) a personalised brief. */
+export async function generateBrief(req: BriefGenerateRequest = {}): Promise<CivicBrief> {
+  return postJSON<CivicBrief>('/api/v1/brief/generate', req);
+}
+
+/** GET /api/v1/brief/today — today's brief, generated on-demand if missing. */
+export async function getTodaysBrief(): Promise<CivicBrief> {
+  return getJSON<CivicBrief>('/api/v1/brief/today');
+}
+
+/** GET /api/v1/brief/archive — list previously generated briefs (newest-first). */
+export async function listBriefArchive(): Promise<{ items: BriefArchiveEntry[]; total: number }> {
+  return getJSON<{ items: BriefArchiveEntry[]; total: number }>('/api/v1/brief/archive');
+}
+
+/** GET /api/v1/brief/{id} — fetch a single brief by ID. */
+export async function getBrief(id: string): Promise<CivicBrief> {
+  return getJSON<CivicBrief>(`/api/v1/brief/${encodeURIComponent(id)}`);
 }
 
 // ----- AI Q&A (streams via SSE) -----
