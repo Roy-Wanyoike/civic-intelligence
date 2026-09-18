@@ -66,7 +66,7 @@ func TestAdapter_GetOfficialSources(t *testing.T) {
                 assert.Equal(t, "uganda.parliament", s.Adapter)
                 assert.NotEmpty(t, s.URL)
                 assert.Contains(t, s.DocumentTypes, "bill")
-                assert.Greater(t, s.CrawlFrequency, 0)
+                assert.Greater(t, s.CrawlFrequency, time.Duration(0))
                 if strings.Contains(s.URL, "parliament.go.ug") && strings.Contains(s.URL, "bills") {
                         billsURLFound = true
                 }

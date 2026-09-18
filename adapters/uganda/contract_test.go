@@ -114,7 +114,7 @@ func TestUgandaAdapter_SatisfiesFullInterface(t *testing.T) {
 
         // Discover — allowed to return an empty slice or an error (the live site
         // may be unreachable in CI); must NOT panic.
-        items, _ := a.Discover(context.Background())
+        items, err := a.Discover(context.Background())
         // We don't assert on err or items content — the live site may be
         // unreachable in CI. We only assert the call didn't panic.
         _ = items

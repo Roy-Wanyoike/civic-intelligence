@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Roy-Wanyoke/civic-intelligence/adapters/tanzania"
+	"github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania/internal"
 	"github.com/Roy-Wanyoike/civic-intelligence/adapters/tanzania/parliament"
 	"github.com/Roy-Wanyoike/civic-intelligence/packages/contracts"

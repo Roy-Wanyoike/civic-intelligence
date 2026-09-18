@@ -96,9 +96,9 @@ func ParseBillDetail(pageHTML, sourceURL string) ([]contracts.ExtractedRecord, e
 		Kind:          "bill",
 		Title:         b.Title,
 		House:         house,
-		Stage:         MapStageText(b.Stage),
+		Stage:         MapStageText(b.BillNumber),
 		Sponsor:       b.Sponsor,
-		PublishedAt:   parseSADate(b.Date),
+		PublishedAt:   b.DiscoveredAt,
 		SourceURL:     sourceURL,
 		RetrievedAt:   time.Now().UTC(),
 		Confidence:    0.85,
@@ -143,9 +143,9 @@ func parseBillCard(card *html.Node) BillCandidate {
 		case "bill-portfolio-committee":
 			c.PortfolioCommittee = strings.TrimSpace(text)
 		case "bill-stage":
-			c.Stage = strings.TrimSpace(text)
+			c.BillNumber = strings.TrimSpace(text)
 		case "bill-date":
-			c.Date = strings.TrimSpace(text)
+			c.DiscoveredAt = parseSADate(strings.TrimSpace(text))
 		case "bill-house":
 			c.House = strings.TrimSpace(text)
 		}

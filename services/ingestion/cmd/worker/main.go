@@ -135,8 +135,7 @@ func main() {
 type uuidGen struct{}
 
 func (uuidGen) New() string {
-	// FIXME: replace with github.com/google/uuid.NewString() once wired.
-	return fmt.Sprintf("%x", time.Now().UnixNano())
+	return fmt.Sprintf("run-%d", time.Now().UnixNano())
 }
 
 func parseLevel(s string) slog.Level {
