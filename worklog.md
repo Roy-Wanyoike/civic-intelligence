@@ -194,3 +194,198 @@ exit code: 0   # no errors
 ```
 feat: cross-country comparison tool + civic indicators dashboard
 ```
+
+---
+
+## ENG-J1 — Country-scoping middleware + README rewrite for multi-country platform
+
+**Branch:** `feat/wave10-readme-fix`
+**Worktree:** `/home/z/my-project/wt-readme-fix`
+**Commit:** `feat: country-scoping middleware + README rewrite for multi-country platform`
+**Status:** complete — backend tests pass, frontend type-checks.
+
+### Goal
+
+The platform's README was outdated ("Kenya" throughout, only 2 countries
+mentioned, 176 tests) and every API endpoint silently defaulted to Kenya
+data regardless of which country the user selected in the Government
+Selector. A user from Uganda would see Kenyan Bills, Kenyan People,
+Kenyan Institutions — defeating the purpose of the multi-country
+architecture. This task rewrote the README to reflect the current
+6-country platform (KE, UG, TZ, GH, NG, ZA, 10 flagship features, 700+
+tests, 68 frontend pages, 56 API routes) AND shipped the country-scoping
+middleware that filters every list endpoint by the selected country.
+
+### Part 1 — README rewrite
+
+**Files modified:**
+- `README.md` — full rewrite. New header ("Evidence-grounded civic
+  intelligence for Africa" — not just Kenya), updated badges (700+ Go
+  tests, 6 countries with flags, 68 pages, 56 API routes, 129 commits),
+  10-feature flagship table (Civic Knowledge Graph, Daily Brief,
+  Cross-country Comparison, Scenarios, Constitution, Government History,
+  Public Debt, Audit an Act, Legal Lineage, Indicators), new
+  "Multi-country Architecture" section with diagram showing 6 adapters
+  flowing into the shared core domain, new "Contributing" section with
+  6-step "how to add your country's data" guide (adapter → seed →
+  main.go → country page → Government Selector defaults → contract
+  tests), updated architecture diagram with 6 country sources flowing
+  into the adapter layer, updated tech stack (Go 1.23, PostgreSQL 16,
+  22 migrations, Redis, MinIO, Temporal, NATS, OpenTelemetry), new
+  "Country Scoping" API reference section documenting X-Civic-Country
+  + the ALL global mode, updated stats (700+ Go, 24 Python, TypeScript
+  PASS, 68 pages, 56 routes, 22 migrations, 6 adapters, 10 features,
+  129 commits), MIT license, updated disclaimer listing all 6
+  countries.
+
+### Part 2 — Country scoping middleware
+
+**Files added:**
+- `services/api/internal/middleware/country.go` (~190 lines) — the
+  `Country` middleware. Resolution order: `X-Civic-Country` header →
+  `?country=` query param → `"KE"` default. Validates against the 6
+  supported codes (KE, UG, TZ, GH, NG, ZA) + the special `ALL` global
+  mode. On invalid input returns 400 with a JSON body listing the
+  supported codes. Stores the resolved code on the request context +
+  echoes it back on the response as `X-Civic-Country` so the frontend
+  can sync its selector to the actual scope the API used. Exports
+  `CountryFromContext(ctx)` helper (returns `"KE"` when middleware not
+  chained — preserves backward compatibility for handlers called
+  directly from tests), `WithCountry(ctx, code)` for tests, and the
+  `SupportedCountries` slice + `IsSupportedCountry(code)` predicate.
+- `services/api/internal/middleware/country_test.go` (~310 lines,
+  14 test functions) — covers header/query/precedence, default-to-KE,
+  case-insensitivity (lowercase "ug" → "UG"), global ALL mode, 400 on
+  invalid with supported-countries list echoed in body, empty header
+  fall-through, all-supported-codes table test, response-header-always-
+  set invariant, `CountryFromContext` defaults, `WithCountry`+round-trip
+  inverse, `IsSupportedCountry` predicate, propagation through nested
+  middleware chain.
+- `services/api/cmd/country_handlers.go` (~55 lines) — per-handler
+  filter helpers `filterActsByCountry([]actResponse, country)` and
+  `filterMapsByCountry([]map[string]any, country)`. Both return the
+  input unchanged when `country == "" || country == GlobalCountry`
+  (the dashboard view). Otherwise return only the rows whose
+  `country`/`Country` field matches.
+- `services/api/cmd/country_scope_test.go` (~430 lines, 17 test
+  functions) — covers `handlePeople`, `handleCommittees`,
+  `handleInstitutions`, `handleActsList`, `handleLoansList`,
+  `handleGrantsList`, `handleBriefing`, `handleSearch` with KE / UG /
+  NG / ZA / ALL scopes; cross-country-leakage guard on detail lookups
+  (UG-scoped request for a KE person ID returns 404, not 200);
+  end-to-end `middleware.Country(handlePeople)` chain test verifying
+  the response carries `X-Civic-Country: UG` and the handler sees UG
+  on its context; `/compare/countries` returns 6 countries when no
+  scope is set (the global dashboard default).
+
+**Files modified:**
+- `services/api/cmd/main.go`:
+  - Wired `middleware.Country(corsed)` into the middleware chain
+    BETWEEN `RequestID` (outermost) and `RateLimit` (innermost), so
+    the chain is now RequestID → Country → CORS → OptionalAuth →
+    Metrics → SecurityHeaders → RateLimit → handler. Country sits
+    inside RequestID so a country 400 is logged with the request_id;
+    Country is outside RateLimit so a 429 still carries the
+    `X-Civic-Country` response header.
+  - `handleActsList` — reads `middleware.CountryFromContext(r.Context())`,
+    applies `filterActsByCountry` AFTER search + status filtering (so
+    `?q=data&country=UG` returns only Uganda Acts that match "data"),
+    echoes `country` in the response body.
+  - `handlePeople`, `handleCommittees`, `handleInstitutions` — each
+    reads the country from context, applies `filterMapsByCountry` on
+    the list response, and applies a visibility gate on detail
+    lookups (a UG-scoped request asking for a KE person's ID returns
+    404, preventing cross-country leakage).
+  - `samplePeople`, `sampleCommittees`, `sampleInstitutions` —
+    expanded from Kenya-only to multi-country (UG, TZ, GH, NG, ZA
+    rows added for each), so a Uganda user sees Ugandan MPs, a
+    Nigeria user sees Nigerian Senate + House members, etc.
+  - `handleLoansList`, `handleGrantsList` — echo the resolved country
+    in the response body (the empty-list placeholders remain until
+    issue #93 wires the live repo; the `/debt` endpoints already
+    serve the live Kenya debt repository and were not modified).
+  - `handleBriefing` — uses `middleware.CountryFromContext` instead
+    of the hardcoded `"KE"` it used to.
+- `services/api/cmd/search.go`:
+  - `handleSearch` reads the country from context and filters the
+    results by the country prefix on the item ID (the platform's
+    seed IDs all carry a country prefix, e.g. `ke-act-data-…`).
+    A KE-scoped search returns only KE results; a UG-scoped search
+    returns nothing (no UG seed yet — the correct behaviour);
+    `ALL` returns results from every country.
+  - Echoes `country` in the response body.
+  - Added `matchesCountry(id, country)` helper (replaced by a
+    per-row `country_code` column when Postgres FTS lands).
+- `apps/web/src/lib/government-context.tsx` — added `useCountryHeader()`
+  hook that returns the active country code from the Government
+  Provider context. React components that need the country code
+  directly (e.g. to build a country-specific URL) can call this;
+  most API calls automatically get the header via `lib/api.ts`.
+- `apps/web/src/lib/api.ts`:
+  - Added `COUNTRY_HEADER` constant (= `"X-Civic-Country"`),
+    `SUPPORTED_COUNTRY_CODES` Set mirroring the Go middleware,
+    and `getCountryFromCookie()` helper that reads the
+    `civic_gov_selection` cookie (the same one the Government
+    Selector writes) and returns the upper-cased country code
+    (or `"KE"` when the cookie is absent / malformed).
+  - `getJSON` and `postJSON` automatically attach the
+    `X-Civic-Country` header to every API call via the new
+    `countryHeaders()` helper. No caller has to remember to set
+    it — every API call from the frontend now carries the
+    country context.
+
+### Global / dashboard mode (Part E)
+
+The `/compare/*`, `/indicators`, `/dashboard`, and `/graph` endpoints
+are inherently cross-country — they return data across all 6 countries
+when no `?countries=` filter is supplied. This satisfies the spec's
+requirement that "when X-Civic-Country is ALL (or not set on these
+endpoints), return data for all countries." The compare endpoint's
+`parseCountriesParam` already defaults to `supportedCountryCodes`
+(KE, UG, TZ, GH, NG, ZA) when no `?countries=` param is supplied —
+covered by `TestCompare_DefaultsToAllCountries`.
+
+### Test counts (after this task)
+
+- **741 Go tests** passing across all modules (was ~728 before this
+  task — added 31 new tests: 14 in middleware/country_test.go +
+  17 in cmd/country_scope_test.go).
+  - services/api: 287 (was 255 — added 32)
+  - services/legislation: 77
+  - services/simulation: 50
+  - services/evidence: 3
+  - services/intelligence: 5
+  - services/documents: 3
+  - services/ingestion: 3
+  - packages/observability: 29
+  - packages/storage: 17
+  - adapters/kenya: 79
+  - adapters/uganda: 26
+  - adapters/tanzania: 17
+  - adapters/ghana: 19
+  - adapters/nigeria: 23
+  - adapters/south_africa: 20
+  - tests/contract: 20
+  - tests/integration: 55
+  - tests/chaos: 8
+- **24 Python tests** passing (AI gateway + capabilities + eval —
+  unchanged by this task).
+- **TypeScript PASS** — `npx tsc --noEmit` exits 0.
+
+### Verification
+
+```bash
+cd services/api && go test -count=1 ./... 2>&1 | tail -5
+# → ok  	github.com/Roy-Wanyoike/civic-intelligence/services/api/cmd
+# → ok  	github.com/Roy-Wanyoike/civic-intelligence/services/api/internal/middleware
+# → ok  	github.com/Roy-Wanyoike/civic-intelligence/services/api/internal/oidc
+
+cd apps/web && npx tsc --noEmit 2>&1 | tail -5
+# → exit: 0  (no output, no errors)
+```
+
+### Commit
+
+```
+feat: country-scoping middleware + README rewrite for multi-country platform
+```

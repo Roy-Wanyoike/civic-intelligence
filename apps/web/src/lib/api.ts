@@ -15,6 +15,75 @@ import type {
   DailyBriefing,
   SearchResult,
 } from './types';
+import { GOVERNMENT_COOKIE, DEFAULT_SELECTION } from './government-defaults';
+
+// X-Civic-Country is the HTTP header the BFF's CountryMiddleware
+// (services/api/internal/middleware/country.go) reads to scope every list
+// endpoint to the user's selected country. The header value is the ISO
+// 3166-1 alpha-2 code (KE, UG, TZ, GH, NG, ZA) or "ALL" for the global
+// dashboard view. Exported so other client modules (e.g. graph-api,
+// scenarios-api) can reference the constant by name.
+export const COUNTRY_HEADER = 'X-Civic-Country';
+
+/**
+ * Reads the user's selected country code from the `civic_gov_selection`
+ * cookie. This is the SAME cookie that `app/layout.tsx` reads server-side
+ * to seed the GovernmentProvider — so the value the API client sends on
+ * the very first request from a freshly loaded page matches the country
+ * the navbar Government Selector will render.
+ *
+ * Returns "KE" (the platform default) when:
+ *   - running on the server (no `document`)
+ *   - the cookie is absent (first-time visitor)
+ *   - the cookie is malformed (corrupt or older schema)
+ *
+ * This helper is safe to call from any client-side code; it never throws.
+ * It is the single source of truth for "what country does the API client
+ * think the user is in?" — kept here in `lib/api.ts` rather than in
+ * `lib/government-context.tsx` so non-React modules (e.g. the service
+ * worker, server actions) can import it without dragging in the React
+ * client boundary.
+ */
+export function getCountryFromCookie(): string {
+  if (typeof document === 'undefined') return DEFAULT_SELECTION.countryCode;
+  // document.cookie returns a single "k=v; k2=v2; ..." string. We do a
+  // manual scan rather than `new URLSearchParams` because the cookie
+  // value is URI-encoded JSON — URLSearchParams would double-decode it.
+  const prefix = `${GOVERNMENT_COOKIE}=`;
+  const raw = document.cookie
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(prefix));
+  if (!raw) return DEFAULT_SELECTION.countryCode;
+  try {
+    const json = decodeURIComponent(raw.slice(prefix.length));
+    const parsed = JSON.parse(json) as { countryCode?: string };
+    const code = (parsed.countryCode ?? '').toUpperCase();
+    // Validate against the supported set so a stale cookie with an old
+    // country code (e.g. a removed country) does not produce a 400 from
+    // the BFF — fall back to the default instead.
+    if (SUPPORTED_COUNTRY_CODES.has(code) || code === 'ALL') {
+      return code;
+    }
+  } catch {
+    // Malformed cookie — fall through to the default.
+  }
+  return DEFAULT_SELECTION.countryCode;
+}
+
+// SUPPORTED_COUNTRY_CODES mirrors middleware.SupportedCountries in the Go
+// BFF (services/api/internal/middleware/country.go). Kept in sync manually
+// — if a new country is added there, it must be added here too. The
+// contract test in tests/contract/adapter_contract_test.go enforces the
+// adapter side; this constant enforces the client side.
+export const SUPPORTED_COUNTRY_CODES = new Set<string>([
+  'KE',
+  'UG',
+  'TZ',
+  'GH',
+  'NG',
+  'ZA',
+]);
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public detail?: unknown) {
@@ -23,11 +92,20 @@ export class ApiError extends Error {
   }
 }
 
+// countryHeaders returns the country-scoping HTTP header bag for the
+// current session. Used by both getJSON and postJSON so EVERY API call
+// automatically carries the country context — no caller has to remember
+// to set it.
+function countryHeaders(): Record<string, string> {
+  return { [COUNTRY_HEADER]: getCountryFromCookie() };
+}
+
 async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(url, {
     ...init,
     headers: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
+      ...countryHeaders(),
       ...(init?.headers ?? {}),
     },
   });
@@ -51,7 +129,11 @@ export { getJSON as getJSON_ };
 export async function postJSON<T>(url: string, body?: unknown): Promise<T> {
   const init: RequestInit = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...countryHeaders(),
+    },
   };
   if (body !== undefined) init.body = JSON.stringify(body);
   return getJSON<T>(url, init);
