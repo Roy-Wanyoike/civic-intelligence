@@ -108,9 +108,20 @@ func main() {
         apiHandler.HandleFunc("/api/v1/briefing", handleBriefing)
 
         // People, committees, institutions — public read.
+        // /api/v1/people (list — no trailing slash) AND /api/v1/people/
+        // (per-person + /scorecard sub-resource, task ENG-K2) both go
+        // through handlePeople, which dispatches on the trailing path tail.
+        apiHandler.HandleFunc("/api/v1/people", handlePeople)
         apiHandler.HandleFunc("/api/v1/people/", handlePeople)
         apiHandler.HandleFunc("/api/v1/committees/", handleCommittees)
         apiHandler.HandleFunc("/api/v1/institutions/", handleInstitutions)
+
+        // Constituencies (task ENG-K2) — per-area civic dashboard. The list
+        // route (/api/v1/constituencies?country=KE) and the detail route
+        // (/api/v1/constituencies/{id}) are both registered so a citizen can
+        // browse the 10 sample Kenyan constituencies.
+        apiHandler.HandleFunc("/api/v1/constituencies", makeConstituenciesListHandler())
+        apiHandler.HandleFunc("/api/v1/constituencies/", makeConstituencyDetailHandler())
 
         // Loans + grants — public read.
         apiHandler.HandleFunc("/api/v1/loans", handleLoansList)
@@ -1055,8 +1066,30 @@ func makeTerminologyHandler() http.HandlerFunc {
 // --- People / Committees / Institutions ---
 
 func handlePeople(w http.ResponseWriter, r *http.Request) {
-        id := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
-        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "People — pending (issue #19)"})
+        // The people router is registered on /api/v1/people/. We dispatch on
+        // the trailing path tail:
+        //   - "" (root, no trailing slash)  → list the 5 sample people
+        //   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
+        //   - "{id}"                          → person detail (still pending,
+        //                                       issue #19 — kept as stub)
+        tail := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
+        // The base /api/v1/people route is registered separately (no trailing
+        // slash), so this handler is only called for /api/v1/people/{...}.
+        if tail == "" {
+                makePeopleListHandler()(w, r)
+                return
+        }
+        // MP scorecard sub-resource (task ENG-K2). The scorecard handler
+        // enforces the NO_POLITICAL_PERFORMANCE_SCORE invariant — it returns
+        // raw counts + rates only, never a composite score.
+        if strings.HasSuffix(tail, "/scorecard") {
+                makeScorecardHandler()(w, r)
+                return
+        }
+        // Default: existing per-person stub (issue #19). Kept for backward
+        // compat with any external link still pointing at /api/v1/people/{id}.
+        id := tail
+        writeJSON(w, http.StatusOK, map[string]any{"id": id, "note": "People detail — pending (issue #19). Use /api/v1/people/{id}/scorecard for the factual MP record."})
 }
 
 func handleCommittees(w http.ResponseWriter, r *http.Request) {

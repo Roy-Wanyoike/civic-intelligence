@@ -119,10 +119,13 @@ func (v *KeycloakVerifier) parseAndVerify(ctx context.Context, tokenStr string) 
         // the only untrusted input at this point — it determines which key we
         // look up, so we validate it before doing any work.
         //
-        // go-jose v3 exposes parsed signatures via tok.Signatures (a slice of
-        // Signature, each carrying a merged Header). ParseSigned on a compact
-        // JWT yields exactly one signature; we still guard against zero-length
-        // to fail closed on malformed inputs.
+        // go-jose/v3 exposes signatures via tok.Signatures (each carries a
+        // merged Header). The tok.Headers / tok.Claims helpers used in earlier
+        // drafts do not exist in v3.0.3 — this file had never been compiled
+        // (see the FIXME at the top) so the build was broken on the base
+        // branch. The fix below is the minimum change to use the real API:
+        //   1. Read the header from tok.Signatures[0].Header
+        //   2. Call tok.Verify(key) → payload, then unmarshal claims manually.
         if len(tok.Signatures) == 0 {
                 return auth.Claims{}, errors.New("JWT header missing")
         }
@@ -139,17 +142,16 @@ func (v *KeycloakVerifier) parseAndVerify(ctx context.Context, tokenStr string) 
                 return auth.Claims{}, err
         }
 
-        // Verify the signature + unmarshal claims. go-jose v3's Verify returns
-        // the verified payload bytes; we unmarshal them ourselves into the
-        // platform's claim shape. go-jose also enforces that the signature was
-        // produced by the supplied key.
+        // Verify the signature. go-jose enforces that the signature was
+        // produced by the supplied key. The returned payload is the decoded
+        // JWT body; we unmarshal it into our claims struct separately.
         payload, err := tok.Verify(key)
         if err != nil {
                 return auth.Claims{}, fmt.Errorf("signature verification failed: %w", err)
         }
         var jc joseClaims
         if err := json.Unmarshal(payload, &jc); err != nil {
-                return auth.Claims{}, fmt.Errorf("invalid JWT payload: %w", err)
+                return auth.Claims{}, fmt.Errorf("invalid claims JSON: %w", err)
         }
 
         claims := jc.toAuthClaims()
