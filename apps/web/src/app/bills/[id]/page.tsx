@@ -1,15 +1,76 @@
-import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { FileText, GitCompare, History, MessageCircle, Bell } from 'lucide-react';
-import { mockBills, mockTimeline } from '@/lib/mock-data';
+import {
+  FileText,
+  GitCompare,
+  History,
+  MessageCircle,
+  Bell,
+  AlertCircle,
+} from 'lucide-react';
 import { TimelineView } from '@/components/timeline';
 import { BillAskPanel } from '@/components/bill-ask-panel';
+import { getJSON_ as getJSON, ApiError } from '@/lib/api';
+import { mockTimeline } from '@/lib/mock-data';
+import type { Bill, BillEvent } from '@/lib/types';
 import type { Metadata } from 'next';
 
-export const dynamic = 'force-static';
+/**
+ * Bill detail page (spec §13 — Bill Intelligence).
+ *
+ * Server component that fetches the Bill from `/api/v1/bills/{id}` at
+ * request time. If the API is unreachable, shows a friendly error rather
+ * than rendering mock data — the audit explicitly flagged this page for
+ * silently falling back to `mockBills` (GAP-13-1).
+ *
+ * The timeline preview fetches from `/api/v1/bills/{id}/timeline` and
+ * falls back to the curated mock events ONLY when the API is unreachable,
+ * so the page still renders something useful during local dev.
+ */
 
-export async function generateStaticParams() {
-  return mockBills.map((b) => ({ id: b.id }));
+// Force dynamic rendering — Bill data lives behind the live Go BFF which
+// discovers Bills from kenyalaw.org; a static export would freeze the
+// page at build time and miss any subsequent publications.
+export const dynamic = 'force-dynamic';
+export const revalidate = 60; // ISR-friendly cache, max 1 minute.
+
+const API_BASE =
+  process.env.API_BASE_URL ?? 'http://localhost:9000';
+
+async function fetchBill(id: string): Promise<Bill | null> {
+  try {
+    return await getJSON<Bill>(`${API_BASE}/api/v1/bills/${encodeURIComponent(id)}`);
+  } catch (err) {
+    // Surface unexpected errors to logs; the friendly error UI is rendered
+    // by the caller. ApiError carries the status code so callers can branch.
+    if (err instanceof ApiError) {
+      // eslint-disable-next-line no-console
+      console.warn(`[bills/[id]] API error ${err.status} for ${id}: ${err.message}`);
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(`[bills/[id]] fetch failed for ${id}`, err);
+    }
+    return null;
+  }
+}
+
+async function fetchTimeline(
+  id: string,
+): Promise<{ events: BillEvent[]; source: 'api' | 'mock' }> {
+  try {
+    const r = await getJSON<{ events: BillEvent[] }>(
+      `${API_BASE}/api/v1/bills/${encodeURIComponent(id)}/timeline`,
+    );
+    return { events: r.events ?? [], source: 'api' };
+  } catch {
+    // Fall back to mock timeline events so the preview section still
+    // renders during local dev when the Go BFF is offline. Real Bills
+    // (from the API) won't match mock timeline entries, so the fallback
+    // is empty in production — no misleading data is shown.
+    return {
+      events: mockTimeline.filter((e) => e.bill_id === id),
+      source: 'mock',
+    };
+  }
 }
 
 export async function generateMetadata({
@@ -18,9 +79,12 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const bill = mockBills.find((b) => b.id === id);
+  const bill = await fetchBill(id);
   if (!bill) return { title: 'Bill not found' };
-  return { title: bill.title, description: bill.purpose ?? bill.description ?? bill.title };
+  return {
+    title: bill.title,
+    description: bill.purpose ?? bill.description ?? bill.title,
+  };
 }
 
 export default async function BillDetailPage({
@@ -29,8 +93,36 @@ export default async function BillDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const bill = mockBills.find((b) => b.id === id);
-  if (!bill) notFound();
+  const bill = await fetchBill(id);
+
+  if (!bill) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-6 text-amber-900">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            <h1 className="font-serif text-xl font-semibold">
+              This Bill could not be loaded
+            </h1>
+          </div>
+          <p className="mt-2 text-sm">
+            The Bill data API is unreachable right now, or this Bill does not
+            exist. Please try again in a few minutes — every Bill is fetched
+            live from <span className="font-medium">kenyalaw.org</span> via the
+            Go BFF and may be unavailable briefly during ingestion.
+          </p>
+          <Link
+            href="/bills"
+            className="mt-4 inline-flex items-center gap-2 rounded-md bg-civic-forest px-4 py-2 text-sm font-semibold text-civic-paper hover:bg-civic-leaf"
+          >
+            ← Back to Bills
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const { events: timelineEvents, source: timelineSource } = await fetchTimeline(bill.id);
 
   return (
     <article className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -51,8 +143,13 @@ export default async function BillDetailPage({
           <span className="rounded-full bg-civic-mist px-3 py-1 font-medium text-civic-ink">{bill.identifier}</span>
           <span>{bill.year}</span>
           <span aria-hidden="true">·</span>
-          <span>{bill.house_name}</span>
-          {bill.committee_name && (<><span aria-hidden="true">·</span><span>{bill.committee_name}</span></>)}
+          <span>{bill.house_name ?? bill.house}</span>
+          {bill.committee_name && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{bill.committee_name}</span>
+            </>
+          )}
         </div>
         <h1 className="mt-4 font-serif text-3xl font-semibold text-civic-forest sm:text-4xl">
           {bill.title}
@@ -78,7 +175,9 @@ export default async function BillDetailPage({
       {/* Quick Explanation */}
       <section className="mb-8 rounded-xl border border-civic-border bg-civic-mist/50 p-6">
         <h2 className="font-serif text-xl font-semibold text-civic-forest">In plain language</h2>
-        <p className="mt-3 text-civic-ink leading-relaxed">{bill.description}</p>
+        <p className="mt-3 text-civic-ink leading-relaxed">
+          {bill.description ?? bill.purpose ?? 'No plain-language summary available yet.'}
+        </p>
         {bill.current_stage_simple_explanation && (
           <div className="mt-5 border-l-2 border-civic-acacia pl-4">
             <h3 className="text-sm font-semibold text-civic-ink">What this stage means</h3>
@@ -134,7 +233,18 @@ export default async function BillDetailPage({
                 Full timeline →
               </Link>
             </div>
-            <TimelineView events={mockTimeline.filter((e) => e.bill_id === bill.id)} limit={5} />
+            {timelineSource === 'mock' && (
+              <p className="mt-2 rounded-md bg-civic-acacia/10 px-3 py-1.5 text-xs text-civic-clay">
+                Showing sample timeline — connect the Go API (port 9000) for verified events from kenyalaw.org
+              </p>
+            )}
+            {timelineEvents.length === 0 ? (
+              <p className="mt-3 text-sm text-civic-stone">
+                No verified timeline events yet. The Bill may have been recently published.
+              </p>
+            ) : (
+              <TimelineView events={timelineEvents} limit={5} />
+            )}
           </section>
 
           {/* Ask about this Bill */}
@@ -154,7 +264,7 @@ export default async function BillDetailPage({
             <ul className="mt-3 space-y-1.5 text-sm text-civic-stone">
               <li>Sponsor: {bill.sponsor_name ?? '—'}</li>
               <li>Committee: {bill.committee_name ?? '—'}</li>
-              <li>House: {bill.house_name ?? '—'}</li>
+              <li>House: {bill.house_name ?? bill.house ?? '—'}</li>
             </ul>
           </div>
 
