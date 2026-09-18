@@ -73,7 +73,7 @@ const GlobalCountry = "ALL"
 //
 // Wave 12 (ENG-L1, 2026) added Rwanda (RW), Zambia (ZM), Senegal (SN),
 // and Egypt (EG) — bringing the platform from 6 to 10 supported countries.
-var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG"}
+var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG", "MA", "CD", "ET", "MW", "RW", "ZM", "SN", "EG"}
 
 // countryCtxKey is the typed context key for country storage. A distinct
 // type avoids collisions with other packages' context keys (and with the
