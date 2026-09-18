@@ -45,6 +45,11 @@ coverage/
 .coverage
 htmlcov/
 
+# Playwright transient artifacts
+playwright-report/
+test-results/
+playwright/.cache/
+
 # Docker
 *.pid
 
