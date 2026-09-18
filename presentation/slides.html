@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Building Civic Intelligence with Next.js + AI — droidcon Uganda 2026</title>
+
+  <!-- Reveal.js 5 from CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/black.css" id="theme">
+
+  <!-- highlight.js for code blocks -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/atom-one-dark.min.css">
+
+  <!-- Mermaid.js for diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+
+  <style>
+    /* Civic Intelligence palette — from apps/web/src/lib/design-tokens.ts */
+    :root {
+      --civic-forest: #0c3b2e;
+      --civic-leaf:   #15784a;
+      --civic-acacia: #d4a017;
+      --civic-clay:   #9c4221;
+      --civic-stone:  #52606b;
+      --civic-mist:   #f5f7f6;
+      --civic-ink:    #0b1f17;
+      --civic-paper:  #ffffff;
+      --civic-border: #c8d3cc;
+      --fact-bg:      #ecfdf5;
+      --fact-text:    #065f46;
+      --evidence-bg:  #f0f9ff;
+      --evidence-text:#075985;
+      --assumption-bg:#fffbeb;
+      --assumption-text:#92400e;
+      --simulation-bg:#faf5ff;
+      --simulation-text:#6b21a8;
+      --unknown-bg:   #f5f5f4;
+      --unknown-text:  #44403c;
+      --limitation-bg:#fff1f2;
+      --limitation-text:#9f1239;
+    }
+
+    .reveal {
+      background: var(--civic-ink);
+      color: var(--civic-mist);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-weight: 350;
+    }
+
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+      font-family: ui-serif, Georgia, "Times New Roman", serif;
+      color: var(--civic-acacia);
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 600;
+      text-shadow: none;
+    }
+
+    .reveal h1 { font-size: 2.6em; line-height: 1.1; }
+    .reveal h2 { font-size: 1.9em; line-height: 1.15; margin-bottom: 0.6em; }
+    .reveal h3 { font-size: 1.4em; color: var(--civic-mist); margin-bottom: 0.4em; }
+
+    .reveal a {
+      color: var(--civic-acacia);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .reveal .slides section {
+      padding: 40px 60px;
+      text-align: left;
+    }
+
+    .reveal .slides section.title-slide {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(ellipse at top, var(--civic-forest) 0%, var(--civic-ink) 80%);
+    }
+
+    .reveal .slides section.title-slide h1 {
+      font-size: 3.1em;
+      max-width: 24ch;
+      margin: 0 auto 0.3em;
+    }
+
+    .reveal .slides section.title-slide .subtitle {
+      font-size: 1.2em;
+      color: var(--civic-mist);
+      opacity: 0.85;
+      margin-bottom: 1.5em;
+    }
+
+    .reveal .slides section.title-slide .speaker {
+      font-size: 1.0em;
+      color: var(--civic-acacia);
+      letter-spacing: 0.02em;
+    }
+
+    .reveal .slides section.title-slide .meta {
+      font-size: 0.8em;
+      color: var(--civic-mist);
+      opacity: 0.6;
+      margin-top: 2em;
+    }
+
+    .reveal ul, .reveal ol {
+      margin-left: 0;
+      padding-left: 1.2em;
+    }
+
+    .reveal ul li, .reveal ol li {
+      margin-bottom: 0.35em;
+      line-height: 1.4;
+    }
+
+    .reveal ul.tight li, .reveal ol.tight li { margin-bottom: 0.15em; }
+
+    .reveal strong { color: var(--civic-paper); font-weight: 600; }
+    .reveal em { color: var(--civic-acacia); font-style: italic; }
+
+    .reveal pre {
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(212,160,23,0.18);
+      border-radius: 6px;
+      padding: 14px 16px;
+      font-size: 0.62em;
+      line-height: 1.45;
+      width: 100%;
+      box-shadow: none;
+      margin: 0.5em 0 0.8em;
+    }
+
+    .reveal pre code {
+      background: transparent;
+      padding: 0;
+      color: #e5e7eb;
+      font-family: "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+      max-height: none;
+    }
+
+    .reveal blockquote {
+      background: rgba(212,160,23,0.08);
+      border-left: 3px solid var(--civic-acacia);
+      padding: 12px 18px;
+      font-style: italic;
+      color: var(--civic-mist);
+      box-shadow: none;
+      margin: 1em 0;
+    }
+
+    .reveal .footer-meta {
+      position: fixed;
+      bottom: 12px;
+      right: 18px;
+      font-size: 0.55em;
+      color: var(--civic-stone);
+      opacity: 0.7;
+      z-index: 5;
+    }
+
+    /* Reality badges — match the React component */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      border: 1px solid;
+      font-size: 0.7em;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    .badge.fact       { background: var(--fact-bg);       color: var(--fact-text);       border-color: var(--fact-text); }
+    .badge.evidence   { background: var(--evidence-bg);   color: var(--evidence-text);  border-color: var(--evidence-text); }
+    .badge.assumption { background: var(--assumption-bg);  color: var(--assumption-text); border-color: var(--assumption-text); }
+    .badge.simulation { background: var(--simulation-bg);  color: var(--simulation-text); border-color: var(--simulation-text); }
+    .badge.unknown    { background: var(--unknown-bg);     color: var(--unknown-text);    border-color: var(--unknown-text); }
+    .badge.limitation { background: var(--limitation-bg);  color: var(--limitation-text); border-color: var(--limitation-text); }
+
+    .badge-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .badge-grid .badge-cell {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+    .badge-grid .badge-cell .label { display: block; font-weight: 700; font-size: 0.9em; margin-bottom: 4px; }
+    .badge-grid .badge-cell .desc  { font-size: 0.75em; color: var(--civic-mist); opacity: 0.85; }
+
+    .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .columns.narrow { grid-template-columns: 1.4fr 1fr; }
+
+    .callout {
+      background: rgba(21,120,74,0.10);
+      border: 1px solid rgba(21,120,74,0.35);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 12px 0;
+      font-size: 0.85em;
+    }
+    .callout.warn {
+      background: rgba(156,66,33,0.10);
+      border-color: rgba(156,66,33,0.35);
+    }
+    .callout strong { color: var(--civic-acacia); }
+
+    .stack-num {
+      display: inline-block;
+      width: 1.6em;
+      height: 1.6em;
+      line-height: 1.6em;
+      text-align: center;
+      border-radius: 50%;
+      background: var(--civic-leaf);
+      color: var(--civic-paper);
+      font-weight: 700;
+      font-size: 0.75em;
+      margin-right: 8px;
+    }
+
+    .stat-row {
+      display: flex;
+      gap: 28px;
+      flex-wrap: wrap;
+      margin: 14px 0;
+    }
+    .stat-row .stat {
+      flex: 1 1 120px;
+      min-width: 120px;
+    }
+    .stat-row .stat .n {
+      font-family: ui-serif, Georgia, serif;
+      font-size: 2.0em;
+      color: var(--civic-acacia);
+      display: block;
+      line-height: 1;
+    }
+    .stat-row .stat .l {
+      font-size: 0.7em;
+      color: var(--civic-mist);
+      opacity: 0.8;
+      display: block;
+      margin-top: 6px;
+    }
+
+    .country-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .country-grid .c {
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 0.8em;
+    }
+    .country-grid .c.active {
+      background: rgba(21,120,74,0.18);
+      border-color: var(--civic-leaf);
+    }
+    .country-grid .c.ready {
+      background: rgba(212,160,23,0.18);
+      border-color: var(--civic-acacia);
+    }
+    .country-grid .c .flag { font-size: 1.4em; display: block; margin-bottom: 4px; }
+    .country-grid .c .code { font-weight: 700; color: var(--civic-paper); }
+    .country-grid .c .status { font-size: 0.7em; color: var(--civic-mist); opacity: 0.85; display: block; margin-top: 3px; }
+
+    .mermaid {
+      background: var(--civic-mist);
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+      margin: 6px 0;
+    }
+
+    .small { font-size: 0.78em; opacity: 0.85; }
+    .tag { color: var(--civic-acacia); font-weight: 700; }
+
+    /* tighter control of code on diagram-light slides */
+    .reveal pre.small { font-size: 0.55em; }
+    .reveal pre.medium { font-size: 0.62em; }
+  </style>
+</head>
+<body>
+
+<div class="reveal">
+  <div class="slides">
+
+    <!-- ================================================================== -->
+    <!-- Slide 1 — Title -->
+    <!-- ================================================================== -->
+    <section class="title-slide">
+      <h1>Building Civic Intelligence<br>with Next.js + AI</h1>
+      <p class="subtitle">Lessons from Kenya's Parliament</p>
+      <p class="speaker">Roy Wanyoike</p>
+      <p class="meta">
+        droidcon Uganda 2026 &middot; October 28&ndash;29, Kampala<br>
+        <a href="https://github.com/Roy-Wanyoike/civic-intelligence">github.com/Roy-Wanyoike/civic-intelligence</a>
+      </p>
+      <aside class="notes">
+        Hi, I'm Roy. I'm here to talk about a year-long project I've been building
+        in Nairobi — the Civic Intelligence Platform. It's an open-source effort
+        to make East African parliamentary information legible to ordinary
+        citizens. I'll walk you through what we built, why we built it this way,
+        and the lessons that I think will save you time if you ever try something
+        similar. 30 seconds. Don't read the title. Move on.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 2 — The problem -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>The problem</h2>
+      <p>Citizens can't follow what Parliament is doing.</p>
+      <ul class="tight">
+        <li>50+ live Bills on <span class="tag">kenyalaw.org</span> at any moment</li>
+        <li>80-page Bill texts in legalese</li>
+        <li>Two chambers (National Assembly + Senate) publishing their own Hansard</li>
+        <li>Gazette notices, Order Papers, committee reports, assent RSS feeds</li>
+        <li>By the time a Bill becomes an Act, even keen followers lose the thread</li>
+      </ul>
+      <blockquote>
+        The information is technically public.<br>
+        It is almost impossible to read.<br><br>
+        That gap — between &ldquo;public&rdquo; and &ldquo;accessible&rdquo; — is where the harm happens.
+      </blockquote>
+      <aside class="notes">
+        The problem is simple. Parliament publishes a lot — Bills, Hansard, Order
+        Papers, committee reports, assent notices, the Kenya Gazette. It's all
+        public. And it is almost impossible for a normal citizen to read.
+        A typical Kenyan Bill runs 80 pages of legalese. The Kenya Law site lists
+        50+ live Bills at any moment. The National Assembly and Senate each
+        publish their own Hansard. By the time a Bill becomes an Act, even people
+        who follow politics for a living have lost the thread. The information is
+        technically there. You just can't understand it. The gap between public
+        and accessible is where the harm happens. 2 minutes. Stop on the last bullet.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 3 — The opportunity -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>The opportunity</h2>
+      <p>The sources are out there.</p>
+      <div class="callout">
+        <strong>parliament.go.ke</strong> &middot; <strong>kenyalaw.org</strong> &middot; <strong>president.go.ke</strong><br>
+        HTML &middot; PDF &middot; RSS — ugly, structured enough to scrape.
+      </div>
+      <blockquote>
+        What if every authoritative source is a first-class citizen,
+        every claim is grounded in one of them,
+        and AI does the <strong>explaining</strong> — not the <strong>deciding</strong>?
+      </blockquote>
+      <p class="small">
+        Show people what happened. Explain what it means. Show them the evidence.
+        Let them decide what to think.<br>
+        Not a political platform. Not affiliated with the Government of Kenya.
+        A civic-information project.
+      </p>
+      <aside class="notes">
+        The sources are out there. parliament.go.ke, kenyalaw.org,
+        president.go.ke — they publish HTML, PDF, RSS. It's structured enough
+        to scrape, even if it's ugly. So the opportunity is: what if we treat
+        every authoritative source as a first-class citizen, ground every claim
+        in one of them, and let AI do the explaining instead of the deciding?
+        That's the whole pitch. Show people what happened. Explain what it means.
+        Show them the evidence. Let them decide what to think. We are not a
+        political platform. We don't rank politicians, we don't endorse, we don't
+        tell you what to think. 1.5 minutes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 4 — Architecture overview -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Architecture overview</h2>
+      <div class="mermaid">
+graph LR
+  classDef go fill:#0c3b2e,stroke:#15784a,color:#f5f7f6
+  classDef py fill:#9c4221,stroke:#d4a017,color:#f5f7f6
+  classDef ts fill:#15784a,stroke:#d4a017,color:#f5f7f6
+  classDef db fill:#1e3a8a,stroke:#3b82f6,color:#f5f7f6
+  classDef inf fill:#52606b,stroke:#94a3b8,color:#f5f7f6
+
+  Sources["Official Sources<br/>parliament.go.ke<br/>kenyalaw.org<br/>president.go.ke"]:::inf
+  Adapters["Country Adapters<br/>Kenya ✅<br/>Uganda ✅"]:::go
+  Ingestion["Ingestion<br/>Go"]:::go
+  Docs["Documents<br/>parse + chunk"]:::go
+  Evidence["Evidence<br/>citations"]:::go
+  Intel["Intelligence<br/>candidate-fact<br/>validation"]:::go
+  Legis["Legislation<br/>Bills, Acts, stages"]:::go
+  Sim["Simulation<br/>what-if engine"]:::go
+  Notif["Notifications<br/>follows + alerts"]:::go
+  API["Go BFF<br/>services/api<br/>30+ REST endpoints"]:::go
+  AI["Python AI<br/>FastAPI<br/>12 capabilities<br/>RAG + citation validation"]:::py
+  Web["Next.js App Router<br/>36 routes<br/>TanStack Query"]:::ts
+  PG[("Postgres 16<br/>pgvector<br/>9 schemas<br/>17 migrations")]:::db
+  NATS["NATS JetStream"]:::inf
+  Temporal["Temporal"]:::inf
+
+  Sources --> Adapters --> Ingestion
+  Ingestion --> Docs --> Evidence --> Intel --> Legis
+  Legis --> Sim
+  Legis --> Notif
+  API --> Legis
+  API --> AI
+  AI --> API
+  API --> Web
+  Legis --> PG
+  Ingestion -. events .-> NATS
+  NATS -.-> Temporal
+      </div>
+      <div class="columns">
+        <div>
+          <p class="small"><strong>Go + Python side by side.</strong> The LLM lives in its own service behind a provider-agnostic gateway — never called from the frontend directly.</p>
+        </div>
+        <div>
+          <p class="small"><strong>5 deployables, not 15.</strong> Modular monolith + workers (ADR-0001). Boundaries exist in code; deployment can split later.</p>
+        </div>
+      </div>
+      <aside class="notes">
+        This is the system. It's a lot. On the left, official sources. Each country
+        has an adapter that knows how to discover, fetch, and parse its own sources.
+        In the middle, a Go BFF — services/api. It exposes the REST endpoints the
+        frontend hits. Behind it are domain services: legislation owns Bills, Acts,
+        stages; ingestion crawls; documents parses PDFs and HTML; evidence owns
+        citations; intelligence runs candidate-fact validation; notifications handles
+        follows; simulation is the what-if engine. On the right, the Next.js frontend
+        — 36 routes, App Router, TanStack Query. And the Python AI service is a
+        separate FastAPI app — 12 capabilities, RAG pipeline, citation validation.
+        Two things I want you to notice. First — Python and Go live side by side.
+        We did not try to do the AI in Go, and we did not try to do the Bill state
+        machine in Python. The boundary is HTTP, not a library call. Second — the
+        LLM is behind a gateway. The frontend never calls OpenAI directly. Every
+        request goes through the gateway, which enforces budgets, retries, fallback,
+        and routes by capability — bill_summarizer, civic_question_answerer,
+        timeline_extractor — not by provider. 3 minutes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 5 — Evidence-first AI pipeline -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Evidence-first AI — the pipeline</h2>
+      <div class="mermaid">
+graph LR
+  classDef stage fill:#0c3b2e,stroke:#15784a,color:#f5f7f6
+  classDef check fill:#9c4221,stroke:#d4a017,color:#f5f7f6
+  classDef ok fill:#15784a,stroke:#d4a017,color:#f5f7f6
+  classDef bad fill:#7f1d1d,stroke:#ef4444,color:#f5f7f6
+
+  Q["Question"]:::stage --> Intent["Intent<br/>classification"]:::stage
+  Intent --> Expand["Query<br/>expansion"]:::stage
+  Expand --> Search["Hybrid search<br/>FTS + pgvector"]:::stage
+  Search --> Rerank["Rerank"]:::stage
+  Rerank --> Select["Evidence<br/>selection"]:::stage
+  Select --> Ctx["Context<br/>construction<br/>with citations"]:::stage
+  Ctx --> LLM["LLM<br/>provider-agnostic"]:::stage
+  LLM --> Extract["Claim<br/>extraction"]:::stage
+  Extract --> Validate["Citation<br/>validation"]:::check
+  Validate --> Resp["Response<br/>with citations"]:::ok
+  Validate --> Fail["FAILED —<br/>surface honestly"]:::bad
+      </div>
+      <p class="small"><strong>Citation validator — 5 checks per claim:</strong></p>
+      <ol class="tight small">
+        <li>Does the cited source exist?</li>
+        <li>Does the citation point to the correct document?</li>
+        <li>Does the snippet share at least one significant word with the claim?</li>
+        <li>Is the claim stronger than the evidence?</li>
+        <li>Is the source authoritative?</li>
+      </ol>
+      <div class="callout warn">
+        If validation fails &rarr; response is marked <code>validation_status = FAILED</code>
+        and surfaced as <em>&ldquo;[This response could not be fully verified from available authoritative sources.]&rdquo;</em>
+        <br><strong>Under-claiming is the feature, not the bug.</strong>
+      </div>
+      <aside class="notes">
+        Here's the RAG pipeline. It's standard RAG with one twist at the end.
+        Question in. Intent classification — is this a summarize, a timeline,
+        a stage, an impact question? Query expansion. Hybrid search — FTS plus
+        pgvector. Rerank. Evidence selection. Context construction with citations.
+        Then the LLM. Then — and this is the part that took the longest — claim
+        extraction and citation validation. The citation validator runs five
+        checks on every claim. Does the cited source exist? Does the citation point
+        to the right document? Does the snippet support the claim — meaning, do
+        the claim and the snippet share at least one significant word? Is the
+        claim stronger than the evidence? Is the source authoritative? If any of
+        those fail, the response is not silently passed through. We mark it
+        validation_status = FAILED and the UI surfaces it as: This response could
+        not be fully verified. Is the heuristic perfect? No. We've had false
+        positives where a perfectly good claim got flagged because the citation
+        used a synonym. But under-claiming is the feature, not the bug. Civic
+        information is the one domain where being wrong confidently is the worst
+        failure mode. 3 minutes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 6 — The six reality labels -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>The six reality labels</h2>
+      <p class="small">Every piece of content carries a label. Six of them.</p>
+      <div class="badge-grid">
+        <div class="badge-cell">
+          <span class="badge fact">FACT</span>
+          <span class="desc">Verified civic information from an authoritative source.</span>
+        </div>
+        <div class="badge-cell">
+          <span class="badge evidence">EVIDENCE</span>
+          <span class="desc">Authoritative supporting material, traceable to a source.</span>
+        </div>
+        <div class="badge-cell">
+          <span class="badge assumption">ASSUMPTION</span>
+          <span class="desc">An explicit scenario input that has not been observed.</span>
+        </div>
+        <div class="badge-cell">
+          <span class="badge simulation">SIMULATION</span>
+          <span class="desc">A modeled outcome. NOT an observed civic fact.</span>
+        </div>
+        <div class="badge-cell">
+          <span class="badge unknown">UNKNOWN</span>
+          <span class="desc">Insufficient evidence. The platform does not fabricate precision.</span>
+        </div>
+        <div class="badge-cell">
+          <span class="badge limitation">LIMITATION</span>
+          <span class="desc">A known limitation of the model or scenario.</span>
+        </div>
+      </div>
+      <div class="columns">
+        <div>
+          <pre class="small"><code class="language-go">// services/simulation/internal/domain/scenario.go
+type RealityLayer string
+
+const (
+  RealityLayerObserved     RealityLayer = "OBSERVED"
+  RealityLayerHypothetical RealityLayer = "HYPOTHETICAL"
+  RealityLayerModeled      RealityLayer = "MODELED"
+  RealityLayerUnknown      RealityLayer = "UNKNOWN"
+)
+
+func (s *Scenario) Validate() error {
+  if s.RealityLayer != RealityLayerHypothetical {
+    return fmt.Errorf("scenario: reality layer "+
+      "must be HYPOTHETICAL, got %s", s.RealityLayer)
+  }
+  if s.Baseline.RealityLayer != RealityLayerObserved {
+    return errors.New("scenario: baseline must be tagged OBSERVED")
+  }
+  // ... more invariants
+}</code></pre>
+        </div>
+        <div>
+          <pre class="small"><code class="language-tsx">// apps/web/src/components/reality-labels.tsx
+export type RealityLabel =
+  | 'FACT' | 'EVIDENCE'
+  | 'ASSUMPTION' | 'SIMULATION'
+  | 'UNKNOWN' | 'LIMITATION';
+
+export function RealityBadge({ kind }: Props) {
+  return (
+    <span className={cx('badge', kind.toLowerCase())}
+          aria-label={kind}>
+      <span aria-hidden="true" className="dot" />
+      {kind}
+    </span>
+  );
+}</code></pre>
+        </div>
+      </div>
+      <div class="callout">
+        The <strong>visual language</strong> and the <strong>type language</strong> are the same language.
+        That's the trick. You can't have one without the other.
+      </div>
+      <aside class="notes">
+        Here's the part I'm most proud of. Every piece of content on the platform
+        carries a reality label. Six of them. FACT — verified civic information
+        from an authoritative source. EVIDENCE — authoritative supporting material,
+        traceable to a source. ASSUMPTION — an explicit scenario input that has
+        not been observed. SIMULATION — a modeled outcome, NOT an observed civic
+        fact. UNKNOWN — insufficient evidence, the platform does not fabricate
+        precision. LIMITATION — a known limitation of the model or scenario. These
+        are not just UI tags. They are enforced at the type level. The Go domain
+        model has a RealityLayer enum: OBSERVED, HYPOTHETICAL, MODELED, UNKNOWN.
+        Every record in the simulation domain is tagged HYPOTHETICAL or MODELED —
+        never OBSERVED. Observed records belong to the legislation service, not
+        the simulation service. You cannot accidentally save a simulated outcome
+        as if it were a fact — the type system stops you. And in the React layer,
+        every scenario page opens with a disclaimer banner that uses the same
+        vocabulary. So a user landing on a "what if this Bill becomes law" page
+        immediately sees: this is HYPOTHETICAL. The results are SIMULATED. Reality
+        is observed; scenarios are constructed; assumptions are explicit; evidence
+        remains traceable. 2.5 minutes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 7 — Scenario engine -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Scenario engine — &ldquo;What if this Bill becomes law?&rdquo;</h2>
+      <pre class="small"><code class="language-go">// services/simulation/internal/domain/engine.go (abridged)
+
+type ValidatePipeline struct{}
+
+// Order is mandatory: Inputs → Evidence → Assumptions → Model
+//                       → Units → Time Horizon → Constraints → Run
+func (ValidatePipeline) Validate(s Scenario, m ScenarioModel) error {
+    if err := ValidateInputs(s, m);      err != nil { return err }
+    if err := ValidateEvidence(s);      err != nil { return err }
+    if err := ValidateAssumptions(s);   err != nil { return err }
+    if err := ValidateModel(s, m);      err != nil { return err }
+    if err := ValidateUnits(s, m);      err != nil { return err }
+    if err := ValidateTimeHorizon(s);   err != nil { return err }
+    if err := ValidateConstraints(s);   err != nil { return err }
+    return nil
+}</code></pre>
+      <pre class="small"><code class="language-go">// services/simulation/internal/infrastructure/engine/engine.go (abridged)
+
+// MonteCarloEngine produces percentile-based uncertainty. NEVER a point estimate.
+type MonteCarloEngine struct {
+    simulate SimulationFn
+    ver      string
+}
+
+func (e *MonteCarloEngine) Execute(ctx context.Context, req EngineRequest) (EngineResponse, error) {
+    rng := rand.New(rand.NewSource(req.RandomSeed))
+    samples := map[string][]float64{}
+    for i := 0; i &lt; req.Iterations; i++ {
+        out, err := e.simulate(vars, rng)
+        if err != nil { return EngineResponse{}, fmt.Errorf("iteration %d: %w", i, err) }
+        for name, val := range out {
+            samples[name] = append(samples[name], toFloat(val))
+        }
+    }
+    // ... compute median, p10, p90, min, max
+    resp.Outputs = append(resp.Outputs, ResultOutput{
+        Name:  name,
+        Value: median,
+        Uncertainty: UncertaintySummary{
+            HasUncertainty: true,
+            Median: &amp;median, P10: &amp;p10, P90: &amp;p90,
+            Notes: "Modeled output. Values are simulated percentiles, NOT observed facts.",
+        },
+        RealityLayer: RealityLayerModeled,
+    })
+}</code></pre>
+      <div class="callout warn">
+        <strong>UNKNOWN assumptions cannot carry a value</strong> — would be fabricated precision.
+        Enforced in <code>ScenarioVariable.Validate()</code> and <code>ScenarioAssumption.Validate()</code>.
+      </div>
+      <aside class="notes">
+        The scenario engine. This is the riskiest part of the platform — because
+        it's where AI could most easily fabricate civic facts. So we built very
+        strict guardrails. A scenario has a baseline — observed reality, with
+        sources. It has assumptions — explicit, each one tagged by type:
+        OBSERVED_INPUT, USER_DEFINED, MODEL_ASSUMPTION, HISTORICAL_REFERENCE,
+        ESTIMATE, or UNKNOWN. Unknown assumptions cannot carry a value — because
+        that would be fabricated precision. It has variables — typed: integer,
+        decimal, percentage, currency, date, duration, boolean, categorical,
+        geographic, entity reference. It has constraints — a small expression
+        grammar. It has a model. And it has a time horizon. Before a scenario
+        runs, the validation pipeline walks through: inputs, evidence, assumptions,
+        model, units, time horizon, constraints. If any step fails, the scenario
+        doesn't run. Two engines ship today: deterministic rules, and Monte Carlo.
+        The Monte Carlo engine produces percentiles — median, p10, p90, min, max —
+        never a single point estimate. Because a single number out of a model is
+        a lie. A distribution is honest. Notice the comment: "Modeled output.
+        Values are simulated percentiles, NOT observed facts." That string is in
+        the response payload. The UI cannot strip it. Even if someone tried, the
+        type system would prevent the result from being saved as an observed
+        fact. 3 minutes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 8 — Multi-country adapter architecture -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Multi-country adapter architecture</h2>
+      <div class="mermaid">
+graph TB
+  classDef dom fill:#0c3b2e,stroke:#15784a,color:#f5f7f6
+  classDef iface fill:#9c4221,stroke:#d4a017,color:#f5f7f6
+  classDef active fill:#15784a,stroke:#d4a017,color:#f5f7f6
+  classDef ready fill:#d4a017,stroke:#9c4221,color:#0b1f17
+  classDef stub fill:#52606b,stroke:#94a3b8,color:#f5f7f6
+
+  Domain["Global domain model<br/>services/legislation/<br/>ZERO country-specific strings<br/>(no 'Senate', no 'Second Reading')"]:::dom
+  Adapters["contracts.LegislativeSourceAdapter<br/>7 methods:<br/>Discover · Fetch · Parse · NormalizeSourceItem ·<br/>GetLegislativeStructure · GetStages · GetTerminology"]:::iface
+  KE["🇰🇪 Kenya<br/>84 tests · 50+ real Bills<br/>parliament + kenya_law + president + gazette"]:::active
+  UG["🇺🇬 Uganda<br/>11 tests · unicameral<br/>8 stages · 25 terms"]:::ready
+  TZ["🇹🇿 Tanzania<br/>stubbed"]:::stub
+  GH["🇬🇭 Ghana<br/>stubbed"]:::stub
+  NG["🇳🇬 Nigeria<br/>stubbed"]:::stub
+  ZA["🇿🇦 South Africa<br/>stubbed"]:::stub
+
+  Domain --> Adapters
+  Adapters --> KE
+  Adapters --> UG
+  Adapters --> TZ
+  Adapters --> GH
+  Adapters --> NG
+  Adapters --> ZA
+      </div>
+      <div class="callout">
+        Every adapter has a <code>contract_test.go</code> that asserts:
+        <ul class="tight" style="margin-top:6px;">
+          <li>It satisfies the interface (compile-time + runtime).</li>
+          <li>Its stages form a valid transition graph.</li>
+          <li>Its terminology has &ge; 25 terms with sources.</li>
+        </ul>
+      </div>
+      <p class="small">Adding a country = writing <code>adapters/&lt;country&gt;/</code> + adding rows to <code>legislation.countries</code>, <code>legislation.bill_stages</code>, <code>legislation.institutions</code>. <strong>The domain doesn't change.</strong></p>
+      <aside class="notes">
+        Multi-country. This is the part that I think generalizes beyond civic
+        tech. Every country's parliament is different. Kenya is bicameral —
+        National Assembly plus Senate. Uganda is unicameral. Nigeria is bicameral
+        but with different houses. South Africa has a National Council of
+        Provinces. Tanzania has a unicameral Bunge. The naive approach is: write
+        Kenya into the domain. Then write Uganda into the domain. Then realize
+        Nigeria breaks everything. We did the opposite. The global domain model
+        contains zero country-specific strings. No 'Senate', no 'National
+        Assembly', no 'Second Reading'. Those are all values supplied by an
+        adapter. The adapter interface is seven methods. Discover, Fetch, Parse,
+        NormalizeSourceItem, GetLegislativeStructure, GetStages, GetTerminology.
+        That's it. Implement those seven methods and your country is onboarded.
+        The domain doesn't change. We have six adapters in the repo. Kenya is the
+        reference implementation — full parliament, kenya_law, president, gazette,
+        84 tests. Uganda is ready — 11 tests, unicameral, 8 stages. Tanzania,
+        Ghana, Nigeria, South Africa are scaffolded — the contract tests exist,
+        the structure is there, the data is partial. The contract tests are the
+        secret. Every adapter has a contract_test.go that asserts it satisfies
+        the interface — and that its stages form a valid transition graph, and
+        that its terminology has at least 25 terms with sources. You can't merge
+        an adapter that breaks the contract. CI catches it. 2.5 minutes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 9 — Uganda adapter deep dive -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Uganda adapter deep dive</h2>
+      <pre class="small"><code class="language-go">// adapters/uganda/adapter.go (abridged)
+
+package uganda
+
+// UgandaAdapter implements contracts.LegislativeSourceAdapter.
+// Uganda's Parliament is UNICAMERAL (no Senate) — unlike Kenya's bicameral.
+type UgandaAdapter struct {
+    parliament *parliament.Adapter
+}
+
+func NewUgandaAdapter() *UgandaAdapter {
+    return &amp;UgandaAdapter{
+        parliament: parliament.NewAdapter(nil,
+            "CivicIntelligence/0.1 (+https://github.com/Roy-Wanyoike/civic-intelligence)"),
+    }
+}
+
+func (a *UgandaAdapter) CountryCode() string { return "UG" }
+
+func (a *UgandaAdapter) Supports(url string) bool {
+    return strings.Contains(url, "parliament.go.ug") ||
+           strings.Contains(url, "parliamentwatch.ug")
+}
+
+func (a *UgandaAdapter) GetStages(ctx context.Context) ([]contracts.StageDefinition, error) {
+    return internal.UgandaBillStages, nil
+}
+
+// Compile-time assertion: if the interface ever drifts, the build fails.
+var _ contracts.LegislativeSourceAdapter = (*UgandaAdapter)(nil)</code></pre>
+      <pre class="small"><code class="language-go">// adapters/uganda/internal/uganda_data.go (abridged)
+
+var UgandaBillStages = []contracts.StageDefinition{
+    {Code: "FIRST_READING",       Name: "First Reading",       Country: "UG", AllowedNext: []string{"SECOND_READING"}},
+    {Code: "SECOND_READING",      Name: "Second Reading",      Country: "UG", AllowedNext: []string{"COMMITTEE_STAGE", "REJECTED"}},
+    {Code: "COMMITTEE_STAGE",     Name: "Committee Stage",     Country: "UG", AllowedNext: []string{"REPORT_STAGE"}},
+    {Code: "REPORT_STAGE",        Name: "Report Stage",        Country: "UG", AllowedNext: []string{"THIRD_READING"}},
+    {Code: "THIRD_READING",        Name: "Third Reading",       Country: "UG", AllowedNext: []string{"PRESIDENTIAL_ASSENT", "REJECTED"}},
+    {Code: "PRESIDENTIAL_ASSENT",  Name: "Presidential Assent", Country: "UG", AllowedNext: []string{"COMMENCEMENT"}},
+    {Code: "COMMENCEMENT",         Name: "Commencement",        Country: "UG", IsTerminal: true},
+    {Code: "REJECTED",             Name: "Rejected",            Country: "UG", IsTerminal: true},
+}</code></pre>
+      <div class="callout">
+        State machine is <strong>data, not code</strong>. Adding a stage = adding a row.
+        Compile-time assertion catches interface drift <em>at build time</em>, not in tests.
+      </div>
+      <aside class="notes">
+        Let me show you the Uganda adapter. It's small — that's the point.
+        UgandaAdapter implements contracts.LegislativeSourceAdapter. It has a
+        parliament sub-adapter that does the actual HTTP. It returns
+        CountryCode() = "UG". It supports URLs that contain parliament.go.ug or
+        parliamentwatch.ug. It delegates Discover, Fetch, Parse to its parliament
+        adapter. And it returns Uganda-specific data — 8 stages, 25 terms, a
+        unicameral house with 556 members — from the internal data package.
+        Notice the compile-time assertion at the bottom: var _ contracts.
+        LegislativeSourceAdapter = (*UgandaAdapter)(nil). If the adapter ever
+        drifts from the interface — say, we add a method to the interface and
+        forget to implement it — the build fails. Not the test. The build. And
+        here are the stages. First Reading, Second Reading, Committee Stage,
+        Report Stage, Third Reading, Presidential Assent, Commencement, Rejected.
+        Each one has a SimpleExplanation — plain language. Each one has
+        AllowedNext — what stages can legally follow. The state machine is data,
+        not code. The terminology has 25 terms with sources — most pointing at
+        parliament.go.ug. Royal Assent is in there as 'Not applicable in Uganda —
+        see Presidential Assent'. That's a small detail but it matters — the same
+        concept has a different name across Commonwealth countries, and the
+        adapter handles it. 2.5 minutes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 10 — Reality/simulation boundary -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>The reality / simulation boundary</h2>
+      <p class="small">How do you prevent AI from fabricating civic facts? <strong>Three layers of defense.</strong></p>
+      <div class="columns narrow">
+        <div>
+          <p><span class="stack-num">1</span><strong>Type system</strong></p>
+          <pre class="small"><code class="language-go">// services/simulation/internal/domain/scenario.go
+
+func (s *Scenario) Validate() error {
+    if s.RealityLayer != RealityLayerHypothetical {
+        return fmt.Errorf("scenario: reality layer "+
+          "must be HYPOTHETICAL, got %s", s.RealityLayer)
+    }
+    if s.Baseline.RealityLayer != RealityLayerObserved {
+        return errors.New("scenario: baseline must be tagged OBSERVED")
+    }
+    // ... more invariants
+}</code></pre>
+          <p><span class="stack-num">2</span><strong>Validation pipeline</strong></p>
+          <p class="small">Seven gates, in order: Inputs → Evidence → Assumptions → Model → Units → Time Horizon → Constraints. If any fails, the scenario stays in <code>DRAFT</code> or returns <code>FAILED</code>.</p>
+        </div>
+        <div>
+          <p><span class="stack-num">3</span><strong>Database constraint</strong></p>
+          <pre class="small"><code class="language-sql">-- infrastructure/postgres/migrations/013_intelligence.up.sql (abridged)
+
+ALTER TABLE intelligence.candidate_facts
+ADD CONSTRAINT candidate_facts_validation_check
+CHECK (
+  (validated = FALSE) = (accepted_at IS NULL)
+);</code></pre>
+          <p><span class="stack-num">4</span><strong>API disclaimer</strong></p>
+          <pre class="small"><code class="language-json">// Every /api/v1/scenarios/* response:
+
+{
+  "reality_layer": "HYPOTHETICAL",
+  "disclaimer": "These results are SIMULATED.
+                 They are NOT observed civic facts."
+}</code></pre>
+        </div>
+      </div>
+      <div class="callout warn">
+        Even if a malicious client tried to strip the disclaimer, the <strong>type system</strong>
+        would prevent the simulation result from being saved to an <code>OBSERVED</code> table.
+        The constraint is in the schema — not in application code.
+      </div>
+      <aside class="notes">
+        I want to spend a minute on this because it's the part that took the
+        longest to get right. How do you prevent AI from fabricating civic facts?
+        Three layers. First — the type system. The simulation domain has a
+        RealityLayer enum. Every record is tagged. The Scenario.Validate method
+        rejects a scenario whose reality layer is not HYPOTHETICAL, or whose
+        baseline is not OBSERVED. You cannot save a malformed record. Second —
+        the validation pipeline. The simulation engine runs ValidatePipeline
+        before it executes. Inputs, evidence, assumptions, model, units, time
+        horizon, constraints — seven gates, in order. If any fails, the scenario
+        stays in DRAFT or returns FAILED. Third — the API. Every response from
+        /api/v1/scenarios/* carries a disclaimer. The create endpoint says
+        'All scenarios are HYPOTHETICAL. They are NOT observed civic facts.' The
+        run endpoint says 'These results are SIMULATED. They are NOT observed
+        civic facts.' The methodology endpoint says 'This scenario is
+        HYPOTHETICAL. Outputs are SIMULATED.' Even if a malicious client tried
+        to strip the disclaimer, the type system would prevent the simulation
+        result from being saved to an OBSERVED table. And the database enforces
+        it too. The intelligence.candidate_facts table has a CHECK constraint:
+        (validated = FALSE) = (accepted_at IS NULL). AI cannot promote a
+        candidate fact to canonical state without going through validation.
+        That constraint is in the schema — not in the application code. You can't
+        bypass it by calling the wrong method. 2.5 minutes. Slow down on the SQL
+        CHECK constraint — that's the audience's "I didn't know you could do
+        that in Postgres" moment.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 11 — Tech stack + lessons learned -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Tech stack + lessons learned</h2>
+      <div class="stat-row">
+        <div class="stat"><span class="n">350+</span><span class="l">source files</span></div>
+        <div class="stat"><span class="n">456</span><span class="l">Go tests (40 files)</span></div>
+        <div class="stat"><span class="n">22</span><span class="l">Python tests</span></div>
+        <div class="stat"><span class="n">17</span><span class="l">SQL migrations</span></div>
+        <div class="stat"><span class="n">14</span><span class="l">ADRs</span></div>
+        <div class="stat"><span class="n">6</span><span class="l">country adapters</span></div>
+      </div>
+      <div class="columns">
+        <div>
+          <h3 style="color:#15784a;">✅ What worked</h3>
+          <ul class="tight small">
+            <li><strong>Provider-agnostic LLM gateway.</strong> Started on a Stub provider — no API key, no network — entire pipeline ran in CI. Switching to OpenAI = one env var. Anthropic/local = same.</li>
+            <li><strong>Country adapter pattern.</strong> Uganda was added in a week. Domain unchanged. Frontend unchanged. DB schema unchanged. Only <code>adapters/uganda/</code> was written.</li>
+            <li><strong>Immutable Bill versions (ADR-0011).</strong> Never <code>UPDATE</code> — only <code>INSERT</code>. History preserved forever. Timeline feature depends on it.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color:#9c4221;">❌ What didn't</h3>
+          <ul class="tight small">
+            <li><strong>Citation validator's word-overlap heuristic.</strong> Catches hallucinations but also catches synonyms: &ldquo;MP&rdquo; vs &ldquo;Member of Parliament&rdquo; fails. Had to add a synonym table. Still tuning.</li>
+            <li><strong>Initially leaking Kenya into the domain.</strong> First Bill state machine had <code>&quot;Second Reading&quot;</code> hardcoded. Onboarding Uganda forced a refactor. ADR-0004 came out of that mistake.</li>
+            <li><strong>Trying to ship 15 microservices on day one.</strong> First production deploy was a modular monolith — 5 deployables, not 15. ADR-0001.</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="notes">
+        Lessons. Three things worked, three didn't. Worked: putting the LLM behind
+        a provider-agnostic gateway. We started on the Stub provider — no API key,
+        no network — and the entire pipeline ran in CI. When we plugged in OpenAI,
+        the only change was one environment variable. When we want to switch to
+        Anthropic or a local model, the only change is the gateway factory.
+        Worked: the country adapter pattern. Uganda was added in a week. The
+        domain didn't change. The frontend didn't change. The DB schema didn't
+        change. We wrote adapters/uganda/ and added a row to legislation.countries.
+        Worked: immutable Bill versions. ADR-0011. We never UPDATE — we INSERT.
+        History is preserved forever. When a Bill's stage changes, the old stage
+        is still there, with the date it was recorded. This turned out to matter
+        more than I expected — it's how the timeline feature works. Didn't work:
+        the citation validator's word-overlap heuristic. It catches hallucinations,
+        but it also catches legitimate synonyms. 'MP' vs 'Member of Parliament'
+        fails the check. We had to add a synonym table. We're still tuning. Didn't
+        work: initially leaking Kenya-specific knowledge into the domain. The
+        first version of the Bill state machine had 'Second Reading' hardcoded.
+        When we onboarded Uganda, we had to refactor. The ADR-0004 country adapter
+        pattern came out of that mistake. Didn't work: trying to ship 15
+        microservices on day one. The first production deploy was a modular
+        monolith — five deployables, not fifteen. The boundaries exist in code,
+        the deployment can split later. ADR-0001. 3 minutes. The most useful slide
+        for the audience. They'll remember the failures more than the successes.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 12 — Demo -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Live demo</h2>
+      <p>5 minutes, hard stop.</p>
+      <ol class="tight">
+        <li><strong>Homepage</strong> &rarr; search &ldquo;What is happening with housing?&rdquo; &rarr; results page.</li>
+        <li><strong>Bill detail</strong> &rarr; plain-language summary, verified timeline, citation links that open the original source.</li>
+        <li><strong>&ldquo;Ask about this Bill&rdquo; chat</strong> &rarr; AI response with inline citations. Show what happens when a question can&rsquo;t be verified — the <code>[This response could not be fully verified]</code> notice.</li>
+        <li><strong>Scenarios section</strong> &rarr; open a &ldquo;What if this Bill becomes law?&rdquo; scenario. HYPOTHETICAL banner. Monte Carlo output: median, p10, p90, min, max.</li>
+        <li><strong>Switch country</strong> &rarr; Uganda page. Uganda Bill stages. Uganda terminology. Open <code>parliament.go.ug</code> in another tab.</li>
+        <li><strong>GitHub repo</strong> &rarr; test count (456 Go, 22 Python). Adapter folder structure.</li>
+      </ol>
+      <div class="callout warn">
+        <strong>Backup if demo fails:</strong> screenshots in the slides.<br>
+        &ldquo;This is the part of the talk where I pretend the WiFi works. It doesn&rsquo;t. Let me show you screenshots instead.&rdquo; Move on.
+      </div>
+      <aside class="notes">
+        Demo time. Let me show you the platform. Demo checklist — open the
+        homepage, type 'What is happening with housing?' — show the results.
+        Click into a Bill — show the summary, the timeline, the citations. Open
+        the chat — ask a question — show the inline citations. Show what happens
+        when a question can't be verified. Switch to scenarios — show a what-if
+        scenario — show the HYPOTHETICAL banner and the Monte Carlo output.
+        Switch country — Uganda — show the stages, terminology, and open
+        parliament.go.ug. Final: open the GitHub repo, show the test count,
+        show the adapter folder structure. If the demo fails: screenshots in the
+        slides. Say 'This is the part of the talk where I pretend the WiFi works.
+        It doesn't.' Audience will laugh. Move on. 5 minutes. Hard stop. Don't
+        let the demo eat the rest of the talk.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 13 — Open source + how to contribute -->
+    <!-- ================================================================== -->
+    <section>
+      <h2>Open source + how to contribute</h2>
+      <div class="callout">
+        <strong>github.com/Roy-Wanyoike/civic-intelligence</strong><br>
+        MIT &middot; 350+ source files &middot; 456 Go tests &middot; 22 Python tests &middot;
+        17 SQL migrations &middot; 14 ADRs &middot; 6 country adapters
+      </div>
+      <h3>Three paths to contribute:</h3>
+      <ol class="tight">
+        <li>
+          <strong>Extend the Uganda adapter.</strong>
+          Structure + contract tests are there. Biggest gap: real Bill discovery against <code>parliament.go.ug</code> — discovery scaffold exists, the HTML parser needs work.
+        </li>
+        <li>
+          <strong>Write the Tanzania adapter.</strong>
+          Contract tests exist as a stub. Tanzania is unicameral (Bunge), different stages. The 7-method interface is your contract.
+        </li>
+        <li>
+          <strong>Improve the citation validator.</strong>
+          The word-overlap heuristic is too strict. If you have NLP background — we need a similarity check that handles synonyms, abbreviations, and partial matches without opening the door to hallucinations.
+        </li>
+      </ol>
+      <div class="country-grid">
+        <div class="c active"><span class="flag">🇰🇪</span><span class="code">Kenya</span><span class="status">Active · 84 tests</span></div>
+        <div class="c ready"><span class="flag">🇺🇬</span><span class="code">Uganda</span><span class="status">Ready · 11 tests</span></div>
+        <div class="c"><span class="flag">🇹🇿</span><span class="code">Tanzania</span><span class="status">Stubbed</span></div>
+        <div class="c"><span class="flag">🇬🇭</span><span class="code">Ghana</span><span class="status">Stubbed</span></div>
+        <div class="c"><span class="flag">🇳🇬</span><span class="code">Nigeria</span><span class="status">Stubbed</span></div>
+        <div class="c"><span class="flag">🇿🇦</span><span class="code">South Africa</span><span class="status">Stubbed</span></div>
+      </div>
+      <p class="small">
+        <code>CONTRIBUTING.md</code> — how to add a country adapter &middot;
+        <code>docs/adr/</code> — 14 Architecture Decision Records &middot;
+        <code>ARCHITECTURE.md</code> — the canonical contract &middot;
+        <code>ADR-0004</code> — onboarding checklist for a new country
+      </p>
+      <aside class="notes">
+        Everything I've shown you is open source. MIT. On GitHub — github.com/
+        Roy-Wanyoike/civic-intelligence. 350+ files, 456 Go tests, 22 Python
+        tests, 17 SQL migrations, 14 ADRs. If you want to contribute, three
+        paths. First — extend the Uganda adapter. The structure is there, the
+        contract tests are there, the data is partial. The biggest gap is real
+        Bill discovery against parliament.go.ug — the discovery scaffold exists,
+        the parser needs to handle their HTML. Second — write the Tanzania
+        adapter. The contract tests exist as a stub. Tanzania is unicameral,
+        Bunge, different stages. The 7-method interface is your contract. Third
+        — improve the citation validator. The word-overlap heuristic is too
+        strict. If you have NLP background, this is the place. We need a
+        similarity check that handles synonyms, abbreviations, and partial matches
+        without opening the door to hallucinations. The contributing guide is in
+        CONTRIBUTING.md. The ADRs are in docs/adr/. The architecture doc is
+        ARCHITECTURE.md. If you want to add a country, the onboarding checklist
+        is in ADR-0004. 1.5 minutes. End on the call to action — Uganda is the
+        audience's home turf. They are the best people to extend the Uganda
+        adapter.
+      </aside>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- Slide 14 — Q&A -->
+    <!-- ================================================================== -->
+    <section class="title-slide">
+      <h1>Thank you.</h1>
+      <p class="speaker">Roy Wanyoike</p>
+      <p class="meta">
+        <a href="https://github.com/Roy-Wanyoike/civic-intelligence">github.com/Roy-Wanyoike/civic-intelligence</a><br><br>
+        Slides + longer write-up: linked in the schedule.
+      </p>
+      <blockquote style="max-width: 36ch; margin-top: 2em; text-align: center; border: none; background: transparent;">
+        Show people what happened.<br>
+        Explain what it means.<br>
+        Show them the evidence.<br>
+        Let them decide what they think.
+      </blockquote>
+      <aside class="notes">
+        Thank you. I have time for questions. I'm Roy, you can find me on GitHub
+        at Roy-Wanyoike. The repo is github.com/Roy-Wanyoike/civic-intelligence.
+        The slides and a longer write-up are linked in the description. Likely
+        questions: Why not just use ChatGPT? — hallucinations, no citations, no
+        traceability. How do you handle source conflicts? — ADR-0013, we don't
+        silently resolve, we record SourceConflict and flag for manual review.
+        Why Go and Python? — each language does what it's good at, the boundary
+        is HTTP, ADR-0002 documents it. How much does it cost to run? — with Stub
+        provider, free; with OpenAI, daily budget enforced in the gateway.
+        How does this apply to Android devs? — the provider-agnostic gateway,
+        the country-adapter pattern, the reality-label visual language all
+        transfer directly. 4 minutes of Q&A. If no questions, end on: "Let me
+        leave you with one thought — the gap between public and accessible is
+        where the harm happens. If you build anything civic, build it so the
+        evidence is traceable. Thank you."
+      </aside>
+    </section>
+
+  </div>
+</div>
+
+<div class="footer-meta">droidcon Uganda 2026 &middot; Roy Wanyoike &middot; Civic Intelligence Platform</div>
+
+<!-- Reveal.js core + plugins -->
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/zoom/zoom.js"></script>
+
+<script>
+  // Initialize mermaid before reveal so diagrams render.
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'neutral',
+    themeVariables: {
+      fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+      fontSize: '14px',
+      primaryColor: '#0c3b2e',
+      primaryTextColor: '#f5f7f6',
+      primaryBorderColor: '#15784a',
+      lineColor: '#d4a017',
+      secondaryColor: '#15784a',
+      tertiaryColor: '#52606b',
+      edgeLabelBackground: '#f5f7f6'
+    },
+    flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true }
+  });
+
+  Reveal.initialize({
+    controls: true,
+    progress: true,
+    slideNumber: 'c/t',
+    hash: true,
+    transition: 'slide',
+    transitionSpeed: 'default',
+    backgroundTransition: 'fade',
+    width: 1280,
+    height: 720,
+    margin: 0.08,
+    minScale: 0.2,
+    maxScale: 2.0,
+    plugins: [RevealNotes, RevealHighlight, RevealZoom],
+    keyboard: {
+      // 's' opens speaker notes view
+      83: () => window.open('?notes', 'notes', 'width=1100,height=850'),
+    }
+  }).then(() => {
+    // Render mermaid diagrams inside the active slide after each slide change.
+    const renderMermaidInActive = () => {
+      const slide = Reveal.getCurrentSlide();
+      if (!slide) return;
+      const diagrams = slide.querySelectorAll('.mermaid:not([data-processed])');
+      if (diagrams.length === 0) return;
+      diagrams.forEach((d, i) => {
+        // mermaid v11 expects a unique id
+        if (!d.id) d.id = 'mermaid-' + Math.random().toString(36).slice(2, 9);
+      });
+      mermaid.run({ nodes: diagrams }).catch(err => {
+        console.warn('mermaid render error:', err);
+      });
+    };
+    renderMermaidInActive();
+    Reveal.on('slidechanged', renderMermaidInActive);
+    Reveal.on('overviewshown', renderMermaidInActive);
+  });
+</script>
+
+</body>
+</html>
