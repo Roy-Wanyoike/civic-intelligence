@@ -12,12 +12,9 @@
 //   - the request start + completion are logged with the request_id field
 //     attached, so every log line tied to this request is correlatable
 //
-// FIXME: verify with go build when Go available. The task brief mentioned
-// zerolog for contextual logging, but zerolog is not yet a dependency of
-// services/api and the Go toolchain is unavailable this session to run
-// `go mod tidy`. We reuse the existing observability.Logger (slog-based)
-// which already supports structured fields; the request_id field travels
-// on every log line emitted by this middleware. Downstream code that wants
+// Logging is done via the shared observability.Logger (slog-based) which
+// already supports structured fields; the request_id field travels on
+// every log line emitted by this middleware. Downstream code that wants
 // the request_id on its own log calls should pull it via
 // middleware.RequestIDFromContext.
 package middleware
@@ -144,7 +141,6 @@ func normalizeOrGenerate(supplied string) string {
 // request_id is also used for log correlation and a predictable value
 // would let an attacker inject noise into log queries.
 //
-// FIXME: verify with go build when Go available.
 func newUUIDv4() string {
         var b [16]byte
         if _, err := rand.Read(b[:]); err != nil {

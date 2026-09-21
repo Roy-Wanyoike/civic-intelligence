@@ -1668,7 +1668,6 @@ const defaultPageSize = 20
 // This closes GAP-67-2 — pagination params were documented in OpenAPI but
 // silently ignored by handlers.
 //
-// FIXME: verify with go build when Go available.
 func parsePagination(r *http.Request) (page, pageSize int) {
         page = parseIntDefault(r.URL.Query().Get("page"), 1)
         if page < 1 {
