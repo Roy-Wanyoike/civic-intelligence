@@ -1,7 +1,16 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import { listResults } from '@/lib/scenarios-api';
 import { RealityBadge, RealityDisclaimer } from '@/components/reality-labels';
+
+export const metadata: Metadata = {
+  title: 'Scenario Results',
+  description:
+    'The computed results of a policy simulation scenario — every result is tagged HYPOTHETICAL or MODELED so it is never confused with observed civic facts.',
+  alternates: { canonical: '/scenarios/[id]/results' },
+  robots: { index: false, follow: true },
+};
 
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return '—';

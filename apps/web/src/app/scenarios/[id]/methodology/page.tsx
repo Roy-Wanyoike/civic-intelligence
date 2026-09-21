@@ -1,7 +1,16 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import { getMethodology } from '@/lib/scenarios-api';
 import { RealityBadge, RealityDisclaimer } from '@/components/reality-labels';
+
+export const metadata: Metadata = {
+  title: 'Scenario Methodology',
+  description:
+    'The methodology behind a policy simulation scenario — the engine used (deterministic, Monte-Carlo, counterfactual), the model version, and the validation pipeline that every scenario must pass.',
+  alternates: { canonical: '/scenarios/[id]/methodology' },
+  robots: { index: false, follow: true },
+};
 
 export default async function MethodologyPage({
   params,

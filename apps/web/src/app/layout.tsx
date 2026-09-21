@@ -7,6 +7,7 @@ import { Providers } from '@/components/providers';
 import { ThemeProvider } from '@/components/theme-provider';
 import { CommandPalette } from '@/components/command-palette';
 import { ServiceWorkerRegister } from '@/components/service-worker-register';
+import { PlatformJsonLd } from '@/components/json-ld';
 import { colors } from '@/lib/design-tokens';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
@@ -17,29 +18,117 @@ import {
   type GovernmentSelection,
 } from '@/lib/government-defaults';
 
+// siteConfig is the single source of truth for the canonical site URL, social
+// handles, and other SEO-relevant constants. The URL is read from the
+// NEXT_PUBLIC_SITE_URL env var (set on Vercel); falls back to the production
+// domain so Open Graph + canonical URLs work out of the box.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://civicintelligence.vercel.app';
+const SITE_NAME = 'Civic Intelligence';
+const SITE_TAGLINE = 'Understand what your government is doing';
+const SITE_DESCRIPTION =
+  'Evidence-grounded explanations of Kenyan legislation, regulations, and civic activity across 14 African countries. Track Bills, read the Hansard, follow MPs, and ask grounded questions — no legal jargon required.';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Civic Intelligence — Understand what your government is doing',
-    template: '%s · Civic Intelligence',
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s · ${SITE_NAME}`,
   },
-  description:
-    'Evidence-grounded explanations of Kenyan legislation, regulations, and civic activity. No legal jargon required.',
-  applicationName: 'Civic Intelligence',
-  authors: [{ name: 'Civic Intelligence Platform' }],
-  keywords: ['Kenya', 'Parliament', 'Bills', 'Legislation', 'Civic', 'Evidence-grounded AI'],
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: 'Civic Intelligence Platform', url: 'https://github.com/Roy-Wanyoike/civic-intelligence' }],
+  creator: 'Roy Wanyoike',
+  publisher: SITE_NAME,
+  keywords: [
+    'Kenya Parliament',
+    'Kenya Bills',
+    'Kenya Hansard',
+    'Kenya Law',
+    'Kenya Gazette',
+    'civic intelligence',
+    'parliamentary monitoring',
+    'legislative tracking',
+    'evidence-grounded AI',
+    'Africa parliament',
+    'Rwanda parliament',
+    'Nigeria National Assembly',
+    'South Africa Parliament',
+    'Ghana Parliament',
+    'Tanzania Bunge',
+    'Uganda Parliament',
+    'Senegal Assemblée Nationale',
+    'Egyptian Parliament',
+    'Morocco Parliament',
+    'Ethiopia Parliament',
+    'DR Congo Parliament',
+    'Malawi National Assembly',
+    'Zambia National Assembly',
+    'civic tech Kenya',
+    'open government Africa',
+  ],
+  alternates: {
+    canonical: '/',
+    languages: {
+      'en-KE': '/',
+      'sw-KE': '/',
+    },
+  },
   openGraph: {
-    title: 'Civic Intelligence',
-    description: 'Understand what your government is doing. Evidence-grounded civic intelligence for Kenya.',
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
     type: 'website',
     locale: 'en_KE',
+    alternateLocale: ['sw_KE'],
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    // Note: images is NOT set here — Next.js auto-detects the OG image
+    // from /opengraph-image.tsx in the same directory.
   },
-  robots: { index: true, follow: true },
+  twitter: {
+    card: 'summary_large_image',
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    // Note: images is NOT set here — Next.js auto-detects the Twitter image
+    // from /twitter-image.tsx in the same directory.
+    creator: '@roywanyoike',
+    site: '@civintellig',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
+  manifest: '/manifest.json',
+  // Note: icons is NOT set here — Next.js auto-detects the favicon + apple
+  // icon from /icon.tsx and /apple-icon.tsx in the same directory.
+  category: 'government',
+  classification: 'Civic Tech · Parliamentary Monitoring · Open Government',
+  other: {
+    // JSON-LD structured data — emitted as a meta tag so search engines can
+    // pick it up. The WebApplication schema enables rich results for the
+    // platform's identity card.
+    'application-name': SITE_NAME,
+    'apple-mobile-web-app-title': SITE_NAME,
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'format-detection': 'telephone=no',
+    'mobile-web-app-capable': 'yes',
+    'theme-color': colors.forest,
+    'color-scheme': 'light',
+  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: colors.forest,
+  colorScheme: 'light',
 };
 
 /**
@@ -84,6 +173,9 @@ export default async function RootLayout({
 
   return (
     <html lang={locale}>
+      <head>
+        <PlatformJsonLd />
+      </head>
       <body>
         <a href="#main" className="skip-link">Skip to content</a>
         <NextIntlClientProvider locale={locale} messages={messages}>

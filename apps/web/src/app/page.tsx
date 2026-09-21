@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import {
   ArrowRight,
   Search,
@@ -44,6 +45,26 @@ import type { Bill } from '@/lib/types';
  */
 
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:9000';
+
+// Homepage metadata — overrides the root layout's defaults with homepage-
+// specific values. The Open Graph image is auto-detected from
+// /opengraph-image.tsx; canonical URL is set so search engines know this
+// is the homepage (not a duplicate of the root).
+export const metadata: Metadata = {
+  title: 'Civic Intelligence — Understand what your government is doing',
+  description:
+    'Track Bills through every legislative stage. Read the Hansard. Follow MPs. Subscribe to Kenya Gazette alerts. Ask grounded questions — all with primary-source evidence, across 14 African countries.',
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    title: 'Civic Intelligence — Understand what your government is doing',
+    description:
+      'Evidence-grounded explanations of legislation, Hansard, and civic activity across 14 African countries.',
+    type: 'website',
+    url: '/',
+  },
+};
 
 async function fetchBills(): Promise<{ items: Bill[]; source: 'api' | 'mock' }> {
   try {
