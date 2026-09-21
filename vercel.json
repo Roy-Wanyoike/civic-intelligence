@@ -6,7 +6,8 @@
       "framework": "nextjs"
     },
     "ai": {
-      "root": "services/ai"
+      "root": "services/ai",
+      "entrypoint": "main.py"
     }
   },
   "rewrites": [
