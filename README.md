@@ -4,17 +4,18 @@
 
 ### Understand what your government is doing. No legal or parliamentary jargon required.
 
-**Evidence-grounded civic intelligence for Africa** 🌍 — one platform, six countries.
+**Evidence-grounded civic intelligence for Africa** 🌍 — one platform, fourteen countries.
 
-🇰🇪 Kenya · 🇺🇬 Uganda · 🇹🇿 Tanzania · 🇬🇭 Ghana · 🇳🇬 Nigeria · 🇿🇦 South Africa
+🇰🇪 Kenya · 🇺🇬 Uganda · 🇹🇿 Tanzania · 🇬🇭 Ghana · 🇳🇬 Nigeria · 🇿🇦 South Africa · 🇷🇼 Rwanda · 🇿🇲 Zambia · 🇸🇳 Senegal · 🇪🇬 Egypt · 🇲🇦 Morocco · 🇨🇩 DR Congo · 🇪🇹 Ethiopia · 🇲🇼 Malawi
 
-[![Tests](https://img.shields.io/badge/tests-700%2B%20Go%20%2B%2024%20Python%20%2B%20TS%20PASS-brightgreen)]()
-[![Countries](https://img.shields.io/badge/countries-6%20%F0%9F%87%B0%F0%9F%87%AA%20%F0%9F%87%BA%F0%9F%87%AC%20%F0%9F%87%B9%F0%9F%87%BF%20%F0%9F%87%AC%F0%9F%87%AD%20%F0%9F%87%B3%F0%9F%87%AC%20%F0%9F%87%BF%F0%9F%87%A6-blue)]()
-[![Pages](https://img.shields.io/badge/frontend-68%20pages-9cf)]()
-[![API](https://img.shields.io/badge/API-56%20routes-orange)]()
-[![Commits](https://img.shields.io/badge/commits-129-lightgrey)]()
+[![Tests](https://img.shields.io/badge/tests-1003%20Go%20%2B%2028%20Python%20%2B%20TS%20PASS-brightgreen)]()
+[![Countries](https://img.shields.io/badge/countries-14-blue)]()
+[![Pages](https://img.shields.io/badge/frontend-73%20pages-9cf)]()
+[![API](https://img.shields.io/badge/API-70%20routes-orange)]()
+[![Commits](https://img.shields.io/badge/commits-164-lightgrey)]()
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 [![Vercel](https://img.shields.io/badge/deploy-Vercel%20ready-black)]()
+[![Release](https://img.shields.io/badge/release-v0.2.0-blueviolet)]()
 
 </div>
 
@@ -24,7 +25,7 @@
 
 Civic Intelligence is an **open-source, multi-country civic intelligence system** that transforms authoritative government information across Africa into **plain-language explanations**, **verified timelines**, **evidence-backed answers**, and **citizen alerts**.
 
-The platform runs as **one codebase serving six countries**. Each country sees only its own data by default — Bills, Acts, Institutions, People, Debt, Constitution, and Government History — through a per-country **adapter** that implements the same `contracts.LegislativeSourceAdapter` interface. A contributor from Uganda works on `adapters/uganda/` and never touches Kenya's data; a contributor from Nigeria works on `adapters/nigeria/` and never touches Tanzania's data. The platform routes each request to the correct adapter based on the selected country (set via the navbar **Government Selector**).
+The platform runs as **one codebase serving fourteen countries**. Each country sees only its own data by default — Bills, Acts, Institutions, People, Debt, Constitution, and Government History — through a per-country **adapter** that implements the same `contracts.LegislativeSourceAdapter` interface. A contributor from Uganda works on `adapters/uganda/` and never touches Kenya's data; a contributor from Nigeria works on `adapters/nigeria/` and never touches Tanzania's data. The platform routes each request to the correct adapter based on the selected country (set via the navbar **Government Selector**).
 
 A citizen can:
 
@@ -46,7 +47,7 @@ The platform ships **10 flagship features**. Every feature is grounded in author
 |---|---------|-------------|-----|
 | 1 | **🕸️ Civic Knowledge Graph** | Interactive force-directed graph of how Bills, Acts, People, Institutions, Constitution Articles, and Government terms connect. BFS path finder, 11 node types, 12 edge types. | `/api/v1/graph/*` |
 | 2 | **📰 Daily Brief** | Personalized, AI-grounded, plain-language daily summary of civic developments filtered by what the citizen follows. | `/api/v1/brief/*` |
-| 3 | **🌍 Cross-country Comparison** | Side-by-side comparison of legislation, government structure, public debt, and civic indicators across the 6 supported countries. | `/api/v1/compare/*` |
+| 3 | **🌍 Cross-country Comparison** | Side-by-side comparison of legislation, government structure, public debt, and civic indicators across the 14 supported countries. | `/api/v1/compare/*` |
 | 4 | **🔮 Scenarios** | "What-if" simulation engine — model the impact of a policy change before it happens. Reality-tagged SIMULATED. | `/api/v1/scenarios/*` |
 | 5 | **📜 Constitution** | Authoritative Constitution text (chapters + articles), never reinterpreted. | `/api/v1/constitution/*` |
 | 6 | **🏛️ Government History** | Administrations, presidential terms, and legislatures over time. | `/api/v1/governments/*`, `/api/v1/transitions` |
@@ -63,13 +64,13 @@ See [`FLAGSHIP_FEATURES.md`](./FLAGSHIP_FEATURES.md) for the full feature catalo
 
 ### One project, many countries
 
-The platform is a **single deployable** that serves all 6 countries. There is no per-country fork, no per-country database, and no per-country frontend — only per-country **adapters** that plug into the same core domain.
+The platform is a **single deployable** that serves all 14 countries. There is no per-country fork, no per-country database, and no per-country frontend — only per-country **adapters** that plug into the same core domain.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        FRONTEND (Next.js)                            │
 │  Government Selector (navbar) → sets X-Civic-Country header           │
-│  68 pages — each reads the selected country from context              │
+│  73 pages — each reads the selected country from context              │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │  X-Civic-Country: UG
                                ▼
@@ -82,12 +83,16 @@ The platform is a **single deployable** that serves all 6 countries. There is no
                                ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │                   COUNTRY ADAPTER LAYER                               │
-│  One interface (contracts.LegislativeSourceAdapter) — 6 impls:        │
+│  One interface (contracts.LegislativeSourceAdapter) — 14 impls:       │
 │                                                                       │
-│   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│   │ kenya    │ │ uganda   │ │ tanzania │ │ ghana    │ │ nigeria  │ │ south_africa │ │
-│   │ 🇰🇪 KE   │ │ 🇺🇬 UG   │ │ 🇹🇿 TZ   │ │ 🇬🇭 GH   │ │ 🇳🇬 NG   │ │ 🇿🇦 ZA   │ │
-│   └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
+│  ┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐│
+│  │kenya   ││uganda  ││tanzania││ghana   ││nigeria ││s. africa││rwanda ││
+│  │🇰🇪 KE  ││🇺🇬 UG  ││🇹🇿 TZ  ││🇬🇭 GH  ││🇳🇬 NG  ││🇿🇦 ZA  ││🇷🇼 RW ││
+│  └────────┘└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘│
+│  ┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐│
+│  │zambia  ││senegal ││egypt   ││morocco ││dr congo││ethiopia││malawi  ││
+│  │🇿🇲 ZM  ││🇸🇳 SN  ││🇪🇬 EG  ││🇲🇦 MA  ││🇨🇩 CD  ││🇪🇹 ET  ││🇲🇼 MW ││
+│  └────────┘└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘│
 │        Each adapter has its own seed data — changes are ISOLATED     │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -109,16 +114,24 @@ The Government Selector in `apps/web/src/components/government-selector.tsx` ren
 
 ### Adapter architecture
 
-Every country adapter implements the same `contracts.LegislativeSourceAdapter` interface. The 6 adapters live in `adapters/`:
+Every country adapter implements the same `contracts.LegislativeSourceAdapter` interface. The 14 adapters live in `adapters/`:
 
 | Adapter | Country | Code | Status |
 |---------|---------|------|--------|
-| `adapters/kenya/` | Kenya 🇰🇪 | `KE` | ✅ Active (parliament, kenya_law, president, gazette) |
-| `adapters/uganda/` | Uganda 🇺🇬 | `UG` | ✅ Ready (unicameral Parliament) |
-| `adapters/tanzania/` | Tanzania 🇹🇿 | `TZ` | ✅ Ready (Bunge) |
+| `adapters/kenya/` | Kenya 🇰🇪 | `KE` | ✅ Active (parliament + kenya_law + president + gazette crawlers, seed data) |
+| `adapters/uganda/` | Uganda 🇺🇬 | `UG` | ✅ Ready (Parliament of Uganda, unicameral) |
+| `adapters/tanzania/` | Tanzania 🇹🇿 | `TZ` | ✅ Ready (Bunge la Tanzania) |
 | `adapters/ghana/` | Ghana 🇬🇭 | `GH` | ✅ Ready (Parliament of Ghana) |
-| `adapters/nigeria/` | Nigeria 🇳🇬 | `NG` | ✅ Ready (National Assembly: Senate + House) |
+| `adapters/nigeria/` | Nigeria 🇳🇬 | `NG` | ✅ Ready (National Assembly: Senate + House of Reps) |
 | `adapters/south_africa/` | South Africa 🇿🇦 | `ZA` | ✅ Ready (Parliament: NA + NCOP) |
+| `adapters/rwanda/` | Rwanda 🇷🇼 | `RW` | ✅ Ready (Parliament of Rwanda, bicameral) |
+| `adapters/zambia/` | Zambia 🇿🇲 | `ZM` | ✅ Ready (National Assembly of Zambia, unicameral) |
+| `adapters/senegal/` | Senegal 🇸🇳 | `SN` | ✅ Ready (Assemblée Nationale du Sénégal) |
+| `adapters/egypt/` | Egypt 🇪🇬 | `EG` | ✅ Ready (Egyptian Parliament, bicameral) |
+| `adapters/morocco/` | Morocco 🇲🇦 | `MA` | ✅ Ready (Parliament of Morocco, bicameral) |
+| `adapters/dr_congo/` | DR Congo 🇨🇩 | `CD` | ✅ Ready (Parliament of the DRC, bicameral) |
+| `adapters/ethiopia/` | Ethiopia 🇪🇹 | `ET` | ✅ Ready (Federal Parliamentary Assembly, bicameral) |
+| `adapters/malawi/` | Malawi 🇲🇼 | `MW` | ✅ Ready (National Assembly of Malawi, unicameral) |
 
 Each adapter is a Go module with its own `go.mod` so it can evolve independently. The shared domain (`services/legislation/`, `services/evidence/`, …) never references a specific country — it only references the adapter interface.
 
@@ -197,17 +210,16 @@ Mirror `adapters/kenya/contract_test.go`. The contract test enforces that your a
 ## Architecture
 
 ```
-                              OFFICIAL SOURCES (6 countries)
+                              OFFICIAL SOURCES (14 countries)
                                               │
-                ┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
-                │ Kenya    │ Uganda   │ Tanzania │ Ghana    │ Nigeria  │ S. Africa│
-                │ sources  │ sources  │ sources  │ sources  │ sources  │ sources  │
-                └──────┬───┴──────┬───┴──────┬───┴──────┬───┴──────┬───┴──────┬───┘
-                       ▼          ▼          ▼          ▼          ▼          ▼
-                ┌──────────────────────────────────────────────────────────────┐
-                │              COUNTRY ADAPTERS (6 modules)                     │
-                │   Each implements contracts.LegislativeSourceAdapter          │
-                └──────────────────────────────┬───────────────────────────────┘
+                ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┐
+                │ KE   │ UG   │ TZ   │ GH   │ NG   │ ZA   │ RW   │  … 8 more
+                └──┬───┴──┬───┴──┬───┴──┬───┴──┬───┴──┬───┴──┬───┘
+                   ▼     ▼     ▼     ▼     ▼     ▼     ▼
+                ┌──────────────────────────────────────────────────────┐
+                │              COUNTRY ADAPTERS (14 modules)            │
+                │   Each implements contracts.LegislativeSourceAdapter  │
+                └──────────────────────────────┬───────────────────────┘
                                                │
                                                ▼
                                        DISCOVERY + FETCH
@@ -236,7 +248,7 @@ Mirror `adapters/kenya/contract_test.go`. The contract test enforces that your a
                                               │
                                               ▼
                                           CITIZEN
-                                (via Next.js frontend, 68 pages)
+                                (via Next.js frontend, 73 pages)
 ```
 
 **The single most important rule:**
@@ -269,9 +281,9 @@ Mirror `adapters/kenya/contract_test.go`. The contract test enforces that your a
 
 ```
 civic-intelligence/
-├── apps/web/                      # Next.js frontend (68 pages)
+├── apps/web/                      # Next.js frontend (73 pages)
 ├── services/
-│   ├── api/                       # Go BFF — 56 REST endpoints, OIDC, RBAC, CountryMiddleware
+│   ├── api/                       # Go BFF — 70 REST endpoints, OIDC, RBAC, CountryMiddleware
 │   ├── ai/                        # Python FastAPI — 12 AI capabilities, RAG, citation validation
 │   ├── legislation/               # Go — Bill domain, state machine, versioning, debt repo
 │   ├── ingestion/                 # Go — source registry, crawlers, dedup, Temporal workflows
@@ -280,13 +292,22 @@ civic-intelligence/
 │   ├── intelligence/              # Go — candidate-fact validation
 │   ├── simulation/                # Go — scenario engine + constraint evaluation
 │   └── (search/notifications/identity — stubs)
-├── adapters/                      # 🌍 6 country adapters — one per country
-│   ├── kenya/                     # 🇰🇪 KE — parliament, kenya_law, president, gazette, seed
+├── adapters/                      # 🌍 14 country adapters — one per country
+│   ├── kenya/                     # 🇰🇪 KE — parliament + kenya_law + president + gazette crawlers + seed
 │   ├── uganda/                    # 🇺🇬 UG — Parliament of Uganda (unicameral)
-│   ├── tanzania/                  # 🇹🇿 TZ — Bunge (Parliament of Tanzania)
+│   ├── tanzania/                  # 🇹🇿 TZ — Bunge la Tanzania
 │   ├── ghana/                     # 🇬🇭 GH — Parliament of Ghana
 │   ├── nigeria/                   # 🇳🇬 NG — National Assembly (Senate + House of Reps)
-│   └── south_africa/              # 🇿🇦 ZA — Parliament (NA + NCOP)
+│   ├── south_africa/              # 🇿🇦 ZA — Parliament (NA + NCOP)
+│   ├── rwanda/                    # 🇷🇼 RW — Parliament of Rwanda (bicameral)
+│   ├── zambia/                    # 🇿🇲 ZM — National Assembly of Zambia (unicameral)
+│   ├── senegal/                   # 🇸🇳 SN — Assemblée Nationale du Sénégal
+│   ├── egypt/                     # 🇪🇬 EG — Egyptian Parliament (bicameral)
+│   ├── morocco/                   # 🇲🇦 MA — Parliament of Morocco (bicameral)
+│   ├── dr_congo/                  # 🇨🇩 CD — Parliament of the DRC (bicameral)
+│   ├── ethiopia/                  # 🇪🇹 ET — Federal Parliamentary Assembly (bicameral)
+│   ├── malawi/                    # 🇲🇼 MW — National Assembly of Malawi (unicameral)
+│   └── registry/                  # Country adapter registry + wrappers
 ├── packages/                      # Shared Go packages
 │   ├── contracts/                 # Adapter interface, events, typed errors, country codes
 │   ├── auth/                      # Principal, scopes, OIDC verifier interface
@@ -294,14 +315,14 @@ civic-intelligence/
 │   ├── config/                    # Env-tag struct loader
 │   ├── events/                    # NATS event helpers
 │   ├── cache/                     # Redis client
-│   └── storage/                  # MinIO/S3 client
+│   └── storage/                   # MinIO/S3 client
 ├── infrastructure/
 │   ├── postgres/migrations/       # 22 SQL migrations (9 schemas, pgvector)
 │   ├── postgres/seed/             # Country + Kenya institution seed SQL
 │   ├── docker/                    # Docker Compose + 3 Dockerfiles
 │   ├── kubernetes/helm/           # Helm chart with NetworkPolicy
 │   ├── terraform/                 # RDS + S3 + EKS modules
-│   └── observability/            # Prometheus, Grafana, OTel, Loki, Tempo
+│   └── observability/             # Prometheus, Grafana, OTel, Loki, Tempo
 ├── presentation/                  # Investor / demo slide deck (HTML + Markdown)
 ├── docs/
 │   ├── architecture/              # 14 deep-dive docs + Phase 1 audit
@@ -314,8 +335,11 @@ civic-intelligence/
 │   ├── integration/               # API integration tests (acts, bills, debt, governments)
 │   ├── load/                      # k6 load tests
 │   └── chaos/                     # Chaos engineering scenarios
+├── CHANGELOG.md                   # Release history (v0.2.0 current)
+├── DEPLOYMENT.md                  # Vercel + Railway + Supabase deploy guide
 ├── FLAGSHIP_FEATURES.md           # 10 flagship features catalogue
-└── worklog.md                     # Engineer-level task entries
+├── README.md                      # this file
+└── vercel.json                    # multi-service config (web + ai)
 ```
 
 ---
@@ -368,28 +392,28 @@ curl http://localhost:9000/api/v1/bills | jq '.total'
 curl -H "X-Civic-Country: UG" http://localhost:9000/api/v1/acts | jq '.country'
 # → "UG"
 
-# Global / dashboard view (data across all countries)
+# Global / dashboard view (data across all 14 countries)
 curl -H "X-Civic-Country: ALL" http://localhost:9000/api/v1/compare/countries | jq '.countries | length'
-# → 6
+# → 14
 ```
 
 ### Run Tests
 
 ```bash
-# Go tests (700+ across all modules)
-cd services/api && go test ./...
-cd adapters/kenya && go test ./...
-cd adapters/uganda && go test ./...
-cd adapters/tanzania && go test ./...
-cd adapters/ghana && go test ./...
-cd adapters/nigeria && go test ./...
-cd adapters/south_africa && go test ./...
+# Go tests (1003 across all modules — 33 modules)
+# Run from the repo root to execute every Go module's tests:
+for d in services/api services/legislation services/evidence services/ingestion services/intelligence services/simulation services/documents adapters/kenya adapters/uganda adapters/tanzania adapters/ghana adapters/nigeria adapters/south_africa adapters/rwanda adapters/zambia adapters/senegal adapters/egypt adapters/morocco adapters/dr_congo adapters/ethiopia adapters/malawi packages/observability packages/storage packages/cache tests/contract tests/integration tests/chaos; do
+  (cd "$d" && go test ./...)
+done
 
-# Python tests (24 — unit + eval)
+# Python tests (28 — unit + eval)
 cd services/ai && pytest tests/ eval/ -v
 
 # Frontend type-check (TypeScript PASS)
 cd apps/web && npx tsc --noEmit && npx next lint
+
+# Production build (verifies all 73 pages + metadata routes generate)
+cd apps/web && npx next build
 ```
 
 ---
@@ -402,12 +426,19 @@ The platform is configured for Vercel multi-service deployment:
 2. Import `Roy-Wanyoike/civic-intelligence`
 3. Vercel detects `vercel.json` — configures two services:
    - **web** (Next.js) at `apps/web/`
-   - **ai** (Python FastAPI) at `services/ai/`
+   - **ai** (Python FastAPI) at `services/ai/` with `entrypoint: main.py`
 4. Set environment variables:
+   - `NEXT_PUBLIC_SITE_URL` — your production URL (e.g. `https://your-app.vercel.app`) for correct Open Graph + canonical URLs
+   - `AI_SERVICE_URL` — your Python AI service URL (Vercel auto-wires this if you use the multi-service pattern; otherwise point at Railway/Render)
+   - `API_SERVICE_URL` — your Go API service URL (Railway/Render/Fly.io)
    - `OPENAI_API_KEY` — for real AI summaries (optional — Stub provider works without it)
    - `DEV_MODE=false` — for production auth (optional — defaults to dev mode)
    - `DATABASE_URL` — your Postgres connection string (optional — API works without DB by calling adapters live)
 5. Deploy
+
+The `vercel.json` cron runs `POST /api/v1/refresh` daily at 03:00 UTC (Vercel Hobby plan limits crons to once per day — upgrade to Pro for hourly).
+
+See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full guide including Railway/Render/Fly.io alternatives.
 
 ---
 
@@ -415,7 +446,7 @@ The platform is configured for Vercel multi-service deployment:
 
 ### Country Scoping
 
-Every list endpoint accepts an `X-Civic-Country` header (or `?country=KE` query param) that scopes the response to a single country. Supported values:
+Every list endpoint accepts an `X-Civic-Country` header (or `?country=KE` query param) that scopes the response to a single country. Supported values (14 countries + global view):
 
 | Code | Country |
 |------|---------|
@@ -425,11 +456,19 @@ Every list endpoint accepts an `X-Civic-Country` header (or `?country=KE` query 
 | `GH` | Ghana 🇬🇭 |
 | `NG` | Nigeria 🇳🇬 |
 | `ZA` | South Africa 🇿🇦 |
+| `RW` | Rwanda 🇷🇼 |
+| `ZM` | Zambia 🇿🇲 |
+| `SN` | Senegal 🇸🇳 |
+| `EG` | Egypt 🇪🇬 |
+| `MA` | Morocco 🇲🇦 |
+| `CD` | DR Congo 🇨🇩 |
+| `ET` | Ethiopia 🇪🇹 |
+| `MW` | Malawi 🇲🇼 |
 | `ALL` | Global / cross-country dashboard view |
 
 If the header is absent, the request defaults to `KE` (Kenya). The resolved country is echoed back on the response as `X-Civic-Country`. Invalid codes return `400 Bad Request` with the supported list.
 
-The `ALL` mode is used by the `/compare`, `/indicators`, `/dashboard`, and `/graph` endpoints to return data across all 6 countries.
+The `ALL` mode is used by the `/compare`, `/indicators`, `/dashboard`, and `/graph` endpoints to return data across all 14 countries.
 
 ### Public Endpoints (no auth required)
 
@@ -508,12 +547,20 @@ The `ALL` mode is used by the `/compare`, `/indicators`, `/dashboard`, and `/gra
 
 | Country | Code | Adapter | Status |
 |---------|------|---------|--------|
-| 🇰🇪 Kenya | `KE` | `adapters/kenya/` | ✅ Active — full adapter (parliament, kenya_law, president, gazette) + seed data |
+| 🇰🇪 Kenya | `KE` | `adapters/kenya/` | ✅ Active — full adapter (parliament + kenya_law + president + gazette crawlers, seed data) |
 | 🇺🇬 Uganda | `UG` | `adapters/uganda/` | ✅ Ready — Parliament of Uganda (unicameral) |
-| 🇹🇿 Tanzania | `TZ` | `adapters/tanzania/` | ✅ Ready — Bunge (Parliament of Tanzania) |
+| 🇹🇿 Tanzania | `TZ` | `adapters/tanzania/` | ✅ Ready — Bunge la Tanzania |
 | 🇬🇭 Ghana | `GH` | `adapters/ghana/` | ✅ Ready — Parliament of Ghana |
 | 🇳🇬 Nigeria | `NG` | `adapters/nigeria/` | ✅ Ready — National Assembly (Senate + House of Representatives) |
 | 🇿🇦 South Africa | `ZA` | `adapters/south_africa/` | ✅ Ready — Parliament (National Assembly + NCOP) |
+| 🇷🇼 Rwanda | `RW` | `adapters/rwanda/` | ✅ Ready — Parliament of Rwanda (bicameral) |
+| 🇿🇲 Zambia | `ZM` | `adapters/zambia/` | ✅ Ready — National Assembly of Zambia (unicameral) |
+| 🇸🇳 Senegal | `SN` | `adapters/senegal/` | ✅ Ready — Assemblée Nationale du Sénégal |
+| 🇪🇬 Egypt | `EG` | `adapters/egypt/` | ✅ Ready — Egyptian Parliament (bicameral) |
+| 🇲🇦 Morocco | `MA` | `adapters/morocco/` | ✅ Ready — Parliament of Morocco (bicameral) |
+| 🇨🇩 DR Congo | `CD` | `adapters/dr_congo/` | ✅ Ready — Parliament of the DRC (bicameral) |
+| 🇪🇹 Ethiopia | `ET` | `adapters/ethiopia/` | ✅ Ready — Federal Parliamentary Assembly (bicameral) |
+| 🇲🇼 Malawi | `MW` | `adapters/malawi/` | ✅ Ready — National Assembly of Malawi (unicameral) |
 
 Adding a new country means implementing `contracts.LegislativeSourceAdapter` — the core domain stays unchanged. See [Contributing](#contributing) above.
 
@@ -583,7 +630,7 @@ If validation fails, the claim is NOT published.
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | Foundation | ✅ Complete |
-| 2 | Kenya Legislative Ingestion | ✅ Complete (50+ real bills) |
+| 2 | Kenya Legislative Ingestion | ✅ Complete (50+ real bills + Hansard + Order Paper + V&P + Committees + Gazette crawlers) |
 | 3 | Bill Intelligence | ✅ Complete (AI summaries, timelines, chat) |
 | 4 | Civic Monitoring & Alerts | ✅ Complete (following, notifications, feed) |
 | 5 | Multi-Organ Civic Intelligence | ✅ Complete (Acts, regulations, policies) |
@@ -592,8 +639,10 @@ If validation fails, the claim is NOT published.
 | 8 | Civic Intelligence OS | ✅ Complete (Ask Kenya, dashboard, sponsor) |
 | 9 | Trust & Verification | ✅ Complete (provenance, corrections) |
 | 10 | Developer Platform | ✅ Complete (API docs, datasets) |
-| 11 | Global Expansion | ✅ Complete (6 country adapters: KE, UG, TZ, GH, NG, ZA) |
+| 11 | Global Expansion | ✅ Complete (14 country adapters: KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG, MA, CD, ET, MW) |
 | 12 | Country Scoping + Multi-country Platform | ✅ Complete (CountryMiddleware, Government Selector, cross-country comparison) |
+| 13 | Civic Knowledge Network | 📋 Planned (see docs/architecture/phase-13-14-spec.md) |
+| 14 | Proactive Civic Intelligence | 📋 Planned (see docs/architecture/phase-13-14-spec.md) |
 
 ---
 
@@ -607,16 +656,19 @@ All funds go toward server costs, AI processing, and data sourcing. We do not ac
 
 ## Stats
 
-- **700+** Go tests (across API + 6 country adapters + legislation + simulation)
-- **24** Python tests (AI gateway + capabilities + eval)
+- **1003** Go tests (across API + 14 country adapters + legislation + simulation + contract + integration + chaos)
+- **28** Python tests (AI gateway + capabilities + eval)
 - **TypeScript PASS** (frontend type-check + lint)
-- **68** frontend pages
-- **56** API routes
+- **73** frontend pages
+- **70** API routes
+- **94** documented OpenAPI paths
 - **22** SQL migrations (9 schemas, pgvector)
 - **14** Architecture Decision Records
-- **6** country adapters
+- **14** country adapters
+- **12** AI capabilities
 - **10** flagship features
-- **129** commits
+- **164** commits
+- **v0.2.0** current release (see [CHANGELOG.md](./CHANGELOG.md))
 
 ---
 
@@ -628,7 +680,7 @@ MIT. See [LICENSE](./LICENSE).
 
 ## Disclaimer
 
-Civic Intelligence is an independent civic-information project. It is not affiliated with the Government of Kenya, Uganda, Tanzania, Ghana, Nigeria, or South Africa. All claims are traceable to official sources. This platform does not provide legal advice.
+Civic Intelligence is an independent civic-information project. It is not affiliated with the Government of Kenya, Uganda, Tanzania, Ghana, Nigeria, South Africa, Rwanda, Zambia, Senegal, Egypt, Morocco, DR Congo, Ethiopia, or Malawi. All claims are traceable to official sources. This platform does not provide legal advice.
 
 <div align="center">
 
