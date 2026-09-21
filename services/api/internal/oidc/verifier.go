@@ -2,7 +2,6 @@
 // standards-compliant OIDC provider). It fetches the provider's public keys
 // (JWKS) and validates JWT signatures.
 //
-// FIXME: verify with go build when Go available.
 package oidc
 
 import (

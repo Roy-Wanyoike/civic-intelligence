@@ -1,4 +1,3 @@
-// FIXME: verify with go build when Go available
 //
 // cmd/worker is the Temporal worker process for the Bill Processing Pipeline.
 //
