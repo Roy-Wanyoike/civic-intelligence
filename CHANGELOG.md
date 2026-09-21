@@ -4,7 +4,26 @@ All notable changes to the Civic Intelligence Platform are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] — 2026-09-21
+
+The Wave 12/13 release — adds 8 new country adapters (Rwanda, Zambia,
+Senegal, Egypt, Morocco, DR Congo, Ethiopia, Malawi), bringing the
+platform from 6 to 14 supported African countries. Also implements the
+5 long-standing Kenya crawler TODOs and fixes the Vercel Hobby cron
+limitation.
+
+### Migration notes
+
+- **Vercel Hobby plan users**: pull the latest `vercel.json` — the cron
+  schedule changed from `0 * * * *` (hourly, rejected by Vercel Hobby)
+  to `0 3 * * *` (daily at 03:00 UTC).
+- **API clients reading `supported_countries`** from the 400-error body:
+  the list now contains 14 unique codes (was 18 with duplicates in the
+  broken wave-13 release). Each code now appears exactly once.
+- **Frontend Government Selector**: now offers all 14 countries. Users
+  who previously selected Rwanda/Zambia/Senegal/Egypt/Morocco/DR Congo/
+  Ethiopia/Malawi in the dropdown will see the correct country's data
+  (was silently downgraded to Kenya).
 
 ### Fixed — Vercel Hobby cron schedule (PR #254)
 
