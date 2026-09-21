@@ -1879,7 +1879,10 @@ func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 // --- Data Refresh (#181) ---
 
 // makeRefreshHandler triggers re-discovery of Bills from kenyalaw.org.
-// This endpoint is called by a cron job (hourly) to keep data fresh.
+// This endpoint is called by a daily Vercel cron at 03:00 UTC (see
+// vercel.json) to keep data fresh. The Vercel Hobby plan only allows
+// daily crons — to run this more frequently, upgrade to Pro or wire
+// an external scheduler (GitHub Actions, Railway cron, etc.).
 // POST /api/v1/refresh
 func makeRefreshHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
