@@ -4,6 +4,60 @@ All notable changes to the Civic Intelligence Platform are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.1] — 2026-09-21
+
+Patch release fixing the Vercel AI service deploy error, adding
+comprehensive SEO/metadata, and refreshing the README to reflect the
+v0.2.0 state.
+
+### Fixed — Vercel AI service entrypoint (PR #258)
+
+Vercel multi-service build failed with:
+
+  Error: Service "ai" detected framework "fastapi" in "services/ai"
+  and must specify an "entrypoint" for runtime "python".
+
+Fix: added `"entrypoint": "main.py"` to the AI service config in
+`vercel.json`. The existing `services/ai/main.py` already exports
+the FastAPI ASGI app via `from app.main import app` — Vercel's Python
+runtime auto-detects the `app` variable at module scope.
+
+Also added `services/ai/runtime.txt` pinning Python 3.12 so Vercel's
+runtime matches the local dev virtualenv and the docker-compose env.
+
+### Added — SEO + metadata improvements (PR #259)
+
+- `/robots.txt` — explicit allow for GPTBot, ClaudeBot, Google-Extended
+  (so AI crawlers can ground their answers with the platform's content);
+  disallow for `/api/`, `/auth/`, `/offline`, `/report`.
+- `/sitemap.xml` — 50 URLs across primary, secondary, utility, country,
+  and per-record index pages. Each URL carries priority + changeFrequency.
+- `/icon` (favicon, 32×32 PNG) — generated from `icon.tsx` via next/og.
+- `/apple-icon` (Apple Touch Icon, 180×180) — generated from `apple-icon.tsx`.
+- `/opengraph-image` (1200×630) — generated from `opengraph-image.tsx`.
+- `/twitter-image` (1200×630) — generated from `twitter-image.tsx`.
+- JSON-LD structured data — `PlatformJsonLd` component emitting a `@graph`
+  with WebSite (SearchAction sitelinks), Organization, WebApplication
+  (applicationCategory=GovernmentApplication, 10-item featureList).
+- Expanded root metadata: 24 keywords covering all 14 country parliaments,
+  OG + Twitter cards, robots directives, manifest, icons.
+- Per-page metadata added to 8 pages that were missing it (homepage,
+  /report, 6 scenario sub-pages). The /report page + scenario pages are
+  `noindex` (user-generated, not durable content for indexing).
+- `NEXT_PUBLIC_SITE_URL` env var support so OG image URLs + canonical
+  URLs point at the right host in production.
+
+### Updated — README for v0.2.0 (PR #260)
+
+Comprehensive README refresh: country count 6 → 14, frontend pages 68 → 73,
+API routes 56 → 70, Go tests 700+ → 1003, Python tests 24 → 28, commits
+129 → 164. All 14 country adapters listed in both the adapter architecture
+section AND the Countries section. Deploy instructions now mention
+NEXT_PUBLIC_SITE_URL, AI_SERVICE_URL, API_SERVICE_URL env vars + the daily
+cron at 03:00 UTC. Roadmap extended with Phases 13 + 14 as Planned.
+
 ## [0.2.0] — 2026-09-21
 
 The Wave 12/13 release — adds 8 new country adapters (Rwanda, Zambia,
