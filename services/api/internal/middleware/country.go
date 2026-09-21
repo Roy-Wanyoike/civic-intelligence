@@ -57,9 +57,9 @@ const DefaultCountry = "KE"
 
 // GlobalCountry is the special country code that means "all countries".
 // It is used by the /compare, /indicators, /dashboard, and /graph endpoints
-// to return data across all 10 countries at once (the "dashboard" view).
-// For list endpoints (/acts, /people, …) it returns data from every
-// country — the handler decides whether that is meaningful.
+// to return data across all supported countries at once (the "dashboard"
+// view). For list endpoints (/acts, /people, …) it returns data from
+// every country — the handler decides whether that is meaningful.
 const GlobalCountry = "ALL"
 
 // SupportedCountries is the canonical list of country codes the platform
@@ -73,7 +73,9 @@ const GlobalCountry = "ALL"
 //
 // Wave 12 (ENG-L1, 2026) added Rwanda (RW), Zambia (ZM), Senegal (SN),
 // and Egypt (EG) — bringing the platform from 6 to 10 supported countries.
-var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG", "MA", "CD", "ET", "MW", "RW", "ZM", "SN", "EG"}
+// Wave 13 (ENG-L2, 2026) added Morocco (MA), DR Congo (CD), Ethiopia (ET),
+// and Malawi (MW) — bringing the platform from 10 to 14 supported countries.
+var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG", "MA", "CD", "ET", "MW"}
 
 // countryCtxKey is the typed context key for country storage. A distinct
 // type avoids collisions with other packages' context keys (and with the
@@ -108,17 +110,17 @@ func CountryFromContext(ctx context.Context) string {
 // (mirroring the WithRequestID pattern in request_id.go).
 //
 // The supplied code is NOT validated here — callers are expected to
-// pass a known-good code (KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG, or ALL).
-// The middleware itself performs validation before calling WithCountry.
+// pass a known-good code (one of SupportedCountries, or ALL). The
+// middleware itself performs validation before calling WithCountry.
 func WithCountry(ctx context.Context, code string) context.Context {
         return context.WithValue(ctx, countryCtxKey{}, code)
 }
 
 // IsSupportedCountry reports whether code is one of the supported country
-// codes (KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG) or the special
-// GlobalCountry ("ALL"). The check is case-insensitive on the input —
-// callers routinely pass lowercase values from URL query strings — but the
-// canonicalised uppercase form is what is stored on the context.
+// codes (see SupportedCountries) or the special GlobalCountry ("ALL").
+// The check is case-insensitive on the input — callers routinely pass
+// lowercase values from URL query strings — but the canonicalised
+// uppercase form is what is stored on the context.
 func IsSupportedCountry(code string) bool {
         if code == GlobalCountry {
                 return true

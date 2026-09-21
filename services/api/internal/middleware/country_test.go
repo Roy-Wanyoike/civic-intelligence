@@ -207,17 +207,36 @@ func TestCountry_InvalidReturns400(t *testing.T) {
         if body.Supplied != "XX" {
                 t.Errorf("expected supplied=XX echoed back, got %q", body.Supplied)
         }
-        if len(body.SupportedCountries) != 10 {
+        // The list grows as new country adapters land. The invariant we care
+        // about is: (a) at least the historical 10 are present and ordered,
+        // (b) every Wave-13 addition is present, and (c) the list has no
+        // duplicates (asserted in TestCountry_SupportedCountriesNoDuplicates).
+        if len(body.SupportedCountries) < 10 {
                 t.Errorf("expected at least 10 supported countries, got %d", len(body.SupportedCountries))
         }
         if body.GlobalCountry != GlobalCountry {
                 t.Errorf("expected global_country=ALL, got %q", body.GlobalCountry)
         }
-        // Verify the supported list contains the expected codes in order.
+        // Verify the historical wave-1/2/12 codes are present and ordered
+        // as the first 10 entries.
         expected := []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG"}
         for i, c := range expected {
                 if i >= len(body.SupportedCountries) || body.SupportedCountries[i] != c {
                         t.Errorf("supported_countries[%d] = %q, want %q", i, body.SupportedCountries[i], c)
+                }
+        }
+        // Verify the wave-13 additions are present (order after position 10
+        // is not asserted by the historical test, but they MUST be in the list).
+        for _, c := range []string{"MA", "CD", "ET", "MW"} {
+                found := false
+                for _, sc := range body.SupportedCountries {
+                        if sc == c {
+                                found = true
+                                break
+                        }
+                }
+                if !found {
+                        t.Errorf("expected supported_countries to contain %q (Wave-13), got %v", c, body.SupportedCountries)
                 }
         }
 }
@@ -358,5 +377,25 @@ func TestCountry_PropagatesThroughChain(t *testing.T) {
 
         if saw != "GH" {
                 t.Errorf("expected country to propagate to inner handler, got %q", saw)
+        }
+}
+
+// TestCountry_SupportedCountriesNoDuplicates guards against the regression
+// seen in wave-13 where appending the new country codes accidentally also
+// re-appended the wave-12 codes, producing a list with 4 duplicates and
+// breaking the 400-error body's supported_countries field. The list MUST
+// contain each country code exactly once.
+func TestCountry_SupportedCountriesNoDuplicates(t *testing.T) {
+        seen := make(map[string]int, len(SupportedCountries))
+        for _, c := range SupportedCountries {
+                seen[c]++
+        }
+        for code, count := range seen {
+                if count > 1 {
+                        t.Errorf("SupportedCountries contains %q %d times — duplicates break the 400-error body and confuse clients", code, count)
+                }
+        }
+        if len(SupportedCountries) < 10 {
+                t.Errorf("SupportedCountries has only %d entries — expected at least 10 (KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG)", len(SupportedCountries))
         }
 }
