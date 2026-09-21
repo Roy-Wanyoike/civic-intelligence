@@ -6,6 +6,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Wave 13 audit (PRs #250, #251, #252)
+
+Wave 13 (commit `d4dd0ef`, 2026) shipped four new country adapters — Morocco,
+DR Congo, Ethiopia, Malawi — but the integration was incomplete in several
+places. A post-merge audit (PR #250) found and fixed five independent bugs:
+
+- **`SupportedCountries` had duplicates** (services/api/internal/middleware/country.go).
+  The wave-12 codes (RW, ZM, SN, EG) were accidentally re-appended after the
+  wave-13 codes, producing a list of 18 entries with 4 duplicates. Every
+  400-error body sent to API clients listed each wave-12 code twice. Fixed by
+  deduping to the canonical 14-entry list; new `TestCountry_SupportedCountriesNoDuplicates`
+  guards against this regression.
+- **Wave-13 adapters were never registered in the runtime** (adapters/registry/wrappers.go).
+  `MustRegisterDefault` only registered 10 adapters. Morocco/DR Congo/Ethiopia/Malawi
+  had working code but were unreachable: `registry.GetAdapter("MA")` returned
+  `ErrUnsupportedCountry`, and `GET /api/v1/countries` omitted them. Fixed by
+  adding the four wrappers + constructors + registration entries.
+- **`SUPPORTED_COUNTRY_CODES` (frontend)** (apps/web/src/lib/api.ts) was
+  missing the 8 newer codes. The cookie-validation logic silently downgraded
+  any of those selections back to `KE` — a user picking Rwanda in the
+  dropdown would still see Kenya data. Fixed by adding all 8 missing codes.
+- **Next.js production build failed** (apps/web):
+  - `apps/web/src/app/people/[id]/scorecard/page.tsx`,
+    `apps/web/src/app/constituencies/[id]/page.tsx`: both exported both
+    `metadata` and `generateMetadata` — Next.js 14 forbids exporting both.
+    Merged the static description into the dynamic `generateMetadata`.
+  - `/offline` page was a Server Component rendering a `<button onClick>` —
+    event handlers cannot cross the server/client boundary, so static page
+    generation for `/offline` timed out (3 retries × 60s, then the whole
+    build failed). Extracted the button into a new `'use client'` island
+    component (`apps/web/src/app/offline/retry-button.tsx`).
+  - 6 ESLint fail-the-build errors: unused imports (`EyeOff`, `Search`,
+    `Share2`, `GraphResponse`, `_year`); unescaped apostrophe in calendar
+    caption; `let` → `const` for non-reassigned bindings; missing
+    `aria-selected` on `role="option"`.
+- **`packages/cache/go.mod`** pinned `gopher-json` to pseudo-version
+  `v0.0.0-20230918194607-3b0d2c1b556d` referencing a non-existent commit,
+  breaking `go mod download` for the whole cache module. Re-pinned to
+  `v0.0.0-20230218143504-906a9b012302` (the real HEAD commit + timestamp).
+
+PR #251 removed stale `FIXME: verify with go build when Go available` markers
+that were added in earlier sessions when the Go toolchain was unavailable.
+Go 1.23.4 is now available; every module builds; the full test suite passes.
+
+PR #252 removed two unused npm dependencies from `apps/web`:
+- `date-fns` — every date format uses `Intl.DateTimeFormat`; no file imports it.
+- `class-variance-authority` — the project does not use shadcn/ui variants; no
+  file imports `cva`.
+
+### Added — Wave 12 (commit `2065bfe`, 2026) — Rwanda, Zambia, Senegal, Egypt
+
+Four new country adapters, bringing the platform from 6 to 10 supported
+countries:
+
+- **Rwanda (RW)** — Parliament of Rwanda (bicameral: Chamber of Deputies +
+  Senate). Source: parliament.gov.rw.
+- **Zambia (ZM)** — National Assembly of Zambia (unicameral). Source:
+  parliament.gov.zm.
+- **Senegal (SN)** — Assemblée Nationale du Sénégal (unicameral). Source:
+  assemblee-nationale.sn.
+- **Egypt (EG)** — Egyptian Parliament (bicameral: House of Representatives +
+  Senate). Source: parliament.eg.
+
+Each adapter ships its full country data (legislative structure, stages,
+glossary, sample Bills, official sources) in `adapters/{country}/internal/`,
+with a parser that handles the parliament's actual HTML structure
+(`testdata/bills.html`). Contract tests verify each adapter's isolation
+(its `DiscoverBills` never returns foreign Bills).
+
+### Added — Wave 13 (commit `d4dd0ef`, 2026) — Morocco, DR Congo, Ethiopia, Malawi
+
+Four new country adapters, bringing the platform from 10 to 14 supported
+countries:
+
+- **Morocco (MA)** — Parliament of Morocco (bicameral: House of Representatives +
+  House of Councillors). Source: parlement.ma.
+- **DR Congo (CD)** — Parliament of the Democratic Republic of the Congo
+  (bicameral: National Assembly + Senate). Sources: assemblee-nationale.cd,
+  senat.cd.
+- **Ethiopia (ET)** — Federal Parliamentary Assembly of Ethiopia (bicameral:
+  House of Peoples' Representatives + House of Federation). Source:
+  parliament.gov.et.
+- **Malawi (MW)** — National Assembly of Malawi (unicameral). Source:
+  parliament.gov.mw.
+
+Each adapter ships its full country data and parser, matching the wave-12
+adapter shape. The platform now covers 14 African countries.
+
 ### Added — Civic Daily Brief + AI Summary (task ENG-I2, branch `feat/wave9-civic-brief`)
 
 Personalised, AI-grounded, plain-language daily summary of civic developments
