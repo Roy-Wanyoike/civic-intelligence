@@ -43,7 +43,7 @@ export default async function ComparePage({ searchParams }: PageProps) {
   // comparison payload; we slice the relevant fields per dimension.
   let profiles: Record<string, CountryProfile> = {};
   let debtData: Record<string, DebtComparisonRow> = {};
-  let indicatorsData: Record<string, Record<string, CountryIndicator>> = {};
+  const indicatorsData: Record<string, Record<string, CountryIndicator>> = {};
   let govDifferences: CompareDifference[] = [];
   let debtDifferences: CompareDifference[] = [];
   let disclaimer = '';

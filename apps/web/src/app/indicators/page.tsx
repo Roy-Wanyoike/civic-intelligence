@@ -52,7 +52,7 @@ export default async function IndicatorsPage({ searchParams }: PageProps) {
   // Build the indicator matrix: one row per country × one card per indicator.
   // We pull all 6 countries' indicators via /api/v1/compare/indicators (no
   // ?countries= filter → all countries returned) then optionally narrow.
-  let indicatorsData: Record<string, Record<string, CountryIndicator>> = {};
+  const indicatorsData: Record<string, Record<string, CountryIndicator>> = {};
   let disclaimer = '';
   let loadError: string | null = null;
   try {
@@ -75,7 +75,7 @@ export default async function IndicatorsPage({ searchParams }: PageProps) {
   );
 
   // Build the CSV export string for the entire visible matrix.
-  const csv = buildCSV(indicatorsData, visibleCountries, year);
+  const csv = buildCSV(indicatorsData, visibleCountries);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -267,7 +267,6 @@ function parseYear(raw: string | undefined, fallback: number): number {
 function buildCSV(
   data: Record<string, Record<string, CountryIndicator>>,
   visibleCountries: string[],
-  _year: number,
 ): string {
   const indicatorKeys = Object.keys(INDICATOR_META);
   const header = ['country_code', 'country_name', ...indicatorKeys.flatMap((k) => [`${k}_value`, `${k}_unit`, `${k}_source`])];

@@ -76,6 +76,9 @@ export function getCountryFromCookie(): string {
 // — if a new country is added there, it must be added here too. The
 // contract test in tests/contract/adapter_contract_test.go enforces the
 // adapter side; this constant enforces the client side.
+//
+// Wave 12 (2026) added Rwanda, Zambia, Senegal, Egypt.
+// Wave 13 (2026) added Morocco, DR Congo, Ethiopia, Malawi.
 export const SUPPORTED_COUNTRY_CODES = new Set<string>([
   'KE',
   'UG',
@@ -83,6 +86,14 @@ export const SUPPORTED_COUNTRY_CODES = new Set<string>([
   'GH',
   'NG',
   'ZA',
+  'RW',
+  'ZM',
+  'SN',
+  'EG',
+  'MA',
+  'CD',
+  'ET',
+  'MW',
 ]);
 
 export class ApiError extends Error {

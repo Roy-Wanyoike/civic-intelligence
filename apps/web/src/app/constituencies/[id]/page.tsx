@@ -19,12 +19,6 @@ import { RealityBadge } from '@/components/reality-labels';
 import { PrintButton } from '@/components/print-button';
 import { KenyaMapPlaceholder } from './map';
 
-export const metadata: Metadata = {
-  title: 'Constituency Dashboard',
-  description:
-    'Per-constituency civic dashboard: MP info, bills affecting the area, budget allocated, local projects, public participation opportunities, recent civic events and government context.',
-};
-
 export async function generateMetadata({
   params,
 }: {
@@ -38,7 +32,11 @@ export async function generateMetadata({
   } catch {
     /* ignore */
   }
-  return { title };
+  return {
+    title,
+    description:
+      'Per-constituency civic dashboard: MP info, bills affecting the area, budget allocated, local projects, public participation opportunities, recent civic events and government context.',
+  };
 }
 
 function formatKESm(m: number): string {

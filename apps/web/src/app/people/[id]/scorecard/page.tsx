@@ -8,7 +8,6 @@ import {
   FileText,
   Landmark,
   MessageCircle,
-  Share2,
   Users,
 } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -16,12 +15,6 @@ import { getMPScorecard } from '@/lib/people-api';
 import { RealityBadge } from '@/components/reality-labels';
 import { PrintButton } from '@/components/print-button';
 import { ScorecardShareButton } from './share-button';
-
-export const metadata: Metadata = {
-  title: 'MP Scorecard',
-  description:
-    'A factual, evidence-backed record of an MP\'s parliamentary activity. Not a ranking — just the facts with sources.',
-};
 
 export async function generateMetadata({
   params,
@@ -36,7 +29,11 @@ export async function generateMetadata({
   } catch {
     /* ignore */
   }
-  return { title };
+  return {
+    title,
+    description:
+      'A factual, evidence-backed record of an MP\'s parliamentary activity. Not a ranking — just the facts with sources.',
+  };
 }
 
 function formatPercent(rate: number): string {

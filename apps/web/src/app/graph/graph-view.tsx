@@ -63,7 +63,6 @@ import {
   type GraphEdgeType,
   type GraphNode,
   type GraphNodeType,
-  type GraphResponse,
   type GraphSummary,
 } from '@/lib/graph-api';
 
@@ -1297,7 +1296,7 @@ function PathNodePicker({
           className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-md border border-civic-border bg-civic-paper shadow-lg"
         >
           {results.map((n) => (
-            <li key={n.id} role="option">
+            <li key={n.id} role="option" aria-selected={value === n.id}>
               <button
                 type="button"
                 onMouseDown={(e) => {
