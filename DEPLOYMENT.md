@@ -1,15 +1,63 @@
 # Deployment Guide
 
+## Architecture Overview
+
+The Civic Intelligence Platform is a three-tier polyglot application:
+
+| Tier | Service | Stack | Deploy Target |
+|------|---------|-------|---------------|
+| Frontend | `apps/web/` | Next.js 14 + React 18 + TypeScript + Tailwind | Vercel |
+| BFF / API | `services/api/` | Go 1.23 + stdlib `net/http` | Railway / Render / Fly.io |
+| AI service | `services/ai/` | Python 3.12 + FastAPI + uvicorn | Railway / Render / Fly.io |
+| Database | — | PostgreSQL 16 + pgvector | Supabase / Neon / RDS |
+
+The frontend talks to the API and AI services via two Vercel rewrites
+defined in `vercel.json`:
+
+```text
+/api/v1/ai/*   →  AI_SERVICE_URL/v1/*
+/api/v1/*      →  API_SERVICE_URL/api/v1/*
+```
+
+The API service hosts the cron endpoint (`POST /api/v1/refresh`) that
+re-discovers Bills, Hansard, Order Papers, Votes & Proceedings, committee
+reports, and gazette notices from the 11 official Parliament of Kenya
+sources + 1 Kenya Law gazette source.
+
+---
+
 ## Vercel (Frontend)
 
 The Next.js frontend deploys to Vercel.
+
+### Vercel multi-service setup
+
+This repo ships with a `vercel.json` that defines two services:
+
+```json
+{
+  "services": {
+    "web": { "root": "apps/web", "framework": "nextjs" },
+    "ai":  { "root": "services/ai" }
+  }
+}
+```
+
+When you import the repo at the top level, Vercel will deploy BOTH
+services. The `web` service is the Next.js frontend (includes the
+API rewrites). The `ai` service is the Python FastAPI service.
+
+If you prefer to deploy the frontend only, you can also import the
+repo with the root directory set to `apps/web` (the older single-
+service pattern). Either works.
 
 ### Setup
 
 1. Go to [vercel.com/new](https://vercel.com/new)
 2. Import `Roy-Wanyoike/civic-intelligence`
-3. **Important:** Set **Root Directory** to `apps/web`
-4. Vercel auto-detects Next.js
+3. If you want both services: leave the root at the repo top level.
+   If you want frontend only: set **Root Directory** to `apps/web`.
+4. Vercel auto-detects Next.js for `web` and Python for `ai`.
 5. Set environment variables (see below)
 6. Deploy
 
@@ -22,16 +70,43 @@ The Next.js frontend deploys to Vercel.
 
 *If not set, the frontend falls back to mock data. Set these to your backend URLs for real data.
 
+### Cron Jobs (Hobby plan limitation)
+
+The repo's `vercel.json` defines one cron:
+
+```json
+"crons": [
+  { "path": "/api/v1/refresh", "schedule": "0 3 * * *" }
+]
+```
+
+**Vercel Hobby accounts only allow cron jobs that run at most once per day.**
+The `0 3 * * *` schedule runs once a day at 03:00 UTC — this is the
+maximum frequency allowed on the Hobby plan. If you see this deploy
+error:
+
+> Hobby accounts are limited to daily cron jobs. This cron expression
+> (0 * * * *) would run more than once per day.
+
+…you are still on the old hourly schedule. Pull the latest `main` and
+redeploy — the schedule was changed from `0 * * * *` (hourly) to
+`0 3 * * *` (daily) in PR #254.
+
+To run the refresh more frequently than once a day, either:
+- Upgrade to Vercel Pro, or
+- Set up an external scheduler (GitHub Actions `schedule:` cron, Railway
+  cron, Render cron, or a cloud function) that POSTs to your deployed
+  `/api/v1/refresh` endpoint.
+
 ### What deploys to Vercel
 
-- Next.js frontend (36 pages)
+- Next.js frontend (73 pages)
 - Static assets
-- The `apps/web/` directory only
+- The `apps/web/` directory (or both services if you import at the repo root)
 
 ### What does NOT deploy to Vercel
 
-- Go backend (deploy separately)
-- Python AI service (deploy separately)
+- Go backend (deploy separately — Railway is the recommended target)
 - Database (use Supabase, Neon, or RDS)
 
 ---
@@ -98,6 +173,34 @@ Set this env var on your Go API service:
 
 ---
 
+## Data Sources Crawled
+
+The Go API's `/api/v1/refresh` endpoint (invoked daily at 03:00 UTC by the
+Vercel cron) crawls the following 12 official Kenyan sources. The crawler
+implementations live in `adapters/kenya/`:
+
+| Source | URL | Document type |
+|--------|-----|---------------|
+| NA Bills | `parliament.go.ke/the-national-assembly/house-business/bills` | bill |
+| Senate Bills | `parliament.go.ke/the-senate/senate-bills` | bill |
+| NA Bill Tracker | `parliament.go.ke/the-national-assembly/house-business/bill-tracker` | bill_tracker |
+| NA Hansard | `parliament.go.ke/the-national-assembly/house-business/hansard` | hansard |
+| Senate Hansard | `parliament.go.ke/the-senate/Hansard` (capital H) | hansard |
+| NA Order Paper | `parliament.go.ke/the-national-assembly/house-business/order-paper` | order_paper |
+| Senate Order Paper | `parliament.go.ke/the-senate/house-business/order-paper` | order_paper |
+| NA Votes & Proceedings | `parliament.go.ke/the-national-assembly/house-business/votes-proceeding` (singular) | votes_proceedings |
+| Senate Votes & Proceedings | `parliament.go.ke/the-senate/house-business/votes-proceeding` | votes_proceedings |
+| NA Committees | `parliament.go.ke/the-national-assembly/committees` | committee_report |
+| Senate Committees | `parliament.go.ke/the-senate/committees/senate-committees` | committee_report |
+| Kenya Gazette | `new.kenyalaw.org/kenya_law/gazette/` | gazette_notice |
+
+All crawls go through the `PoliteClient` (1 request/sec/host) so the
+crawler is a good citizen on the source sites. The `User-Agent` header
+includes the project URL so source administrators can reach the
+platform operators if the crawler misbehaves.
+
+---
+
 ## Country Subdomains (Future Feature)
 
 Yes — `ke.civicintelligence.com`, `ug.civicintelligence.com`, etc. is absolutely possible.
@@ -111,12 +214,20 @@ tz.civicintelligence.com  →  Tanzania data
 gh.civicintelligence.com  →  Ghana data
 ng.civicintelligence.com  →  Nigeria data
 za.civicintelligence.com  →  South Africa data
+rw.civicintelligence.com  →  Rwanda data
+zm.civicintelligence.com  →  Zambia data
+sn.civicintelligence.com  →  Senegal data
+eg.civicintelligence.com  →  Egypt data
+ma.civicintelligence.com  →  Morocco data
+cd.civicintelligence.com  →  DR Congo data
+et.civicintelligence.com  →  Ethiopia data
+mw.civicintelligence.com  →  Malawi data
 ```
 
 ### Implementation plan
 
 1. **Next.js Middleware** detects the subdomain
-2. Sets `country` context (KE, UG, TZ, GH, NG, ZA)
+2. Sets `country` context (KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG, MA, CD, ET, MW)
 3. All API calls include the country parameter
 4. Go API routes to the correct country adapter
 5. Frontend renders country-specific data (Bills, stages, terminology)
@@ -134,14 +245,15 @@ export function middleware(request: NextRequest) {
 6. **DNS**: Add wildcard CNAME `*.civicintelligence.com` → Vercel
 7. **Vercel**: Supports wildcard domains natively
 
-This is a Phase 12 feature — the architecture already supports it via the country adapter pattern.
+This is a Phase 12 feature — the architecture already supports it via the country adapter pattern. The platform currently supports 14 countries (KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG, MA, CD, ET, MW).
 
 ---
 
 ## Quick Deploy Checklist
 
-- [ ] Vercel: Import repo, set Root Directory to `apps/web`
+- [ ] Vercel: Import repo (root = repo top, OR root = `apps/web` for frontend-only)
 - [ ] Vercel: Set `AI_SERVICE_URL` and `API_SERVICE_URL` env vars
+- [ ] Vercel: Confirm the cron schedule in `vercel.json` is `0 3 * * *` (daily, Hobby-compatible)
 - [ ] Railway/Render: Deploy Go API from `services/api/`
 - [ ] Railway/Render: Deploy Python AI from `services/ai/`
 - [ ] Supabase: Create Postgres + pgvector, run 17 migrations
@@ -150,6 +262,7 @@ This is a Phase 12 feature — the architecture already supports it via the coun
 - [ ] Set `DEV_MODE=false` on Railway/Render (Go service)
 - [ ] Optional: Set `MPESA_*` and `STRIPE_SECRET_KEY` for sponsor payments
 - [ ] Point your domain to Vercel
+- [ ] Verify the cron by manually POSTing to `/api/v1/refresh` after the first deploy
 
 ---
 
@@ -182,10 +295,12 @@ Railway is the recommended platform for the Go API and Python AI service.
 6. **Copy the Railway URLs** back to your Vercel project:
    - `API_SERVICE_URL` = Railway Go API URL (e.g., `https://civic-api.up.railway.app`)
    - `AI_SERVICE_URL` = Railway Python AI URL (e.g., `https://civic-ai.up.railway.app`)
-7. **Set up hourly refresh:**
-   - Vercel Cron is configured in `vercel.json` (runs every hour)
+7. **Set up daily refresh:**
+   - Vercel Cron is configured in `vercel.json` (runs daily at 03:00 UTC)
    - It calls `/api/v1/refresh` which proxies to the Go API
-   - The Go API re-discovers Bills from kenyalaw.org
+   - The Go API re-discovers Bills, Hansard, Order Papers, V&P, committee
+     reports, and gazette notices from the 12 official Kenyan sources
+     (see "Data Sources Crawled" above)
 
 ### Alternative: Render
 
@@ -198,3 +313,4 @@ Same approach — two web services on [render.com](https://render.com):
 Deploy as Docker containers using the existing Dockerfiles:
 - Go: `infrastructure/docker/Dockerfile.go`
 - Python: `infrastructure/docker/Dockerfile.python-ai`
+

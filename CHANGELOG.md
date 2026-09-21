@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Vercel Hobby cron schedule (PR #254)
+
+Vercel Hobby accounts only allow cron jobs that run at most once per day.
+The previous schedule `0 * * * *` (every hour at minute 0) was rejected
+on deploy. Changed to `0 3 * * *` — runs once a day at 03:00 UTC.
+
+### Added — Kenya live crawlers (PR #255)
+
+Implemented the five long-standing `TODO: crawl` markers in the Kenya
+adapter package. Each `Discover*` method previously returned an empty
+slice; they now perform real HTTP crawls against verified URLs on
+parliament.go.ke and new.kenyalaw.org.
+
+The crawlers cover all 12 official Kenyan sources:
+
+| Source | URL |
+|--------|-----|
+| NA Bills | `parliament.go.ke/the-national-assembly/house-business/bills` |
+| Senate Bills | `parliament.go.ke/the-senate/senate-bills` |
+| NA Bill Tracker | `parliament.go.ke/the-national-assembly/house-business/bill-tracker` |
+| NA Hansard | `parliament.go.ke/the-national-assembly/house-business/hansard` |
+| Senate Hansard | `parliament.go.ke/the-senate/Hansard` (capital H) |
+| NA Order Paper | `parliament.go.ke/the-national-assembly/house-business/order-paper` |
+| Senate Order Paper | `parliament.go.ke/the-senate/house-business/order-paper` |
+| NA Votes & Proceedings | `parliament.go.ke/the-national-assembly/house-business/votes-proceeding` (singular) |
+| Senate Votes & Proceedings | `parliament.go.ke/the-senate/house-business/votes-proceeding` |
+| NA Committees | `parliament.go.ke/the-national-assembly/committees` |
+| Senate Committees | `parliament.go.ke/the-senate/committees/senate-committees` |
+| Kenya Gazette | `new.kenyalaw.org/kenya_law/gazette/` |
+
+All crawls go through the polite `PoliteClient` (1 request/sec/host).
+Each candidate carries a deterministic source ID derived from house +
+sitting date (or URL hash fallback) so downstream consumers can dedupe
+across discovery runs. PDF text extraction + per-notice parsing remain
+delegated to the documents service.
+
+The PR ships 20 new tests + 6 HTML fixtures mirroring the actual site
+structure. Test count went from 983 → 1003.
+
 ### Fixed — Wave 13 audit (PRs #250, #251, #252)
 
 Wave 13 (commit `d4dd0ef`, 2026) shipped four new country adapters — Morocco,
