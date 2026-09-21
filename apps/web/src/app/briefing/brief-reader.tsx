@@ -29,7 +29,6 @@ import {
   FileText,
   Scale,
   Eye,
-  EyeOff,
   Sparkles,
   AlertTriangle,
 } from 'lucide-react';

@@ -26,9 +26,13 @@ package registry
 import (
         "context"
 
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/dr_congo"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/egypt"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/ethiopia"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/malawi"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/morocco"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/rwanda"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/senegal"
@@ -562,6 +566,203 @@ func (w egyptWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error
 }
 
 // ---------------------------------------------------------------------------
+// Morocco wrapper (added in Wave 13 / ENG-L2)
+// ---------------------------------------------------------------------------
+
+type moroccoWrapper struct {
+        inner *morocco.MoroccoAdapter
+}
+
+func (w moroccoWrapper) CountryCode() string  { return "MA" }
+func (w moroccoWrapper) CountryName() string  { return "Morocco" }
+func (w moroccoWrapper) FlagEmoji() string    { return "🇲🇦" }
+func (w moroccoWrapper) ParliamentName() string {
+        return "Parliament of Morocco"
+}
+func (w moroccoWrapper) LegislatureType() string { return "bicameral" }
+
+func (w moroccoWrapper) GetStages() []contracts.StageDefinition {
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil {
+                return nil
+        }
+        return stages
+}
+
+func (w moroccoWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil {
+                return contracts.LegislativeStructure{}
+        }
+        return *s
+}
+
+func (w moroccoWrapper) GetOfficialSources() []SourceDefinition {
+        return []SourceDefinition{
+                {Name: "Parliament of Morocco", URL: "https://www.parlement.ma/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Official Gazette of the Kingdom of Morocco", URL: "https://www.sgg.gov.ma/BulletinOfficiel.aspx", AuthorityLevel: "official", ItemType: "gazette"},
+                {Name: "Bank Al-Maghrib", URL: "https://www.bkam.ma/", AuthorityLevel: "primary", ItemType: "policy"},
+                {Name: "Ministry of Economy and Finance", URL: "https://www.finances.gov.ma/", AuthorityLevel: "primary", ItemType: "policy"},
+        }
+}
+
+func (w moroccoWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
+        items, err := w.inner.Discover(ctx)
+        if err != nil {
+                return nil, err
+        }
+        return billsFromSourceItems("MA", items), nil
+}
+
+// ---------------------------------------------------------------------------
+// DR Congo wrapper (added in Wave 13 / ENG-L2)
+// ---------------------------------------------------------------------------
+
+type drCongoWrapper struct {
+        inner *dr_congo.DRCongoAdapter
+}
+
+func (w drCongoWrapper) CountryCode() string  { return "CD" }
+func (w drCongoWrapper) CountryName() string  { return "DR Congo" }
+func (w drCongoWrapper) FlagEmoji() string    { return "🇨🇩" }
+func (w drCongoWrapper) ParliamentName() string {
+        return "Parliament of the Democratic Republic of the Congo"
+}
+func (w drCongoWrapper) LegislatureType() string { return "bicameral" }
+
+func (w drCongoWrapper) GetStages() []contracts.StageDefinition {
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil {
+                return nil
+        }
+        return stages
+}
+
+func (w drCongoWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil {
+                return contracts.LegislativeStructure{}
+        }
+        return *s
+}
+
+func (w drCongoWrapper) GetOfficialSources() []SourceDefinition {
+        return []SourceDefinition{
+                {Name: "National Assembly of DR Congo", URL: "https://www.assemblee-nationale.cd/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Senate of DR Congo", URL: "https://www.senat.cd/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Journal Officiel de la RDC", URL: "https://www.journalofficiel.gouv.cd/", AuthorityLevel: "official", ItemType: "gazette"},
+                {Name: "Central Bank of Congo", URL: "https://www.bcc.cd/", AuthorityLevel: "primary", ItemType: "policy"},
+                {Name: "Ministry of Finance", URL: "https://www.minfin.gouv.cd/", AuthorityLevel: "primary", ItemType: "policy"},
+        }
+}
+
+func (w drCongoWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
+        items, err := w.inner.Discover(ctx)
+        if err != nil {
+                return nil, err
+        }
+        return billsFromSourceItems("CD", items), nil
+}
+
+// ---------------------------------------------------------------------------
+// Ethiopia wrapper (added in Wave 13 / ENG-L2)
+// ---------------------------------------------------------------------------
+
+type ethiopiaWrapper struct {
+        inner *ethiopia.EthiopiaAdapter
+}
+
+func (w ethiopiaWrapper) CountryCode() string  { return "ET" }
+func (w ethiopiaWrapper) CountryName() string  { return "Ethiopia" }
+func (w ethiopiaWrapper) FlagEmoji() string    { return "🇪🇹" }
+func (w ethiopiaWrapper) ParliamentName() string {
+        return "Federal Parliamentary Assembly of Ethiopia"
+}
+func (w ethiopiaWrapper) LegislatureType() string { return "bicameral" }
+
+func (w ethiopiaWrapper) GetStages() []contracts.StageDefinition {
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil {
+                return nil
+        }
+        return stages
+}
+
+func (w ethiopiaWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil {
+                return contracts.LegislativeStructure{}
+        }
+        return *s
+}
+
+func (w ethiopiaWrapper) GetOfficialSources() []SourceDefinition {
+        return []SourceDefinition{
+                {Name: "Parliament of Ethiopia", URL: "https://www.parliament.gov.et/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Negarit Gazeta (Official Gazette)", URL: "https://www.parliament.gov.et/gazette", AuthorityLevel: "official", ItemType: "gazette"},
+                {Name: "National Bank of Ethiopia", URL: "https://www.nbe.gov.et/", AuthorityLevel: "primary", ItemType: "policy"},
+                {Name: "Ministry of Finance", URL: "https://www.mofed.gov.et/", AuthorityLevel: "primary", ItemType: "policy"},
+        }
+}
+
+func (w ethiopiaWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
+        items, err := w.inner.Discover(ctx)
+        if err != nil {
+                return nil, err
+        }
+        return billsFromSourceItems("ET", items), nil
+}
+
+// ---------------------------------------------------------------------------
+// Malawi wrapper (added in Wave 13 / ENG-L2)
+// ---------------------------------------------------------------------------
+
+type malawiWrapper struct {
+        inner *malawi.MalawiAdapter
+}
+
+func (w malawiWrapper) CountryCode() string  { return "MW" }
+func (w malawiWrapper) CountryName() string  { return "Malawi" }
+func (w malawiWrapper) FlagEmoji() string    { return "🇲🇼" }
+func (w malawiWrapper) ParliamentName() string {
+        return "National Assembly of Malawi"
+}
+func (w malawiWrapper) LegislatureType() string { return "unicameral" }
+
+func (w malawiWrapper) GetStages() []contracts.StageDefinition {
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil {
+                return nil
+        }
+        return stages
+}
+
+func (w malawiWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil {
+                return contracts.LegislativeStructure{}
+        }
+        return *s
+}
+
+func (w malawiWrapper) GetOfficialSources() []SourceDefinition {
+        return []SourceDefinition{
+                {Name: "Parliament of Malawi", URL: "https://www.parliament.gov.mw/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Malawi Gazette", URL: "https://www.malawigazette.com/", AuthorityLevel: "official", ItemType: "gazette"},
+                {Name: "Reserve Bank of Malawi", URL: "https://www.rbm.mw/", AuthorityLevel: "primary", ItemType: "policy"},
+                {Name: "Ministry of Finance", URL: "https://www.finance.gov.mw/", AuthorityLevel: "primary", ItemType: "policy"},
+        }
+}
+
+func (w malawiWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
+        items, err := w.inner.Discover(ctx)
+        if err != nil {
+                return nil, err
+        }
+        return billsFromSourceItems("MW", items), nil
+}
+
+// ---------------------------------------------------------------------------
 // Default-adapter constructors
 // ---------------------------------------------------------------------------
 
@@ -617,19 +818,43 @@ func NewEgyptWrapper(inner *egypt.EgyptAdapter) CountryAdapter {
         return egyptWrapper{inner: inner}
 }
 
-// MustRegisterDefault registers the 10 default country adapters (Kenya,
+// NewMoroccoWrapper returns a CountryAdapter for the supplied Morocco adapter.
+func NewMoroccoWrapper(inner *morocco.MoroccoAdapter) CountryAdapter {
+        return moroccoWrapper{inner: inner}
+}
+
+// NewDRCongoWrapper returns a CountryAdapter for the supplied DR Congo adapter.
+func NewDRCongoWrapper(inner *dr_congo.DRCongoAdapter) CountryAdapter {
+        return drCongoWrapper{inner: inner}
+}
+
+// NewEthiopiaWrapper returns a CountryAdapter for the supplied Ethiopia adapter.
+func NewEthiopiaWrapper(inner *ethiopia.EthiopiaAdapter) CountryAdapter {
+        return ethiopiaWrapper{inner: inner}
+}
+
+// NewMalawiWrapper returns a CountryAdapter for the supplied Malawi adapter.
+func NewMalawiWrapper(inner *malawi.MalawiAdapter) CountryAdapter {
+        return malawiWrapper{inner: inner}
+}
+
+// MustRegisterDefault registers the 14 default country adapters (Kenya,
 // Uganda, Tanzania, Ghana, Nigeria, South Africa, Rwanda, Zambia, Senegal,
-// Egypt) using fresh adapter instances constructed with zero-value
-// Dependencies. It is safe to call multiple times — subsequent calls are
-// no-ops once the adapters are registered.
+// Egypt, Morocco, DR Congo, Ethiopia, Malawi) using fresh adapter instances
+// constructed with zero-value Dependencies. It is safe to call multiple
+// times — subsequent calls are no-ops once the adapters are registered.
 //
 // Production wiring: call this once at startup in services/api/cmd/main.go.
 // Test wiring: the country-isolation test calls ResetForTest() and then
 // MustRegisterDefault() so it sees a known registry state.
 //
-// Wave 12 (ENG-L1, 2026) added the final 4 adapters — Rwanda (RW), Zambia
-// (ZM), Senegal (SN), and Egypt (EG) — bringing the platform from 6 to 10
-// supported countries.
+// Wave 12 (ENG-L1, 2026) added Rwanda (RW), Zambia (ZM), Senegal (SN),
+// and Egypt (EG) — bringing the platform from 6 to 10 supported countries.
+//
+// Wave 13 (ENG-L2, 2026) added Morocco (MA), DR Congo (CD), Ethiopia (ET),
+// and Malawi (MW) — bringing the platform from 10 to 14 supported countries.
+// (Wave 13 also fixes a regression where these 4 adapters had been written
+// but never registered in MustRegisterDefault — they existed as dead code.)
 func MustRegisterDefault() {
         registryMu.Lock()
         defer registryMu.Unlock()
@@ -662,5 +887,17 @@ func MustRegisterDefault() {
         }
         if _, ok := registry["EG"]; !ok {
                 registry["EG"] = egyptWrapper{inner: egypt.NewEgyptAdapter(egypt.Dependencies{})}
+        }
+        if _, ok := registry["MA"]; !ok {
+                registry["MA"] = moroccoWrapper{inner: morocco.NewMoroccoAdapter()}
+        }
+        if _, ok := registry["CD"]; !ok {
+                registry["CD"] = drCongoWrapper{inner: dr_congo.NewDRCongoAdapter()}
+        }
+        if _, ok := registry["ET"]; !ok {
+                registry["ET"] = ethiopiaWrapper{inner: ethiopia.NewEthiopiaAdapter()}
+        }
+        if _, ok := registry["MW"]; !ok {
+                registry["MW"] = malawiWrapper{inner: malawi.NewMalawiAdapter()}
         }
 }

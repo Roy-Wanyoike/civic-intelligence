@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { MapPin, Users, ArrowRight, Search } from 'lucide-react';
+import { MapPin, Users, ArrowRight } from 'lucide-react';
 import { listConstituencies } from '@/lib/people-api';
 import { RealityBadge } from '@/components/reality-labels';
 import { ConstituencySearch } from './search';

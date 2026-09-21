@@ -433,7 +433,7 @@ export function CalendarView({ initialMonth, initialEvents }: CalendarViewProps)
           >
             <table className="w-full min-w-[44rem] border-collapse text-sm">
               <caption className="sr-only">
-                Civic calendar for {formatMonthLabel(month)}. Each cell lists the day's events.
+                Civic calendar for {formatMonthLabel(month)}. Each cell lists the day&apos;s events.
               </caption>
               <thead>
                 <tr>

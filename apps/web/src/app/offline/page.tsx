@@ -8,6 +8,7 @@
  * page itself must be precached by the SW so it loads with zero network.
  */
 import Link from 'next/link';
+import { OfflineRetryButton } from './retry-button';
 
 export const metadata = {
   title: 'Offline · Civic Intelligence',
@@ -25,15 +26,7 @@ export default function OfflinePage() {
         pages and search will return when your connection does.
       </p>
 
-      <button
-        type="button"
-        onClick={() => {
-          if (typeof window !== 'undefined') window.location.reload();
-        }}
-        className="mt-8 inline-flex items-center rounded-md bg-forest px-4 py-2 text-sm font-medium text-white hover:bg-forest-dark focus:outline-none focus:ring-2 focus:ring-forest focus:ring-offset-2"
-      >
-        Try again
-      </button>
+      <OfflineRetryButton />
 
       <h2 className="mt-12 text-sm font-semibold uppercase tracking-wide text-gray-500">
         Available offline
