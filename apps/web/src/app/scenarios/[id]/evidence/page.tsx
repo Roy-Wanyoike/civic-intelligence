@@ -1,7 +1,16 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { listEvidence } from '@/lib/scenarios-api';
 import { RealityBadge, RealityDisclaimer } from '@/components/reality-labels';
+
+export const metadata: Metadata = {
+  title: 'Scenario Evidence',
+  description:
+    'The evidence backing a policy simulation scenario — every assumption and result links to its primary source so the scenario is fully traceable.',
+  alternates: { canonical: '/scenarios/[id]/evidence' },
+  robots: { index: false, follow: true },
+};
 
 export default async function EvidencePage({
   params,

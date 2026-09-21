@@ -1,7 +1,16 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import { listAssumptions } from '@/lib/scenarios-api';
 import { RealityBadge, RealityDisclaimer } from '@/components/reality-labels';
+
+export const metadata: Metadata = {
+  title: 'Scenario Assumptions',
+  description:
+    'The assumptions underpinning a policy simulation scenario — each assumption carries an evidence URL and a confidence level so the scenario is fully traceable to its sources.',
+  alternates: { canonical: '/scenarios/[id]/assumptions' },
+  robots: { index: false, follow: true },
+};
 
 const TYPE_LABELS: Record<string, string> = {
   OBSERVED_INPUT: 'Observed input',

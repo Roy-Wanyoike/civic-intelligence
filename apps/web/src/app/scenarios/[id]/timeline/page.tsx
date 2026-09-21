@@ -1,7 +1,16 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import { getTimeline } from '@/lib/scenarios-api';
 import { RealityDisclaimer, TimelineLabel } from '@/components/reality-labels';
+
+export const metadata: Metadata = {
+  title: 'Scenario Timeline',
+  description:
+    'The timeline of a policy simulation scenario — each step from inputs through assumptions, model, constraints, and results. Every step is tagged with its reality layer (FACT, OBSERVED, HYPOTHETICAL, MODELED).',
+  alternates: { canonical: '/scenarios/[id]/timeline' },
+  robots: { index: false, follow: true }, // scenario pages are user-generated, noindex by default
+};
 
 export default async function TimelinePage({
   params,

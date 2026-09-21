@@ -1,8 +1,17 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import { listScenarios } from '@/lib/scenarios-api';
 import { RealityBadge, RealityDisclaimer } from '@/components/reality-labels';
 import { CompareForm } from './compare-form';
+
+export const metadata: Metadata = {
+  title: 'Compare Scenarios',
+  description:
+    'Compare the assumptions, results, and methodology of two policy simulation scenarios side-by-side.',
+  alternates: { canonical: '/scenarios/[id]/comparison' },
+  robots: { index: false, follow: true },
+};
 
 export default async function ComparisonPage({
   params,
