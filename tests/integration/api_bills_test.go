@@ -24,13 +24,18 @@ import (
 )
 
 // billsListResponse is the documented /api/v1/bills success shape.
+// Source is "live" when the live crawl of new.kenyalaw.org succeeded,
+// or "seed" when the crawl failed and the API fell back to the seed
+// Bills (issue #265) — the API returns 200 with degraded=true in
+// both branches now, so the success shape always decodes here.
 type billsListResponse struct {
 	Items    []map[string]any `json:"items"`
-	Total    int             `json:"total"`
-	Page     int             `json:"page"`
-	PageSize int             `json:"page_size"`
-	Source   string          `json:"source"`
-	Country  string          `json:"country"`
+	Total    int              `json:"total"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"page_size"`
+	Source   string           `json:"source"`   // "live" | "seed" (issue #265)
+	Degraded bool             `json:"degraded"` // true when Source == "seed"
+	Country  string           `json:"country"`
 }
 
 // errorResponse is the documented error shape returned by writeError().
@@ -55,17 +60,24 @@ func TestBills_HealthzReachable(t *testing.T) {
 	}
 }
 
-// TestBills_ListReturnsDocumentedShape verifies /api/v1/bills returns the
-// documented JSON envelope. The Kenya Law adapter makes a live HTTP call
-// to new.kenyalaw.org; in sandboxed CI this returns 503 adapter_error. We
-// accept either branch and assert on the corresponding documented shape.
+// TestBills_ListReturnsDocumentedShape verifies /api/v1/bills returns
+// the documented JSON envelope. The Kenya Law adapter makes a live HTTP
+// call to new.kenyalaw.org; when that fails (typical in sandboxed CI),
+// the API now falls back to the seed Bills and returns 200 with
+// `source: "seed"` + `degraded: true` (issue #265) — instead of the
+// previous 503 adapter_error shape. We assert on the documented success
+// shape in both branches so the test still asserts a documented
+// contract rather than silently skipping.
 func TestBills_ListReturnsDocumentedShape(t *testing.T) {
 	var list billsListResponse
 	status := mustGet(t, apiURL("/bills"), &list)
 
 	switch status {
 	case http.StatusOK:
-		// Success path: Kenya Law adapter returned real Bill candidates.
+		// Success path: either the live crawl worked (source=live) or
+		// the live crawl failed and the handler fell back to the seed
+		// Bills (source=seed, degraded=true). Both branches share the
+		// documented success shape.
 		if list.Total < 0 {
 			t.Errorf("bills: total should be >= 0, got %d", list.Total)
 		}
@@ -78,8 +90,17 @@ func TestBills_ListReturnsDocumentedShape(t *testing.T) {
 		if list.PageSize < 0 {
 			t.Errorf("bills: page_size should be >= 0, got %d", list.PageSize)
 		}
-		if !strings.Contains(list.Source, "kenyalaw") {
-			t.Errorf("bills: source %q should mention kenyalaw", list.Source)
+		// Source is now "live" or "seed" (issue #265) — both are
+		// documented enum values.
+		switch list.Source {
+		case "live", "seed":
+			// ok
+		default:
+			t.Errorf("bills: source %q must be \"live\" or \"seed\"", list.Source)
+		}
+		// Degraded must be true iff Source == "seed".
+		if list.Degraded != (list.Source == "seed") {
+			t.Errorf("bills: degraded=%v but source=%q (degraded must mirror source=seed)", list.Degraded, list.Source)
 		}
 		// Country comes from X-Civic-Country header (default KE).
 		if list.Country != "KE" {
@@ -95,31 +116,21 @@ func TestBills_ListReturnsDocumentedShape(t *testing.T) {
 			}
 		}
 	case http.StatusServiceUnavailable:
-		// Sandbox path: Kenya Law adapter unreachable. The handler returns
-		// a 503 with the documented adapter_error envelope so clients can
-		// distinguish "no Bills found" from "upstream down".
-		var errResp errorResponse
-		// Re-decode: mustGet above tried to decode into billsListResponse
-		// which would have left the error fields unset. Decode again into
-		// the error shape.
-		status2 := mustGet(t, apiURL("/bills"), &errResp)
-		if status2 != http.StatusServiceUnavailable {
-			t.Fatalf("bills: re-request returned %d (expected 503)", status2)
-		}
-		if errResp.Error != "adapter_error" {
-			t.Errorf("bills 503: expected error=adapter_error, got %q", errResp.Error)
-		}
-		if errResp.Message == "" {
-			t.Error("bills 503: expected non-empty message")
-		}
+		// Legacy sandbox path: the API used to return 503 adapter_error
+		// when the live crawl failed. Issue #265 removed this branch —
+		// the handler now returns 200 with degraded=true. If we see 503,
+		// something has regressed; surface it as a hard failure.
+		t.Fatalf("bills: status 503 is no longer documented (issue #265 made /api/v1/bills always return 200 with degraded flag); got 503")
 	default:
-		t.Fatalf("bills: unexpected status %d (expected 200 or 503)", status)
+		t.Fatalf("bills: unexpected status %d (expected 200)", status)
 	}
 }
 
 // TestBills_ListAcceptsCountryHeader verifies the X-Civic-Country header
 // is reflected in the response. The handler defaults to "KE" when no
 // header is set; with an explicit header the country field echoes it.
+// Issue #265 made /api/v1/bills always return 200 (with degraded flag),
+// so the success-path country assertion always runs now.
 func TestBills_ListAcceptsCountryHeader(t *testing.T) {
 	req, err := http.NewRequest("GET", apiURL("/bills"), nil)
 	if err != nil {
@@ -131,13 +142,12 @@ func TestBills_ListAcceptsCountryHeader(t *testing.T) {
 		t.Fatalf("do request: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("bills: unexpected status %d (expected 200 or 503)", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("bills: unexpected status %d (issue #265 made /api/v1/bills always return 200 with degraded flag)", resp.StatusCode)
 	}
 	var list billsListResponse
 	_ = json.NewDecoder(resp.Body).Decode(&list)
-	// Country is only present on the 200 path (503 returns the error envelope).
-	if resp.StatusCode == http.StatusOK && list.Country != "UG" {
+	if list.Country != "UG" {
 		t.Errorf("bills: X-Civic-Country=UG should be echoed in response; got %q", list.Country)
 	}
 }
@@ -156,16 +166,18 @@ func TestBills_DetailRequiresID(t *testing.T) {
 }
 
 // TestBills_DetailUnknownReturns404 verifies that a non-existent bill ID
-// returns 404 not_found (not 500, not an empty 200).
+// returns 404 not_found (not 500, not an empty 200). Issue #265 made the
+// detail handler fall back to the seed slice when the live crawl fails —
+// so unknown IDs in sandboxed CI now return 404 (not in seed) instead of
+// the previous 503 (adapter_error). When the adapter is reachable, the
+// same 404 still applies because the ID isn't in the live crawl either.
 func TestBills_DetailUnknownReturns404(t *testing.T) {
-	// The handler tries to discover Bills from the Kenya Law adapter; if
-	// the adapter is unreachable (503) we skip this assertion because the
-	// 503 happens before the not_found branch. When the adapter works, an
-	// unknown ID must yield 404.
 	var dummy map[string]any
 	firstStatus := mustGet(t, apiURL("/bills/does-not-exist-"+strings.Repeat("x", 12)), &dummy)
+	// 503 is no longer documented (issue #265); 404 is the expected
+	// response for an unknown bill ID in both live + degraded paths.
 	if firstStatus == http.StatusServiceUnavailable {
-		t.Skip("bills detail: Kenya Law adapter unreachable in sandbox; skipping 404 assertion")
+		t.Fatalf("bills/unknown: status 503 is no longer documented (issue #265); expected 404")
 	}
 	if firstStatus != http.StatusNotFound {
 		t.Errorf("bills/unknown: expected 404, got %d", firstStatus)
@@ -177,8 +189,18 @@ func TestBills_DetailUnknownReturns404(t *testing.T) {
 // envelope when the parent bill exists, OR 404/503 when it doesn't / when
 // the adapter is unreachable. The test picks a known Bill ID from the
 // list endpoint if available; otherwise it skips.
+//
+// Issue #265 note: /api/v1/bills now ALWAYS returns 200 (with degraded
+// flag) — the list is never empty. But the per-sub-resource handlers
+// (/timeline, /changes, /summary) still call findBillByID, which still
+// surfaces 503 when the live crawl fails (those handlers are out of
+// scope for #265). So this test now skips the timeline/changes/summary
+// assertions when the bills list reports `source: "seed"` (i.e. the
+// live crawl is down) — the versions + documents sub-routes always
+// return 200 unconditionally.
 func TestBills_SubRoutesReturnDocumentedShape(t *testing.T) {
-	// Discover a real Bill ID first.
+	// Discover a real Bill ID first. With issue #265, the list always
+	// returns 200; `degraded` tells us whether the live crawl worked.
 	var list billsListResponse
 	listStatus := mustGet(t, apiURL("/bills"), &list)
 	if listStatus != http.StatusOK || len(list.Items) == 0 {
@@ -189,15 +211,32 @@ func TestBills_SubRoutesReturnDocumentedShape(t *testing.T) {
 		t.Skip("bills: first item has no id; cannot test sub-routes")
 	}
 
+	// When the live crawl failed (source=seed), the sub-resource
+	// handlers that call findBillByID will return 503 because the
+	// adapter is still unreachable. Versions + documents always
+	// return 200 (they're stubs that don't touch the adapter).
+	expectStatus := map[string]int{
+		"timeline":  http.StatusOK,
+		"changes":   http.StatusOK,
+		"versions":  http.StatusOK,
+		"documents": http.StatusOK,
+		"summary":   http.StatusOK,
+	}
+	if list.Source == "seed" {
+		expectStatus["timeline"] = http.StatusServiceUnavailable
+		expectStatus["changes"] = http.StatusServiceUnavailable
+		expectStatus["summary"] = http.StatusServiceUnavailable
+	}
+
 	for _, sub := range []struct {
 		path   string
 		expect int
 	}{
-		{"timeline", http.StatusOK},
-		{"changes", http.StatusOK},
-		{"versions", http.StatusOK},
-		{"documents", http.StatusOK},
-		{"summary", http.StatusOK},
+		{"timeline", expectStatus["timeline"]},
+		{"changes", expectStatus["changes"]},
+		{"versions", expectStatus["versions"]},
+		{"documents", expectStatus["documents"]},
+		{"summary", expectStatus["summary"]},
 	} {
 		var resp map[string]any
 		status := mustGet(t, apiURL("/bills/"+firstID+"/"+sub.path), &resp)
@@ -205,8 +244,13 @@ func TestBills_SubRoutesReturnDocumentedShape(t *testing.T) {
 			t.Errorf("bills/%s: expected %d, got %d", sub.path, sub.expect, status)
 			continue
 		}
-		// Every sub-route response carries a bill_id field tying the
-		// payload back to the parent Bill.
+		// 503 has its own documented envelope (error/message) — no
+		// bill_id field. Skip the bill_id assertion for that status.
+		if status == http.StatusServiceUnavailable {
+			continue
+		}
+		// Every 200 sub-route response carries a bill_id field tying
+		// the payload back to the parent Bill.
 		if _, ok := resp["bill_id"]; !ok {
 			t.Errorf("bills/%s: response missing bill_id field", sub.path)
 		}
