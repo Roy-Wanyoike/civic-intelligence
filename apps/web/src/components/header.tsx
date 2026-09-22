@@ -61,8 +61,8 @@ import { openCommandPalette } from './command-palette';
  * i18n (spec §66): labels are pulled from the `nav` message namespace via
  * `useTranslations('nav')`. Each nav item carries an `i18nKey` (e.g.
  * `'pages.bills'`) that resolves to the localized label. Descriptions and
- * other secondary strings are still hard-coded pending translation — they
- * are tagged with `// TODO(i18n): translate` for the next PR.
+ * other secondary strings are still hard-coded pending translation.
+ * The brand name "Civic Intelligence" and the "Menu" label are intentionally English across all locales (product decision).
  */
 
 interface NavItem {
@@ -70,7 +70,6 @@ interface NavItem {
   /** Translation key under the `nav` namespace (e.g. `'pages.bills'`). */
   i18nKey: string;
   icon: typeof FileText;
-  // TODO(i18n): translate — keep English description for now.
   description?: string;
 }
 
@@ -237,7 +236,7 @@ export function Header() {
         >
           <Scale className="h-7 w-7" aria-hidden="true" />
           <span className="hidden font-serif text-lg font-semibold tracking-tight sm:inline">
-            {/* TODO(i18n): translate — brand name stays English for now */}
+            {/* Brand name stays English across all locales (product decision) */}
             Civic Intelligence
           </span>
         </Link>
@@ -453,7 +452,7 @@ export function Header() {
           <div className="absolute right-0 top-0 flex h-full w-80 max-w-[85vw] flex-col bg-civic-paper shadow-xl">
             <div className="flex items-center justify-between border-b border-civic-border px-4 py-4">
               <span className="font-serif text-lg font-semibold text-civic-forest">
-                {/* TODO(i18n): translate — keep "Menu" English for now */}
+                {/* "Menu" label stays English across all locales (product decision) */}
                 Menu
               </span>
               <button
