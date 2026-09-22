@@ -2443,3 +2443,105 @@ security:
         '200':
           description: Matching gazette notices
         '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---- RSS 2.0 feeds (issue #280) ----
+  #
+  # The four /feed/*.rss endpoints reuse the JSON handlers' data sources
+  # but emit application/rss+xml so subscribers can follow Bills,
+  # what-changed, the daily brief, and per-MP activity from Feedly /
+  # Inoreader / NetNewsWire without creating an account. RSS 2.0 spec:
+  # https://www.rssboard.org/rss-specification
+
+  /feed/bills.rss:
+    get:
+      tags: [feed]
+      summary: RSS 2.0 feed of the latest Bills
+      description: |
+        Returns the latest Bills before Kenya Parliament as RSS 2.0 XML.
+        Reuses the same Kenya Law adapter (new.kenyalaw.org/bills/) as
+        GET /bills — including the issue-#265 degraded-fallback contract:
+        when the live crawl fails, the feed returns 200 with the seed
+        Bills rather than 5xx, so RSS subscribers don't see their feed
+        break during upstream outages.
+
+        Each Bill becomes a single <item> whose <guid> is the Bill's
+        stable SourceID (so RSS readers deduplicate across re-fetches
+        even when the upstream slug changes) and whose <category> is
+        the House (National Assembly vs Senate).
+      responses:
+        '200':
+          description: RSS 2.0 XML feed of Bills
+          content:
+            application/rss+xml:
+              schema:
+                type: string
+                description: RSS 2.0 XML document (<rss version="2.0">).
+
+  /feed/what-changed.rss:
+    get:
+      tags: [feed, what-changed]
+      summary: RSS 2.0 feed of verified civic changes
+      description: |
+        Returns the latest verified civic changes as RSS 2.0 XML. Mirrors
+        the JSON /what-changed endpoint's data pipeline (DiscoverBills →
+        ChangeItem) but emits RSS. Each item carries the change's
+        significance (INFORMATIONAL / SUBSTANTIVE / HIGH_IMPACT) as the
+        RSS <category> so subscribers can filter their feed reader by
+        severity. Every item links to evidence.
+      responses:
+        '200':
+          description: RSS 2.0 XML feed of verified civic changes
+          content:
+            application/rss+xml:
+              schema:
+                type: string
+                description: RSS 2.0 XML document (<rss version="2.0">).
+
+  /feed/brief.rss:
+    get:
+      tags: [feed, briefing]
+      summary: RSS 2.0 feed of the latest Civic Daily Brief
+      description: |
+        Returns the latest generated Civic Daily Briefs as RSS 2.0 XML.
+        The brief headline becomes the item title; the AI summary becomes
+        the description; the deep link points to /briefing?id={briefID}.
+
+        When the brief store is empty (e.g. before the day's first
+        /brief/generate call), the feed renders with zero items so RSS
+        readers see a valid but empty feed rather than a 5xx.
+      responses:
+        '200':
+          description: RSS 2.0 XML feed of the Civic Daily Brief
+          content:
+            application/rss+xml:
+              schema:
+                type: string
+                description: RSS 2.0 XML document (<rss version="2.0">).
+
+  /feed/people/{id}.rss:
+    get:
+      tags: [feed, people]
+      summary: RSS 2.0 feed of a single MP's activity
+      description: |
+        Returns the per-MP activity feed — Bills sponsored, speeches,
+        votes, questions — sourced from the same sampleScorecards dataset
+        the /api/v1/people/{id}/scorecard endpoint uses. Each activity
+        becomes a single <item> whose <category> is the activity kind
+        (bill_sponsored, vote, question, statement) so subscribers can
+        filter their feed reader by activity type.
+
+        The platform NEVER aggregates these into a political-performance
+        score (rule: NO_POLITICAL_PERFORMANCE_SCORE) — the feed is a raw
+        timeline of evidence-cited activity.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: Person ID (e.g. "person-001") }
+      responses:
+        '200':
+          description: RSS 2.0 XML feed of the MP's activity
+          content:
+            application/rss+xml:
+              schema:
+                type: string
+                description: RSS 2.0 XML document (<rss version="2.0">).
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
