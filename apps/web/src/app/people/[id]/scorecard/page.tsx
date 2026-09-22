@@ -5,9 +5,14 @@ import {
   ArrowRight,
   CheckSquare,
   ExternalLink,
+  Facebook,
   FileText,
   Landmark,
+  Mail,
+  MapPin,
   MessageCircle,
+  Phone,
+  Twitter,
   Users,
 } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -182,6 +187,79 @@ export default async function ScorecardPage({
           />
         </div>
       </section>
+
+      {/* Contact — issue #281. Conditional on at least one non-empty contact
+          field so a future MP whose data has not been scraped yet does NOT
+          show up with empty "Email: —" / "Phone: —" rows. The _note field
+          marks the contact info as seed data pending live scraping from
+          parliament.go.ke. */}
+      {hasContactInfo(sc) && (
+        <section aria-labelledby="contact-heading" className="mb-8">
+          <h2
+            id="contact-heading"
+            className="font-serif text-xl font-semibold text-civic-forest"
+          >
+            Contact
+          </h2>
+          <p className="mt-1 text-xs text-civic-stone">
+            Official parliamentary contact channels — click any field to
+            reach out directly.
+          </p>
+          <ul className="mt-3 divide-y divide-civic-border overflow-hidden rounded-md border border-civic-border bg-white">
+            {sc.email && (
+              <ContactRow
+                icon={Mail}
+                label="Email"
+                value={sc.email}
+                href={`mailto:${sc.email}`}
+              />
+            )}
+            {sc.phone && (
+              <ContactRow
+                icon={Phone}
+                label="Phone"
+                value={sc.phone}
+                // tel: links must not contain spaces — strip them.
+                href={`tel:${sc.phone.replace(/\s+/g, '')}`}
+              />
+            )}
+            {sc.office_address && (
+              <ContactRow
+                icon={MapPin}
+                label="Office address"
+                value={sc.office_address}
+              />
+            )}
+            {sc.twitter && (
+              <ContactRow
+                icon={Twitter}
+                label="Twitter"
+                value={sc.twitter}
+                href={`https://twitter.com/${sc.twitter.replace(/^@/, '')}`}
+                external
+              />
+            )}
+            {sc.facebook && (
+              <ContactRow
+                icon={Facebook}
+                label="Facebook"
+                value={sc.facebook}
+                href={
+                  sc.facebook.startsWith('http')
+                    ? sc.facebook
+                    : `https://${sc.facebook}`
+                }
+                external
+              />
+            )}
+          </ul>
+          {sc._note && (
+            <p className="mt-2 text-[11px] text-civic-stone">
+              {sc._note}
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Bills sponsored list */}
       <section aria-labelledby="bills-heading" className="mb-8">
@@ -393,5 +471,75 @@ function MetricCard({
         </a>
       )}
     </div>
+  );
+}
+
+// hasContactInfo returns true when at least one contact field is present,
+// so the Contact section is omitted entirely (rather than rendered as an
+// empty card) for MPs whose contact info has not been scraped yet.
+// Mirrors the API's omitempty invariant (issue #281).
+function hasContactInfo(
+  sc: Pick<
+    Awaited<ReturnType<typeof getMPScorecard>>,
+    'email' | 'phone' | 'office_address' | 'twitter' | 'facebook'
+  >,
+): boolean {
+  return Boolean(
+    sc.email ||
+      sc.phone ||
+      sc.office_address ||
+      sc.twitter ||
+      sc.facebook,
+  );
+}
+
+// ContactRow is a single row in the Contact section. Each row pairs a
+// lucide-react icon with a label + value (optionally a link). The `external`
+// flag adds an ExternalLink affordance + the safe `rel="noopener noreferrer"`
+// attributes for cross-origin links (Twitter / Facebook profiles).
+function ContactRow({
+  icon: Icon,
+  label,
+  value,
+  href,
+  external,
+}: {
+  icon: typeof Mail;
+  label: string;
+  value: string;
+  href?: string;
+  external?: boolean;
+}) {
+  return (
+    <li className="flex items-start gap-3 p-3">
+      <Icon
+        className="mt-0.5 h-4 w-4 flex-shrink-0 text-civic-stone"
+        aria-hidden="true"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-civic-stone">
+          {label}
+        </p>
+        {href ? (
+          <a
+            href={href}
+            {...(external
+              ? { target: '_blank', rel: 'noopener noreferrer' }
+              : {})}
+            className="inline-flex items-center gap-1 break-all font-medium text-civic-forest hover:underline"
+          >
+            {value}
+            {external && (
+              <ExternalLink
+                className="h-3 w-3 flex-shrink-0"
+                aria-hidden="true"
+              />
+            )}
+          </a>
+        ) : (
+          <p className="break-words font-medium text-civic-forest">{value}</p>
+        )}
+      </div>
+    </li>
   );
 }
