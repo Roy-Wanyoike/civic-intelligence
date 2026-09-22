@@ -6,6 +6,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-09-22
+
+Patch release fixing the two distinct build errors that blocked the
+v0.2.1 Vercel deploy (the user provided a deploy log showing 79+
+prerender failures).
+
+### Fixed — next-intl plugin wiring (PR #262)
+
+The dominant error in the deploy log was:
+
+  Error: Couldn't find next-intl config file. Please follow the
+  instructions at https://next-intl.dev/docs/getting-started/app-router
+
+Root cause: next-intl v4 requires the `createNextIntlPlugin` wrapper
+around the Next.js config so it knows where to find
+`src/i18n/request.ts`. The plugin was installed (`next-intl/plugin`
+exists in `node_modules`) but `next.config.mjs` wasn't wrapping the
+config with it.
+
+Fix: `next.config.mjs` now imports `createNextIntlPlugin` from
+`next-intl/plugin` and wraps the nextConfig with
+`withNextIntl('./src/i18n/request.ts')`.
+
+### Fixed — OG image `display: flex` errors (PR #262)
+
+The second error in the deploy log was:
+
+  Error: Expected <div> to have explicit "display: flex" or
+  "display: none" if it has more than one child node.
+
+Affecting `/opengraph-image` and `/twitter-image`. Root cause: Satori
+(the renderer used by `next/og`) requires every `<div>` with multiple
+children to have an explicit `display: flex`. The original OG image
+JSX had:
+
+- A `<div>` containing `'Understand what your'` + `<br/>` +
+  `'government is doing.'` (text + br + text = 3 children, no
+  `display: flex`).
+- A `<div>` with multi-line text wrapped across the source file
+  (Satori treats newlines as separate text nodes).
+
+Fix: wrap each multi-line text block in its own `<div>` with
+`display: flex` + `flexDirection: column`, so each line is a
+single-text-child div. Same fix applied to both `opengraph-image.tsx`
+and `twitter-image.tsx`.
+
 ## [0.2.1] — 2026-09-21
 
 Patch release fixing the Vercel AI service deploy error, adding
