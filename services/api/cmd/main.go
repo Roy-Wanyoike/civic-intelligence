@@ -254,6 +254,15 @@ func main() {
         // Policies — public.
         apiHandler.HandleFunc("/api/v1/policies", handlePoliciesList)
 
+        // Topics — public read (issue #267). Browse Bills, Acts, and
+        // civic people by topic (Health, Education, Finance & National
+        // Planning, etc.). Both URL forms (with + without trailing slash)
+        // are registered so the no-slash form returns 200 directly
+        // (per issue #264 + #266); handleTopicsList dispatches the
+        // {id} tail to handleTopicDetail.
+        apiHandler.HandleFunc("/api/v1/topics", handleTopicsList)
+        apiHandler.HandleFunc("/api/v1/topics/", handleTopicsList)
+
         // Apply OptionalAuth + rate limiting + metrics to the API routes.
         // Notifications — in-memory store for now.
         notifStore := NewNotificationStore()
