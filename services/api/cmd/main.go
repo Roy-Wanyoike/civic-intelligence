@@ -1293,9 +1293,10 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 	//   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
 	//   - "{id}"                          → person detail (still pending,
 	//                                       issue #19 — kept as stub)
-	tail := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
-	// The base /api/v1/people route is registered separately (no trailing
-	// slash), so this handler is only called for /api/v1/people/{...}.
+	// Normalise: treat both /api/v1/people and /api/v1/people/ as the list call (issue #264).
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	tail := strings.TrimPrefix(path, "/api/v1/people")
+	tail = strings.TrimPrefix(tail, "/")
 	if tail == "" {
 		makePeopleListHandler()(w, r)
 		return
@@ -1360,7 +1361,10 @@ var sampleCommittees = []map[string]any{
 }
 
 func handleCommittees(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/v1/committees/")
+	// Normalise: treat both /api/v1/committees and /api/v1/committees/ as the list call (issue #266).
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	id := strings.TrimPrefix(path, "/api/v1/committees")
+	id = strings.TrimPrefix(id, "/")
 	country := middleware.CountryFromContext(r.Context())
 	if id == "" {
 		filtered := filterMapsByCountry(sampleCommittees, country)
@@ -1412,7 +1416,10 @@ var sampleInstitutions = []map[string]any{
 }
 
 func handleInstitutions(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/v1/institutions/")
+	// Normalise: treat both /api/v1/institutions and /api/v1/institutions/ as the list call (issue #266).
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	id := strings.TrimPrefix(path, "/api/v1/institutions")
+	id = strings.TrimPrefix(id, "/")
 	country := middleware.CountryFromContext(r.Context())
 	if id == "" {
 		filtered := filterMapsByCountry(sampleInstitutions, country)

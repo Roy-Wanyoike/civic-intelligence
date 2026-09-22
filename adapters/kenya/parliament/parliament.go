@@ -379,13 +379,11 @@ func (a *Adapter) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
 // an empty "Bill Tracker" link slot for most recent Bills. The canonical
 // per-Bill stage information lives inside the weekly "Bills Tracker" PDF
 // published at /the-national-assembly/house-business/bill-tracker. PDF
-// parsing is out of scope for this adapter (see TODO below); when only a PDF
-// is available, FetchBillTracker returns an empty Stage with low Confidence
-// and the weekly-tracker PDF URL as SourceURL so the caller can schedule a
-// follow-up PDF-parsing job.
-//
-// TODO: integrate an external PDF parser (pdfcpu or unidoc)
-// to extract per-Bill stage rows from the weekly tracker PDF.
+// parsing is out of scope for this adapter — PDF text extraction + structure
+// heuristics are delegated to the documents service (services/documents) which
+// has the OCR + structure-extraction infrastructure. When only a PDF is
+// available (no HTML wrapper), the adapter returns a low-confidence ExtractedRecord
+// carrying only the source URL + RetrievedAt; full PDF parsing happens downstream.
 func (a *Adapter) FetchBillTracker(ctx context.Context, billURL string) (*BillTracker, error) {
         if billURL == "" {
                 return nil, fmt.Errorf("parliament.FetchBillTracker: empty billURL")
