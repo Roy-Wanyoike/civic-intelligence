@@ -11,6 +11,7 @@ import {
   Link2,
   ScrollText,
   Lightbulb,
+  Users,
 } from 'lucide-react';
 import { TimelineView } from '@/components/timeline';
 import { BillAskPanel } from '@/components/bill-ask-panel';
@@ -160,8 +161,54 @@ export default async function BillDetailPage({
         <h1 className="mt-4 font-serif text-3xl font-semibold text-civic-forest sm:text-4xl">
           {bill.title}
         </h1>
+        {/* Sponsored by — issue #282.
+            * The sponsor line appears near the top of the Bill header so
+            * citizens immediately see which MP championed the Bill. When
+            * the API surfaces a scorecard_url for the sponsor, the MP's
+            * name links to their scorecard page (/people/{id}/scorecard)
+            * so a citizen can verify the MP's full parliamentary record.
+            * Cosponsors are listed below the primary sponsor — each name
+            * links to the cosponsor's scorecard when available. */}
         {bill.sponsor_name && (
-          <p className="mt-3 text-sm text-civic-stone">Sponsored by {bill.sponsor_name}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-civic-stone">
+            <Users className="h-4 w-4 flex-shrink-0 text-civic-clay" aria-hidden="true" />
+            <span>Sponsored by</span>
+            {bill.scorecard_url ? (
+              <Link
+                href={`/people/${encodeURIComponent(bill.sponsor_id ?? '')}/scorecard`}
+                className="font-medium text-civic-forest hover:underline"
+              >
+                {bill.sponsor_name}
+              </Link>
+            ) : (
+              <span className="font-medium text-civic-forest">{bill.sponsor_name}</span>
+            )}
+            {bill.cosponsors && bill.cosponsors.length > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>Cosponsored by</span>
+                <ul className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  {bill.cosponsors.map((c, idx) => (
+                    <li key={c.person_id} className="flex items-center gap-1.5">
+                      {c.scorecard_url ? (
+                        <Link
+                          href={`/people/${encodeURIComponent(c.person_id)}/scorecard`}
+                          className="text-civic-forest hover:underline"
+                        >
+                          {c.name}
+                        </Link>
+                      ) : (
+                        <span className="text-civic-forest">{c.name}</span>
+                      )}
+                      {idx < (bill.cosponsors?.length ?? 0) - 1 && (
+                        <span aria-hidden="true" className="text-civic-stone">,</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
         )}
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-civic-leaf px-4 py-1.5 text-xs font-semibold text-white">
@@ -387,7 +434,19 @@ export default async function BillDetailPage({
           <div className="rounded-xl border border-civic-border bg-civic-paper p-5">
             <h3 className="text-sm font-semibold text-civic-ink">People</h3>
             <ul className="mt-3 space-y-1.5 text-sm text-civic-stone">
-              <li>Sponsor: {bill.sponsor_name ?? '—'}</li>
+              <li>
+                Sponsor:{' '}
+                {bill.sponsor_name && bill.scorecard_url ? (
+                  <Link
+                    href={`/people/${encodeURIComponent(bill.sponsor_id ?? '')}/scorecard`}
+                    className="text-civic-forest hover:underline"
+                  >
+                    {bill.sponsor_name}
+                  </Link>
+                ) : (
+                  <span>{bill.sponsor_name ?? '—'}</span>
+                )}
+              </li>
               <li>Committee: {bill.committee_name ?? '—'}</li>
               <li>House: {bill.house_name ?? bill.house ?? '—'}</li>
             </ul>

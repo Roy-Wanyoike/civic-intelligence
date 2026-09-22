@@ -1615,8 +1615,15 @@ components:
         identifier: { type: string, example: 'NA Bill No. 23 of 2024' }
         title: { type: string }
         year: { type: integer }
-        sponsor_id: { type: string, format: uuid, nullable: true }
-        sponsor_name: { type: string, nullable: true }
+        sponsor_id: { type: string, nullable: true, description: 'Platform-internal person ID of the primary sponsor (e.g. "person-001"); empty when the sponsor is unknown (issue #282 — the live kenya_law parser does NOT extract the sponsor; only seed Bills carry sponsor_id).' }
+        sponsor_name: { type: string, nullable: true, description: 'Display name of the primary sponsor, populated from the sample people slice when sponsor_id is known AND matches a sample MP; empty otherwise (issue #282).' }
+        scorecard_url: { type: string, nullable: true, description: 'Platform-internal path to the sponsor\'s MP scorecard page (/api/v1/people/{id}/scorecard). Populated alongside sponsor_name; empty otherwise. The frontend Bill detail page links the sponsor name to this URL (issue #282).' }
+        cosponsors:
+          type: array
+          nullable: true
+          description: 'List of cosponsor references (secondary supporters). Empty/omitted when the Bill has no known cosponsors (issue #282).'
+          items:
+            $ref: '#/components/schemas/SponsorRef'
         house_id: { type: string, format: uuid, nullable: true }
         house_name: { type: string, nullable: true }
         committee_id: { type: string, format: uuid, nullable: true }
@@ -1633,6 +1640,22 @@ components:
         event_count: { type: integer }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    SponsorRef:
+      type: object
+      description: |
+        A lightweight reference to a person in their role as a Bill sponsor
+        or cosponsor (issue #282). Carries enough information for the
+        frontend to render the sponsor's name + a link to their scorecard
+        page without an extra round-trip to /api/v1/people/{id}.
+
+        The scorecard_url is omitted on the wire when the sponsor is not
+        in the sample people slice (the seed slice may carry sponsor_ids
+        that aren't yet wired to a full scorecard).
+      properties:
+        person_id: { type: string, description: 'Platform-internal person ID (e.g. "person-001")' }
+        name: { type: string, description: 'Display name of the sponsor' }
+        scorecard_url: { type: string, nullable: true, description: '/api/v1/people/{id}/scorecard URL; omitted when the sponsor has no scorecard page' }
 
     BillEvent:
       type: object
@@ -2352,6 +2375,47 @@ security:
         '200':
           description: MP scorecard with factual records
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /people/{id}/bills:
+    get:
+      tags: [people, bills]
+      summary: Bills sponsored by the given MP (issue #282)
+      description: |
+        Returns every Bill the seed slice attributes to the given MP
+        (primary sponsor). Powers the scorecard page's "Bills
+        Sponsored: N" clickable list.
+
+        The endpoint is seed-only — the live kenya_law parser does NOT
+        extract the sponsor from the Bill detail page (issue #282
+        deliberately leaves sponsorship attribution to the seed slice
+        pending a verified ingestion path through parliament.go.ke).
+
+        When a verified ingestion path ships, this endpoint will be
+        extended to merge live + seed results; until then, `source` is
+        always `"seed"`.
+
+        Each item carries the full `Bill` response shape (with the
+        sponsor + cosponsors fields populated by `applySponsorFields`)
+        so the frontend can render the same Bill card it uses on /bills.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal person ID (e.g. "person-001")' }
+      responses:
+        '200':
+          description: List of Bills sponsored by the given MP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  person_id: { type: string, description: 'The requested MP\'s platform-internal person ID' }
+                  name: { type: string, description: 'The requested MP\'s display name (looked up from sampleScorecards)' }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Bill' }
+                  total: { type: integer }
+                  source: { type: string, enum: [seed], description: 'Always "seed" — sponsor attribution is seed-only until a verified ingestion path ships (issue #282).' }
+                  scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP (the seed Bills slice is the only source of sponsor attribution).' }
 
   /constituencies:
     get:

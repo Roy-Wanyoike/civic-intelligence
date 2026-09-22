@@ -20,6 +20,12 @@ export interface Citation {
   retrieved_at: string;
 }
 
+export interface SponsorRef {
+  person_id: string;
+  name: string;
+  scorecard_url?: string;
+}
+
 export interface Bill {
   id: string;
   identifier: string;
@@ -27,6 +33,16 @@ export interface Bill {
   year: number;
   sponsor_id: string | null;
   sponsor_name: string | null;
+  // scorecard_url is the platform-internal path to the sponsor's MP
+  // scorecard page (/api/v1/people/{id}/scorecard). Populated when
+  // sponsor_id is known AND matches a sample MP; omitted otherwise so
+  // the frontend can gate the "Sponsored by" link on its presence
+  // (issue #282).
+  scorecard_url?: string;
+  // cosponsors is the list of secondary supporters. Empty/omitted when
+  // the Bill has no known cosponsors — the frontend must NOT render an
+  // empty "Cosponsors:" row in that case (issue #282).
+  cosponsors?: SponsorRef[];
   house_id: string | null;
   house_name: string | null;
   house?: string; // API returns "house" directly (e.g., "National Assembly")
