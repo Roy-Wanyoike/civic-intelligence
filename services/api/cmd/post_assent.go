@@ -304,7 +304,7 @@ func makeFollowLawHandler() http.HandlerFunc {
                 // Create a real subscription. EntityAct ("act") + the Act's ID is
                 // the canonical target; the response exposes the composite
                 // "act:"+actID form for the frontend.
-                rec, err := subscriptionStore.Follow(p.UserID, EntityAct, id)
+                rec, err := subscriptionStore.Follow(p.UserID, EntityAct, id, nil)
                 if err != nil {
                         writeError(w, http.StatusInternalServerError, "follow_failed", err.Error())
                         return

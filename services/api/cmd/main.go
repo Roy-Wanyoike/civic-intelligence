@@ -174,6 +174,26 @@ func main() {
         apiHandler.HandleFunc("/api/v1/brief/archive", makeBriefArchiveHandler(briefStore))
         apiHandler.HandleFunc("/api/v1/brief/", makeBriefDetailHandler(briefStore))
 
+        // Email alert subscriptions (issue #279). The EmailSender is wired
+        // here so the refresh handler (below) can fan out daily digest
+        // emails when RESEND_API_KEY is set. The brief/digest endpoint
+        // returns the same JSON the email pipeline renders to HTML, so
+        // /notifications can preview today's digest without waiting for
+        // the cron.
+        emailSender := NewEmailSender(nil)
+        // WEB_BASE_URL is the public web origin used for the per-item deep
+        // links + the unsubscribe link inside the digest email. Defaults to
+        // the production domain so the links work out-of-the-box in dev.
+        webBaseURL := os.Getenv("WEB_BASE_URL")
+        if webBaseURL == "" {
+                webBaseURL = "https://civicintelligence.com"
+        }
+        // The notifStore is constructed below (issue #112) but the digest
+        // handler needs it, so we re-use the package-level notifStore
+        // declaration that comes after this block. To keep the diff
+        // minimal, we register /brief/digest in the same block as
+        // /api/v1/notifications (see below).
+
         // People, committees, institutions — public read.
         // Each collection is registered TWICE — once with and once without
         // the trailing slash — so Go's http.ServeMux doesn't auto-301 the
@@ -226,8 +246,14 @@ func main() {
         // to actRepo) so the /api/v1/acts/{id}/follow endpoint (issue #216) can
         // write real subscriptions through the same store used by
         // /api/v1/subscriptions.
+        //
+        // userEmails (issue #279) is the in-memory registry that captures each
+        // subscriber's email claim (from the auth principal) when they PATCH
+        // their channels to include "email". The daily digest pipeline looks
+        // up recipients here — the refresh cron has no principal of its own.
+        userEmails := NewUserEmailStore()
         apiHandler.HandleFunc("/api/v1/subscriptions", makeSubscriptionsHandler(subscriptionStore))
-        apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore))
+        apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore, userEmails))
 
         // Notifications — requires auth (wired via middleware in the handler).
 
@@ -246,8 +272,19 @@ func main() {
         apiHandler.HandleFunc("/api/v1/sponsor/mpesa/callback", handleMpesaCallback)
         apiHandler.HandleFunc("/api/v1/sponsor/card/webhook", handleStripeWebhook)
 
-        // Data refresh — triggers adapter re-discovery (called by cron)
-        apiHandler.HandleFunc("/api/v1/refresh", makeRefreshHandler(kenyaLaw))
+        // Notifications store (issue #112). Constructed here — earlier than
+        // the /api/v1/notifications handler registration — because the
+        // refresh handler (next block) needs it for the daily digest fan-out
+        // (issue #279). The handler registration itself happens below in
+        // the same block as the digest endpoint.
+        notifStore := NewNotificationStore()
+
+        // Data refresh — triggers adapter re-discovery (called by cron).
+        // The handler ALSO fans out daily digest emails to every subscriber
+        // who has "email" in their channels (issue #279) when RESEND_API_KEY
+        // is set. When the key is absent, the StubEmailSender logs the
+        // would-be sends in dev.
+        apiHandler.HandleFunc("/api/v1/refresh", makeRefreshHandler(kenyaLaw, subscriptionStore, userEmails, notifStore, emailSender, webBaseURL))
 
         // What Changed — proactive change detection feed
         apiHandler.HandleFunc("/api/v1/what-changed", makeWhatChangedHandler(kenyaLaw))
@@ -260,10 +297,14 @@ func main() {
         apiHandler.HandleFunc("/api/v1/topics/", handleTopicDetail)
 
         // Apply OptionalAuth + rate limiting + metrics to the API routes.
-        // Notifications — in-memory store for now.
-        notifStore := NewNotificationStore()
         apiHandler.Handle("/api/v1/notifications", makeNotificationsHandler(notifStore))
         apiHandler.Handle("/api/v1/notifications/", makeNotificationDetailHandler(notifStore))
+
+        // Daily digest endpoint (issue #279). Returns the past 24h's
+        // notifications grouped into the same three sections the email
+        // template renders — Bills that changed stage, New gazette
+        // notices matching your alerts, Your MP's activity.
+        apiHandler.HandleFunc("/api/v1/brief/digest", makeBriefDigestHandler(notifStore, webBaseURL))
 
         // Trust + Provenance (issue #165) — in-memory trust store seeded
         // with sample Kenyan sources, claims, evidence, and one active
@@ -1970,8 +2011,22 @@ func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 // vercel.json) to keep data fresh. The Vercel Hobby plan only allows
 // daily crons — to run this more frequently, upgrade to Pro or wire
 // an external scheduler (GitHub Actions, Railway cron, etc.).
+//
+// As of issue #279, the refresh handler ALSO fans out daily digest emails
+// to every subscriber who has "email" in their channels. When the
+// RESEND_API_KEY env var is set, real emails are queued via the Resend
+// API; when it is absent, the StubEmailSender logs the would-be sends so
+// dev operators can see the pipeline firing without spending API quota.
+//
 // POST /api/v1/refresh
-func makeRefreshHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
+func makeRefreshHandler(
+        adapter *kenya_law.Adapter,
+        subs *SubscriptionStore,
+        emails *UserEmailStore,
+        notifStore *NotificationStore,
+        sender EmailSender,
+        webBaseURL string,
+) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 if r.Method != http.MethodPost {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
@@ -1989,13 +2044,40 @@ func makeRefreshHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
                 }
 
                 log.Printf("refresh: discovered %d bills from kenyalaw.org", len(bills))
+
+                // Fan out daily digest emails (issue #279). The digest pipeline is
+                // resilient: a single recipient's failure is logged and the loop
+                // continues, so one bad address never blocks the cron. The fan-out
+                // shares the refresh request's context so a slow Resend response
+                // propagates the cancellation (and the 60-second ctx above bounds
+                // the total time).
+                digestSent, digestFailed := 0, 0
+                if sender != nil {
+                        digestSent, digestFailed = sendDailyDigests(ctx, subs, emails, notifStore, sender, webBaseURL, time.Now().UTC())
+                        log.Printf("refresh: digest fan-out via %s sender — sent=%d failed=%d", sender.Name(), digestSent, digestFailed)
+                } else {
+                        log.Printf("refresh: digest skipped — no EmailSender wired (should not happen in production)")
+                }
+
                 writeJSON(w, http.StatusOK, map[string]any{
-                        "status":       "refreshed",
-                        "bills_found":  len(bills),
-                        "source":       "new.kenyalaw.org",
-                        "refreshed_at": time.Now().UTC().Format(time.RFC3339),
+                        "status":         "refreshed",
+                        "bills_found":    len(bills),
+                        "source":         "new.kenyalaw.org",
+                        "refreshed_at":   time.Now().UTC().Format(time.RFC3339),
+                        "digest_sent":    digestSent,
+                        "digest_failed":  digestFailed,
+                        "digest_sender":  senderName(sender),
                 })
         }
+}
+
+// senderName returns the EmailSender's Name() (or "none" when the sender
+// is nil — used to gracefully report in the refresh response JSON).
+func senderName(s EmailSender) string {
+        if s == nil {
+                return "none"
+        }
+        return s.Name()
 }
 
 // --- What Changed Engine (#186 Phase 14) ---
