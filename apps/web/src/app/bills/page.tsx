@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Filter } from 'lucide-react';
+import { Filter, Rss } from 'lucide-react';
 import { mockBills } from '@/lib/mock-data';
 import { FilterSelect } from '@/components/filter-select';
 import type { Metadata } from 'next';
@@ -53,10 +53,23 @@ export default async function BillsPage({
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <header className="mb-8">
-        <h1 className="font-serif text-3xl font-semibold text-civic-forest">Bills before Parliament</h1>
-        <p className="mt-2 text-sm text-civic-stone">
-          Each Bill links to a plain-language explanation, verified timeline, and the original documents. No claim is published without an authoritative source.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="font-serif text-3xl font-semibold text-civic-forest">Bills before Parliament</h1>
+            <p className="mt-2 text-sm text-civic-stone">
+              Each Bill links to a plain-language explanation, verified timeline, and the original documents. No claim is published without an authoritative source.
+            </p>
+          </div>
+          <a
+            href="/api/v1/feed/bills.rss"
+            title="Subscribe to the Bills RSS feed"
+            aria-label="Subscribe to the Bills RSS feed"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-civic-border bg-civic-paper px-3 py-2 text-xs font-medium text-civic-stone transition hover:border-civic-leaf hover:text-civic-leaf"
+          >
+            <Rss className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">RSS</span>
+          </a>
+        </div>
         {source === 'mock' && (
           <p className="mt-2 rounded-md bg-civic-acacia/10 px-3 py-1.5 text-xs text-civic-clay">
             Showing sample data — connect the Go API (port 9000) for real Bills from kenyalaw.org

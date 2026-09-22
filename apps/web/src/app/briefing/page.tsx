@@ -15,7 +15,7 @@
 // past brief instead of today's.
 
 import Link from 'next/link';
-import { Calendar, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Calendar, ShieldCheck, AlertCircle, Rss } from 'lucide-react';
 import { PrintButton } from '@/components/print-button';
 import { BriefReader } from './brief-reader';
 import { formatDate } from '@/lib/utils';
@@ -111,6 +111,15 @@ export default async function BriefingPage({
             {brief.country === 'KE' ? 'Kenya' : brief.country} Civic Brief
           </p>
           <div className="flex items-center gap-2">
+            <a
+              href="/api/v1/feed/brief.rss"
+              title="Subscribe to the Daily Brief RSS feed"
+              aria-label="Subscribe to the Daily Brief RSS feed"
+              className="inline-flex items-center gap-1.5 rounded-md border border-civic-border bg-civic-paper px-3 py-2 text-xs font-medium text-civic-stone transition hover:border-civic-leaf hover:text-civic-leaf"
+            >
+              <Rss className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">RSS</span>
+            </a>
             <Link
               href="/briefing/archive"
               className="hidden text-xs text-civic-stone hover:text-civic-leaf hover:underline sm:inline"
