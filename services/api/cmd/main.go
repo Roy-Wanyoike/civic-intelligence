@@ -175,12 +175,17 @@ func main() {
         apiHandler.HandleFunc("/api/v1/brief/", makeBriefDetailHandler(briefStore))
 
         // People, committees, institutions — public read.
-        // /api/v1/people (list — no trailing slash) AND /api/v1/people/
-        // (per-person + /scorecard sub-resource, task ENG-K2) both go
-        // through handlePeople, which dispatches on the trailing path tail.
+        // Each collection is registered TWICE — once with and once without
+        // the trailing slash — so Go's http.ServeMux doesn't auto-301 the
+        // no-slash form to the with-slash form (issue #266 broke REST
+        // clients that hit /api/v1/institutions without a trailing slash).
+        // The handlers themselves normalise the path before extracting the
+        // tail, so both forms dispatch identically (issue #264).
         apiHandler.HandleFunc("/api/v1/people", handlePeople)
         apiHandler.HandleFunc("/api/v1/people/", handlePeople)
+        apiHandler.HandleFunc("/api/v1/committees", handleCommittees)
         apiHandler.HandleFunc("/api/v1/committees/", handleCommittees)
+        apiHandler.HandleFunc("/api/v1/institutions", handleInstitutions)
         apiHandler.HandleFunc("/api/v1/institutions/", handleInstitutions)
 
         // Constituencies (task ENG-K2) — per-area civic dashboard. The list
@@ -1296,7 +1301,16 @@ var sampleCommittees = []map[string]any{
 }
 
 func handleCommittees(w http.ResponseWriter, r *http.Request) {
-        id := strings.TrimPrefix(r.URL.Path, "/api/v1/committees/")
+        // Issue #266: the router is registered on BOTH /api/v1/committees
+        // and /api/v1/committees/. When the no-slash form is hit,
+        // strings.TrimPrefix(r.URL.Path, "/api/v1/committees/") does not
+        // match (the prefix is longer than the path), leaving `id` as the
+        // whole "/api/v1/committees" string. Normalise the path the same
+        // way handlePeople does: strip trailing slash, trim the
+        // "/api/v1/committees" prefix, then trim a leading slash.
+        path := strings.TrimSuffix(r.URL.Path, "/")
+        id := strings.TrimPrefix(path, "/api/v1/committees")
+        id = strings.TrimPrefix(id, "/")
         country := middleware.CountryFromContext(r.Context())
         if id == "" {
                 filtered := filterMapsByCountry(sampleCommittees, country)
@@ -1348,7 +1362,10 @@ var sampleInstitutions = []map[string]any{
 }
 
 func handleInstitutions(w http.ResponseWriter, r *http.Request) {
-        id := strings.TrimPrefix(r.URL.Path, "/api/v1/institutions/")
+        // Issue #266: same trailing-slash normalisation as handleCommittees.
+        path := strings.TrimSuffix(r.URL.Path, "/")
+        id := strings.TrimPrefix(path, "/api/v1/institutions")
+        id = strings.TrimPrefix(id, "/")
         country := middleware.CountryFromContext(r.Context())
         if id == "" {
                 filtered := filterMapsByCountry(sampleInstitutions, country)
