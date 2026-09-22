@@ -1210,15 +1210,28 @@ var samplePeople = []map[string]any{
 }
 
 func handlePeople(w http.ResponseWriter, r *http.Request) {
-        // The people router is registered on /api/v1/people/. We dispatch on
-        // the trailing path tail:
-        //   - "" (root, no trailing slash)  → list the 5 sample people
-        //   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
-        //   - "{id}"                          → person detail (still pending,
-        //                                       issue #19 — kept as stub)
-        tail := strings.TrimPrefix(r.URL.Path, "/api/v1/people/")
-        // The base /api/v1/people route is registered separately (no trailing
-        // slash), so this handler is only called for /api/v1/people/{...}.
+        // The people router is registered on BOTH /api/v1/people and
+        // /api/v1/people/. We dispatch on the trailing path tail:
+        //   - "" (root, with or without trailing slash) → list sample people
+        //   - "{id}/scorecard"                        → MP scorecard (task ENG-K2)
+        //   - "{id}"                                   → person detail (still pending,
+        //                                              issue #19 — kept as stub)
+        //
+        // Issue #264: when the URL is /api/v1/people (no trailing slash),
+        // strings.TrimPrefix(path, "/api/v1/people/") does NOT match
+        // (the prefix is longer than the path) and `tail` stays as the
+        // whole "/api/v1/people" string — the handler then treats that as
+        // a person ID lookup and 404s. To handle both URL forms
+        // identically, we strip any trailing slash FIRST, then trim the
+        // leading "/api/v1/people" prefix and any leading slash on the
+        // remainder. After normalisation:
+        //   "/api/v1/people"          → tail ""
+        //   "/api/v1/people/"         → tail ""
+        //   "/api/v1/people/person-001"           → tail "person-001"
+        //   "/api/v1/people/person-001/scorecard" → tail "person-001/scorecard"
+        path := strings.TrimSuffix(r.URL.Path, "/")
+        tail := strings.TrimPrefix(path, "/api/v1/people")
+        tail = strings.TrimPrefix(tail, "/")
         if tail == "" {
                 makePeopleListHandler()(w, r)
                 return
