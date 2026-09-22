@@ -49,6 +49,7 @@ tags:
   - name: qa
   - name: sponsor
   - name: operational
+  - name: topics
 
 paths:
   /healthz:
@@ -515,6 +516,73 @@ paths:
                 properties:
                   items: { type: array, items: { $ref: '#/components/schemas/Policy' } }
                   total: { type: integer }
+
+  /topics:
+    get:
+      tags: [topics]
+      summary: List civic topics (Health, Education, Finance, …)
+      description: |
+        Returns the list of seed civic topics for the resolved country scope.
+        Each topic carries the count of seed Bills, Acts, and People
+        associated with it — enough for the frontend Topics page
+        (apps/web/src/app/topics/page.tsx) to render a lightweight index.
+
+        Country scope is resolved by the standard middleware chain:
+        `X-Civic-Country` header → `?country=` query → `KE` default.
+        `ALL` (GlobalCountry) returns the seed set for every country that
+        has topics. Only Kenya ships seed topics today; other countries
+        return an empty list (200, not 404) so the Topics page degrades
+        gracefully with an empty-state UI.
+      parameters:
+        - { in: header, name: X-Civic-Country, required: false, schema: { type: string, enum: [KE, UG, TZ, GH, NG, ZA, RW, ZM, SN, EG, MA, CD, ET, MW, ALL] }, description: 'Country scope; defaults to KE' }
+      responses:
+        '200':
+          description: List of civic topics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Topic' } }
+                  total: { type: integer }
+                  country: { type: string, example: KE }
+                  source: { type: string, example: kenya_seed }
+                  note: { type: string }
+
+  /topics/{id}:
+    get:
+      tags: [topics]
+      summary: Get a topic with its associated Bills, Acts, and People
+      description: |
+        Returns the topic plus the concrete Bills / Acts / People slices
+        associated with it. Every associated entry carries a `source_url`
+        so the citizen can verify the reference on the primary source's
+        website (kenyalaw.org, parliament.go.ke).
+
+        Returns 404 when the supplied ID does not match any seed topic,
+        or when the resolved country scope does not have seed topics for
+        the requested ID (e.g. a Uganda-scoped request asking for a
+        Kenyan topic returns 404).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Topic ID (kebab-case, e.g. "health", "education", "finance")' }
+        - { in: header, name: X-Civic-Country, required: false, schema: { type: string }, description: 'Country scope; defaults to KE' }
+      responses:
+        '200':
+          description: Topic detail with associated Bills, Acts, and People
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topic: { $ref: '#/components/schemas/Topic' }
+                  bills: { type: array, items: { $ref: '#/components/schemas/TopicBill' } }
+                  acts: { type: array, items: { $ref: '#/components/schemas/TopicAct' } }
+                  people: { type: array, items: { $ref: '#/components/schemas/TopicPerson' } }
+                  country: { type: string, example: KE }
+                  source: { type: string, example: kenya_seed }
+                  note: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   # ---- Constitution + Government + Transitions ----
 
@@ -1714,6 +1782,56 @@ components:
         published_at: { type: string, format: date-time }
         source_url: { type: string }
         topics: { type: array, items: { type: string } }
+
+    Topic:
+      type: object
+      description: |
+        A civic topic (e.g. "Health", "Education", "Finance & National
+        Planning") shown in the /api/v1/topics list and /topics/{id} detail
+        responses. Topic IDs are kebab-case (e.g. "health",
+        "defence-foreign-relations"); each topic carries the count of seed
+        Bills / Acts / People associated with it.
+      properties:
+        id: { type: string, example: health }
+        name: { type: string, example: Health }
+        description: { type: string, description: '1-2 sentence plain-language summary of what the topic covers' }
+        bill_count: { type: integer, description: 'Number of seed Bills associated with this topic' }
+        act_count: { type: integer, description: 'Number of seed Acts associated with this topic' }
+        people_count: { type: integer, description: 'Number of seed People associated with this topic' }
+        country: { type: string, example: KE, description: 'ISO 3166-1 alpha-2 country code' }
+
+    TopicBill:
+      type: object
+      description: |
+        A Bill associated with a topic. Trimmed-down view (ID, title,
+        house, year, source URL) — enough for the Topics detail page to
+        render a clickable list without re-crawling the live adapter.
+      properties:
+        id: { type: string, example: ke-bill-2026-health }
+        title: { type: string, example: 'The Health Bill, 2026' }
+        house: { type: string, enum: [National Assembly, Senate] }
+        year: { type: integer }
+        source_url: { type: string, format: uri }
+
+    TopicAct:
+      type: object
+      description: An Act associated with a topic.
+      properties:
+        id: { type: string, example: ke-act-data-protection-2019 }
+        title: { type: string, example: 'Data Protection Act, 2019' }
+        citation: { type: string, example: 'No. 24 of 2019' }
+        source_url: { type: string, format: uri }
+
+    TopicPerson:
+      type: object
+      description: |
+        A Person (MP, official) associated with a topic — typically the
+        chair / vice-chair of the corresponding Departmental Committee.
+      properties:
+        id: { type: string, example: person-001 }
+        full_name: { type: string, example: 'Rt. Hon. Moses Wetangula' }
+        role: { type: string, example: 'Speaker of the National Assembly' }
+        house: { type: string, enum: [National Assembly, Senate, Executive] }
 
     Constitution:
       type: object
