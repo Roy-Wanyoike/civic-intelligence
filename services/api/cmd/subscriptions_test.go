@@ -42,7 +42,7 @@ func dispatch(handler http.Handler, method, url string, body []byte, p auth.Prin
 func TestSubscriptionStore_FollowIdempotent(t *testing.T) {
         store := NewSubscriptionStore()
 
-        rec1, err := store.Follow("user-1", EntityBill, "bill-123")
+        rec1, err := store.Follow("user-1", EntityBill, "bill-123", nil)
         if err != nil {
                 t.Fatalf("first Follow: %v", err)
         }
@@ -52,23 +52,57 @@ func TestSubscriptionStore_FollowIdempotent(t *testing.T) {
         if rec1.UserID != "user-1" || rec1.EntityType != EntityBill || rec1.EntityID != "bill-123" {
                 t.Fatalf("unexpected record: %+v", rec1)
         }
+        // Default channels (in_app) should be applied when none are passed.
+        if len(rec1.Channels) != 1 || rec1.Channels[0] != ChannelInApp {
+                t.Fatalf("expected default channels [in_app], got %v", rec1.Channels)
+        }
 
         // Second Follow for the same (user, type, id) must return the existing record.
-        rec2, err := store.Follow("user-1", EntityBill, "bill-123")
+        rec2, err := store.Follow("user-1", EntityBill, "bill-123", []string{"in_app", "email"})
         if err != nil {
                 t.Fatalf("second Follow: %v", err)
         }
         if rec2.ID != rec1.ID {
                 t.Errorf("idempotency: expected same ID %s, got %s", rec1.ID, rec2.ID)
         }
+        // Idempotent path does not mutate channels — the existing record is returned as-is.
+        if len(rec2.Channels) != 1 || rec2.Channels[0] != ChannelInApp {
+                t.Errorf("idempotency: channels should not change; got %v", rec2.Channels)
+        }
 
         // Different user following the same entity gets a different record.
-        rec3, err := store.Follow("user-2", EntityBill, "bill-123")
+        rec3, err := store.Follow("user-2", EntityBill, "bill-123", nil)
         if err != nil {
                 t.Fatalf("third Follow: %v", err)
         }
         if rec3.ID == rec1.ID {
                 t.Errorf("different user should get different ID, got %s", rec3.ID)
+        }
+}
+
+func TestSubscriptionStore_FollowWithEmailChannel(t *testing.T) {
+        store := NewSubscriptionStore()
+
+        rec, err := store.Follow("user-1", EntityBill, "bill-1", []string{"in_app", "email"})
+        if err != nil {
+                t.Fatalf("Follow with email channel: %v", err)
+        }
+        if !hasChannel(rec.Channels, ChannelEmail) {
+                t.Errorf("expected channels to include email; got %v", rec.Channels)
+        }
+        if !hasChannel(rec.Channels, ChannelInApp) {
+                t.Errorf("expected channels to include in_app; got %v", rec.Channels)
+        }
+        if !store.IsEmailSubscriber("user-1") {
+                t.Errorf("EmailSubscribers should report user-1 as a subscriber")
+        }
+}
+
+func TestSubscriptionStore_FollowWithInvalidChannel(t *testing.T) {
+        store := NewSubscriptionStore()
+        _, err := store.Follow("user-1", EntityBill, "bill-1", []string{"sms"})
+        if err == nil || !strings.Contains(err.Error(), "invalid channel") {
+                t.Fatalf("expected invalid channel error, got %v", err)
         }
 }
 
@@ -88,7 +122,7 @@ func TestSubscriptionStore_Validation(t *testing.T) {
         }
         for _, c := range cases {
                 t.Run(c.name, func(t *testing.T) {
-                        _, err := store.Follow(c.userID, c.entityType, c.entityID)
+                        _, err := store.Follow(c.userID, c.entityType, c.entityID, nil)
                         if err == nil || !strings.Contains(err.Error(), c.wantErr) {
                                 t.Errorf("expected error %q, got %v", c.wantErr, err)
                         }
@@ -98,9 +132,9 @@ func TestSubscriptionStore_Validation(t *testing.T) {
 
 func TestSubscriptionStore_ListAndUnfollow(t *testing.T) {
         store := NewSubscriptionStore()
-        r1, _ := store.Follow("user-1", EntityBill, "bill-a")
-        r2, _ := store.Follow("user-1", EntityTopic, "topic-x")
-        _, _ = store.Follow("user-2", EntityBill, "bill-b") // different user
+        r1, _ := store.Follow("user-1", EntityBill, "bill-a", nil)
+        r2, _ := store.Follow("user-1", EntityTopic, "topic-x", nil)
+        _, _ = store.Follow("user-2", EntityBill, "bill-b", nil) // different user
 
         got := store.List("user-1")
         if len(got) != 2 {
@@ -130,7 +164,7 @@ func TestSubscriptionStore_ListAndUnfollow(t *testing.T) {
 
 func TestSubscriptionStore_IsFollowing(t *testing.T) {
         store := NewSubscriptionStore()
-        _, _ = store.Follow("user-1", EntityBill, "bill-a")
+        _, _ = store.Follow("user-1", EntityBill, "bill-a", nil)
         if !store.IsFollowing("user-1", EntityBill, "bill-a") {
                 t.Error("expected IsFollowing=true for existing follow")
         }
@@ -266,10 +300,10 @@ func TestHandleSubscribe_Idempotent(t *testing.T) {
 
 func TestHandleListSubscriptions_Success(t *testing.T) {
         store := NewSubscriptionStore()
-        _, _ = store.Follow("user-1", EntityBill, "bill-a")
-        _, _ = store.Follow("user-1", EntityTopic, "topic-x")
+        _, _ = store.Follow("user-1", EntityBill, "bill-a", nil)
+        _, _ = store.Follow("user-1", EntityTopic, "topic-x", nil)
         // Other user's follows should NOT appear.
-        _, _ = store.Follow("user-2", EntityBill, "bill-b")
+        _, _ = store.Follow("user-2", EntityBill, "bill-b", nil)
 
         handler := makeSubscriptionsHandler(store)
         p := auth.Principal{UserID: "user-1"}
@@ -297,9 +331,9 @@ func TestHandleListSubscriptions_Success(t *testing.T) {
 
 func TestHandleListSubscriptions_FilterByEntityType(t *testing.T) {
         store := NewSubscriptionStore()
-        _, _ = store.Follow("user-1", EntityBill, "bill-a")
-        _, _ = store.Follow("user-1", EntityTopic, "topic-x")
-        _, _ = store.Follow("user-1", EntityCommittee, "committee-1")
+        _, _ = store.Follow("user-1", EntityBill, "bill-a", nil)
+        _, _ = store.Follow("user-1", EntityTopic, "topic-x", nil)
+        _, _ = store.Follow("user-1", EntityCommittee, "committee-1", nil)
 
         handler := makeSubscriptionsHandler(store)
         p := auth.Principal{UserID: "user-1"}
@@ -331,8 +365,8 @@ func TestHandleListSubscriptions_AnonymousRejected(t *testing.T) {
 
 func TestHandleUnsubscribe_Success(t *testing.T) {
         store := NewSubscriptionStore()
-        rec, _ := store.Follow("user-1", EntityBill, "bill-a")
-        handler := makeSubscriptionDetailHandler(store)
+        rec, _ := store.Follow("user-1", EntityBill, "bill-a", nil)
+        handler := makeSubscriptionDetailHandler(store, nil)
 
         p := auth.Principal{UserID: "user-1"}
         rr := dispatch(handler, http.MethodDelete, "/api/v1/subscriptions/"+rec.ID, nil, p)
@@ -346,8 +380,8 @@ func TestHandleUnsubscribe_Success(t *testing.T) {
 
 func TestHandleUnsubscribe_NotOwner(t *testing.T) {
         store := NewSubscriptionStore()
-        rec, _ := store.Follow("user-1", EntityBill, "bill-a")
-        handler := makeSubscriptionDetailHandler(store)
+        rec, _ := store.Follow("user-1", EntityBill, "bill-a", nil)
+        handler := makeSubscriptionDetailHandler(store, nil)
 
         // user-2 attempts to delete user-1's follow.
         p := auth.Principal{UserID: "user-2"}
@@ -362,7 +396,7 @@ func TestHandleUnsubscribe_NotOwner(t *testing.T) {
 
 func TestHandleUnsubscribe_NotFound(t *testing.T) {
         store := NewSubscriptionStore()
-        handler := makeSubscriptionDetailHandler(store)
+        handler := makeSubscriptionDetailHandler(store, nil)
         p := auth.Principal{UserID: "user-1"}
         rr := dispatch(handler, http.MethodDelete, "/api/v1/subscriptions/flw_does_not_exist", nil, p)
         if rr.Code != http.StatusNotFound {
@@ -372,8 +406,8 @@ func TestHandleUnsubscribe_NotFound(t *testing.T) {
 
 func TestHandleUnsubscribe_AnonymousRejected(t *testing.T) {
         store := NewSubscriptionStore()
-        rec, _ := store.Follow("user-1", EntityBill, "bill-a")
-        handler := makeSubscriptionDetailHandler(store)
+        rec, _ := store.Follow("user-1", EntityBill, "bill-a", nil)
+        handler := makeSubscriptionDetailHandler(store, nil)
 
         rr := dispatch(handler, http.MethodDelete, "/api/v1/subscriptions/"+rec.ID, nil, auth.Anonymous())
         if rr.Code != http.StatusUnauthorized {
@@ -397,16 +431,16 @@ func TestSubscriptionsHandler_MethodNotAllowed(t *testing.T) {
 
 func TestSubscriptionDetailHandler_MethodNotAllowed(t *testing.T) {
         store := NewSubscriptionStore()
-        rec, _ := store.Follow("user-1", EntityBill, "bill-a")
-        handler := makeSubscriptionDetailHandler(store)
+        rec, _ := store.Follow("user-1", EntityBill, "bill-a", nil)
+        handler := makeSubscriptionDetailHandler(store, nil)
         p := auth.Principal{UserID: "user-1"}
 
         rr := dispatch(handler, http.MethodGet, "/api/v1/subscriptions/"+rec.ID, nil, p)
         if rr.Code != http.StatusMethodNotAllowed {
                 t.Errorf("expected 405 for GET on detail handler, got %d", rr.Code)
         }
-        if rr.Header().Get("Allow") != "DELETE" {
-                t.Errorf("expected Allow header 'DELETE', got %q", rr.Header().Get("Allow"))
+        if rr.Header().Get("Allow") != "DELETE, PATCH" {
+                t.Errorf("expected Allow header 'DELETE, PATCH', got %q", rr.Header().Get("Allow"))
         }
 }
 
