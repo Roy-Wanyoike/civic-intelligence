@@ -66,6 +66,116 @@ type Config struct {
         TracerServiceName string `env:"OTEL_SERVICE_NAME" default:"civic-api"`
 }
 
+func lookupPerson(personID string) (name, scorecardURL string) {
+        if personID == "" {
+                return "", ""
+        }
+        for i := range sampleScorecards {
+                if sampleScorecards[i].PersonID == personID {
+                        return sampleScorecards[i].Name, "/api/v1/people/" + personID + "/scorecard"
+                }
+        }
+        return "", ""
+}
+
+
+func buildSponsorRef(personID string) *SponsorRef {
+        name, url := lookupPerson(personID)
+        if name == "" {
+                return nil
+        }
+        return &SponsorRef{PersonID: personID, Name: name, URL: url}
+}
+
+
+func applySponsorFields(resp *billResponse, sponsorID string, cosponsorIDs []string, billSourceID string) {
+        // Issue #282: live-discovered Bills don't carry sponsor info on the
+        // candidate (the parser doesn't extract it). When the candidate's
+        // SponsorID is empty, try to enrich from the seed slice by SourceID
+        // so a Bill that's both in the seed + live crawl surfaces the
+        // sponsor the seed documents.
+        if sponsorID == "" && billSourceID != "" {
+                if seed := kenya_seed.FindSampleBillByID(billSourceID); seed != nil {
+                        sponsorID = seed.SponsorID
+                        if len(cosponsorIDs) == 0 {
+                                cosponsorIDs = seed.CosponsorIDs
+                        }
+                }
+        }
+        resp.SponsorID = sponsorID
+        if sponsorID != "" {
+                if name, url := lookupPerson(sponsorID); name != "" {
+                        resp.SponsorName = name
+                        resp.SponsorURL = url
+                }
+        }
+        for _, cid := range cosponsorIDs {
+                if ref := buildSponsorRef(cid); ref != nil {
+                        resp.Cosponsors = append(resp.Cosponsors, *ref)
+                }
+        }
+}
+
+
+// billsByPersonResponse is the JSON envelope for GET /api/v1/people/{id}/bills.
+type billsByPersonResponse struct {
+	PersonID      string         `json:"person_id"`
+	Name          string         `json:"name"`
+	Items         []billResponse `json:"items"`
+	Total         int            `json:"total"`
+	Source        string         `json:"source"`
+	ScorecardURL  string         `json:"scorecard_url,omitempty"`
+}
+
+func handleBillsByPerson(w http.ResponseWriter, r *http.Request, personID string) {
+        if r.Method != http.MethodGet {
+                writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+                return
+        }
+        sc := findScorecard(personID)
+        if sc == nil {
+                writeError(w, http.StatusNotFound, "not_found", "person not found: "+personID)
+                return
+        }
+        // Filter the seed Bills slice by SponsorID == personID. The seed
+        // slice is the canonical source of sponsor attribution until the
+        // verified ingestion path ships (issue #282).
+        seedBills := kenya_seed.FindSampleBillsBySponsor(personID)
+        items := make([]billResponse, 0, len(seedBills))
+        for _, b := range seedBills {
+                year := 0
+                if !b.PublicationDate.IsZero() {
+                        year = b.PublicationDate.Year()
+                }
+                resp := billResponse{
+                        ID:              b.SourceID,
+                        Identifier:      b.Slug,
+                        Title:           b.Title,
+                        House:           b.House,
+                        Year:            year,
+                        Status:          "in_progress",
+                        CurrentStage:    "published",
+                        Country:         "KE",
+                        SourceURL:       b.URL,
+                        PublicationDate: b.PublicationDate.Format("2006-01-02"),
+                        Topics:          []string{},
+                        Source:          "seed",
+                }
+                // Seed Bills carry sponsor_id on the candidate directly.
+                applySponsorFields(&resp, b.SponsorID, b.CosponsorIDs, b.SourceID)
+                items = append(items, resp)
+        }
+        writeJSON(w, http.StatusOK, billsByPersonResponse{
+                PersonID:     personID,
+                Name:         sc.Name,
+                Items:        items,
+                Total:        len(items),
+                Source:       "seed",
+                ScorecardURL: "/api/v1/people/" + personID + "/scorecard",
+        })
+}
+
+
 func main() {
         var cfg Config
         if err := config.Load(&cfg); err != nil {
@@ -480,7 +590,21 @@ type billResponse struct {
         Source          string   `json:"source"`   // "live" | "seed" (issue #265)
         Degraded        bool     `json:"degraded"` // true when Source == "seed"
         VideoURL        string   `json:"video_url,omitempty"` // issue #283 — Hansard plenary video
+	SponsorID       string       `json:"sponsor_id,omitempty"`
+	SponsorName     string       `json:"sponsor_name,omitempty"`
+	SponsorURL      string       `json:"scorecard_url,omitempty"`
+	Cosponsors      []SponsorRef `json:"cosponsors,omitempty"`
 }
+
+// SponsorRef is a reference to a person (MP) who sponsored or cosponsored
+// a Bill. The scorecard_url links to the MP's scorecard page so the
+// frontend can deep-link from the Bill detail page.
+type SponsorRef struct {
+	PersonID string `json:"person_id"`
+	Name     string `json:"name"`
+	URL      string `json:"scorecard_url,omitempty"`
+}
+
 
 func makeBillsHandler(adapter BillsAdapter) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
@@ -532,6 +656,8 @@ func makeBillsHandler(adapter BillsAdapter) http.HandlerFunc {
                                 Degraded:        degraded,
                                 VideoURL:        b.VideoURL,
                         })
+			// Populate sponsor fields from seed data (issue #282).
+			applySponsorFields(&items[len(items)-1], b.SponsorID, b.CosponsorIDs, b.SourceID)
                 }
 
                 writeJSON(w, http.StatusOK, map[string]any{
@@ -1336,6 +1462,15 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
                 makeScorecardHandler()(w, r)
                 return
         }
+	if strings.HasSuffix(tail, "/bills") {
+		personID := strings.TrimSuffix(tail, "/bills")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleBillsByPerson(w, r, personID)
+		return
+	}
         // Default: person detail lookup with country-scoped visibility gate.
         id := tail
         country := middleware.CountryFromContext(r.Context())
