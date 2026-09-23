@@ -55,7 +55,8 @@ func (a *Adapter) Supports(url string) bool {
 // date extracted from the Akoma Ntoso URL structure.
 //
 // The Kenya Law bills page lists Bills with links in the format:
-//   /akn/ke/bill/{house}/{date}/{slug}/eng@{date}
+//
+//	/akn/ke/bill/{house}/{date}/{slug}/eng@{date}
 //
 // where {house} is "na" (National Assembly) or "senate", and {date} is
 // the publication date in YYYY-MM-DD format.
@@ -70,12 +71,28 @@ func (a *Adapter) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
 
 // BillCandidate is a discovered Bill before canonicalization.
 type BillCandidate struct {
-	URL           string    // full URL on kenyalaw.org
-	Slug          string    // URL slug (e.g., "the-housing-bill-2024")
-	Title         string    // human-readable title
-	House         string    // "National Assembly" or "Senate"
+	URL             string    // full URL on kenyalaw.org
+	Slug            string    // URL slug (e.g., "the-housing-bill-2024")
+	Title           string    // human-readable title
+	House           string    // "National Assembly" or "Senate"
 	PublicationDate time.Time // parsed from the URL date component
-	SourceID      string    // platform-internal ID (e.g., "ke-bill-2026-09-07-local-authorities...")
+	SourceID        string    // platform-internal ID (e.g., "ke-bill-2026-09-07-local-authorities...")
+
+	// SponsorID is the platform-internal person ID of the Bill's primary
+	// sponsor (e.g., "person-001"). Empty when the sponsor is unknown — the
+	// live kenya_law parser does NOT extract the sponsor from the Bill
+	// detail page (issue #282 deliberately leaves this to seed data), so
+	// every BillCandidate returned by DiscoverBills has SponsorID == "".
+	// The seed slice (kenya_seed.SampleBills) populates this field on the
+	// bills whose sponsors are documented below; the API layer enriches
+	// live-discovered Bills with seed sponsor data when the SourceID
+	// matches a seeded Bill.
+	SponsorID string
+
+	// CosponsorIDs is the list of platform-internal person IDs of the
+	// Bill's cosponsors (secondary supporters). Nil when unknown — same
+	// seed-only contract as SponsorID.
+	CosponsorIDs []string
 }
 
 // FetchBill downloads the bill detail page HTML.
@@ -87,13 +104,13 @@ func (a *Adapter) FetchBill(ctx context.Context, url string) (string, error) {
 func (a *Adapter) GetOfficialSources() []SourceDefinition {
 	return []SourceDefinition{
 		{
-			ID:           "ke-kenyalaw-bills",
-			Country:      "KE",
-			Institution:  "Kenya Law Reports",
-			Authority:    "primary",
-			URL:          a.baseURL + "/bills/",
-			Adapter:      "kenya.kenya_law",
-			DocumentTypes: []string{"bill"},
+			ID:             "ke-kenyalaw-bills",
+			Country:        "KE",
+			Institution:    "Kenya Law Reports",
+			Authority:      "primary",
+			URL:            a.baseURL + "/bills/",
+			Adapter:        "kenya.kenya_law",
+			DocumentTypes:  []string{"bill"},
 			CrawlFrequency: 6 * time.Hour,
 		},
 	}
@@ -145,14 +162,14 @@ func (a *Adapter) Discover(ctx context.Context) ([]contracts.SourceItem, error) 
 	items := make([]contracts.SourceItem, len(bills))
 	for i, b := range bills {
 		items[i] = contracts.SourceItem{
-			URL:            b.URL,
-			Title:          b.Title,
-			DocumentType:   "bill",
-			SourceType:     contracts.SourceItemBill,
-			CountryCode:    "KE",
-			PublishedAt:    b.PublicationDate,
-			DiscoveredAt:   time.Now().UTC(),
-			SourceID:       b.SourceID,
+			URL:          b.URL,
+			Title:        b.Title,
+			DocumentType: "bill",
+			SourceType:   contracts.SourceItemBill,
+			CountryCode:  "KE",
+			PublishedAt:  b.PublicationDate,
+			DiscoveredAt: time.Now().UTC(),
+			SourceID:     b.SourceID,
 			Metadata: map[string]string{
 				"house": b.House,
 				"slug":  b.Slug,
@@ -236,10 +253,10 @@ func ParseBillsListing(html string) []BillCandidate {
 	out := make([]BillCandidate, 0, len(matches))
 
 	for _, m := range matches {
-		houseCode := m[1]      // "na" or "senate"
-		dateStr := m[2]        // "2026-09-07"
-		slug := m[3]           // "the-local-authorities-provident-fund-amendment-bill-2026"
-		fullURL := m[0]        // the full match
+		houseCode := m[1] // "na" or "senate"
+		dateStr := m[2]   // "2026-09-07"
+		slug := m[3]      // "the-local-authorities-provident-fund-amendment-bill-2026"
+		fullURL := m[0]   // the full match
 
 		// Deduplicate (the listing page may have the same bill linked multiple times).
 		if seen[fullURL] {
