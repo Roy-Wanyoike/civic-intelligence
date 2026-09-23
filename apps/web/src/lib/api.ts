@@ -676,6 +676,90 @@ export async function listCalendarUpcoming(params: {
   return getJSON(`/api/v1/calendar/upcoming?${qs.toString()}`);
 }
 
+// ----- Plenary livestream (issue #283) -----
+//
+// The /api/v1/calendar/live endpoint tells the frontend whether parliament
+// is sitting right now. When `is_live` is true, the response also carries
+// the YouTube video URL of the live stream so the homepage can render a
+// "🔴 Parliament is live — Watch now" banner + modal without a second
+// round-trip. When `is_live` is false, the response is the minimal
+// `{ is_live: false }` payload — the homepage can short-circuit and skip
+// the embed entirely.
+
+export interface CalendarLive {
+  is_live: boolean;
+  /** YouTube URL of the live stream. Present iff `is_live` is true. */
+  video_url?: string;
+  /** Sitting title (e.g., "National Assembly — Morning Sitting"). Present iff `is_live` is true. */
+  title?: string;
+  /** Short house label (e.g., "National Assembly", "Senate"). Present iff `is_live` is true. */
+  house?: string;
+  /** Calendar event ID of the in-session sitting. Present iff `is_live` is true. */
+  event_id?: string;
+  /** YYYY-MM-DD of the sitting. Present iff `is_live` is true. */
+  date?: string;
+}
+
+/**
+ * GET /api/v1/calendar/live?country=KE — is parliament sitting right now?
+ *
+ * The fetch is intentionally NOT cached (cache: 'no-store') so the homepage
+ * always reflects the current live status — a 5-minute revalidate would
+ * miss the moment a sitting starts or ends.
+ */
+export async function getCalendarLive(params: {
+  country?: string;
+} = {}): Promise<CalendarLive> {
+  const qs = new URLSearchParams();
+  if (params.country) qs.set('country', params.country);
+  const url = `/api/v1/calendar/live${qs.size ? `?${qs.toString()}` : ''}`;
+  // Use the raw fetch (not getJSON) so we can pass cache: 'no-store' —
+  // getJSON doesn't expose the RequestInit.cache option.
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...countryHeaders(),
+  };
+  const resp = await fetch(url, { cache: 'no-store', headers });
+  if (!resp.ok) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, `HTTP ${resp.status} ${url}`, detail);
+  }
+  return (await resp.json()) as CalendarLive;
+}
+
+/**
+ * fetchCalendarLiveFromBFF is the server-component variant of
+ * getCalendarLive. Server components cannot read the country cookie via
+ * getCountryFromCookie (which depends on document.cookie), so the caller
+ * passes the country code explicitly (typically read from the
+ * GovernmentProvider's server-side seed in app/layout.tsx).
+ *
+ * Uses the absolute API_BASE URL so the fetch reaches the Go BFF during
+ * SSR rather than the Next.js dev server. Caching is disabled so the
+ * homepage always reflects the current live status.
+ */
+export async function fetchCalendarLiveFromBFF(
+  apiBase: string,
+  country = 'KE',
+): Promise<CalendarLive | null> {
+  try {
+    const url = `${apiBase}/api/v1/calendar/live?country=${encodeURIComponent(country)}`;
+    const resp = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json',
+        [COUNTRY_HEADER]: country,
+      },
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as CalendarLive;
+  } catch {
+    // BFF unreachable — render the homepage without the live banner.
+    return null;
+  }
+}
+
 // ----- Gazette Alerts (task ENG-K1 — Feature 2) -----
 //
 // Citizens subscribe to keywords in the Kenya Gazette. When a matching

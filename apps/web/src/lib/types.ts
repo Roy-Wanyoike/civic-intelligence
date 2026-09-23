@@ -56,6 +56,11 @@ export interface Bill {
   country: string;
   source_url?: string; // the official source URL (kenyalaw.org, parliament.go.ke)
   publication_date?: string; // ISO date string
+  // video_url is the YouTube URL of the most-recent Hansard sitting in
+  // which this Bill was debated (issue #283). Empty/omitted when no
+  // Hansard video is available yet; the frontend renders an inline
+  // YouTube embed below the Bill title when present.
+  video_url?: string;
   created_at: string;
   updated_at: string;
   citation_count: number;
