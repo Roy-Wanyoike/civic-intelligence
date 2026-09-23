@@ -11,6 +11,7 @@
 //      GET /api/v1/calendar         ?month=2026-09&country=KE
 //      GET /api/v1/calendar/today  ?country=KE
 //      GET /api/v1/calendar/upcoming?country=KE&limit=10
+//      GET /api/v1/calendar/live   ?country=KE          (issue #283)
 //
 // Each event carries: id, title, date, type, description, source_url,
 // country, institution. Dates are RFC3339 (date-only is accepted on input
@@ -273,6 +274,7 @@ func newCalendarEventID() string {
 //      GET /api/v1/calendar         — events for a month (?month=YYYY-MM)
 //      GET /api/v1/calendar/today   — today's events
 //      GET /api/v1/calendar/upcoming— upcoming events (?limit=N, default 10)
+//      GET /api/v1/calendar/live    — "is parliament sitting right now?" (issue #283)
 //
 // All three honour ?country=KE (defaults to store's country) and an
 // optional ?types=parliament_session,committee_meeting filter (comma list).
@@ -286,9 +288,10 @@ func makeCalendarHandler(store *CalendarStore) http.HandlerFunc {
                 }
 
                 // Sub-route dispatch. The outer mux registers /api/v1/calendar,
-                // /api/v1/calendar/today, /api/v1/calendar/upcoming as separate
-                // patterns, but this handler is also robust to being mounted at
-                // /api/v1/calendar/ — it inspects the trailing path segment.
+                // /api/v1/calendar/today, /api/v1/calendar/upcoming,
+                // /api/v1/calendar/live as separate patterns, but this handler
+                // is also robust to being mounted at /api/v1/calendar/ — it
+                // inspects the trailing path segment.
                 switch strings.TrimPrefix(r.URL.Path, "/api/v1/calendar") {
                 case "", "/":
                         handleCalendarMonth(w, r, store)
@@ -296,6 +299,8 @@ func makeCalendarHandler(store *CalendarStore) http.HandlerFunc {
                         handleCalendarToday(w, r, store)
                 case "/upcoming", "/upcoming/":
                         handleCalendarUpcoming(w, r, store)
+                case "/live", "/live/":
+                        handleCalendarLive(w, r, store)
                 default:
                         writeError(w, http.StatusNotFound, "not_found",
                                 "unknown calendar sub-path: "+r.URL.Path)
@@ -361,6 +366,121 @@ func handleCalendarUpcoming(w http.ResponseWriter, r *http.Request, store *Calen
                 "total":  len(events),
                 "limit":  limit,
         })
+}
+
+// --- Plenary livestream (issue #283) ---
+
+// livePlaceholderVideoURL is the YouTube URL returned by /api/v1/calendar/live
+// when parliament is in session. The Hansard crawler already discovers a
+// per-sitting YouTube URL (HansardCandidate.VideoURL) — in production the
+// live endpoint would surface that URL directly. Until the live Hansard
+// discovery pipeline is wired into the calendar store, we return this
+// stable placeholder so the frontend can exercise the embed path.
+//
+// TODO: wire to live Hansard discovery — replace with the sitting's
+// HansardCandidate.VideoURL once the ingestion worker writes calendar
+// events + their video URLs into the store.
+const livePlaceholderVideoURL = "https://youtu.be/dQw4w9WgXcQ"
+
+// CalendarLiveResponse is the JSON envelope returned by
+// GET /api/v1/calendar/live. When `is_live` is true, the response also
+// carries the live-stream video URL, a human-readable sitting title, and
+// the house (e.g., "National Assembly") so the frontend can render a
+// "🔴 Parliament is live — Watch now" banner + modal without a second
+// round-trip. When `is_live` is false, the remaining fields are omitted
+// so the wire payload stays minimal (the frontend only needs the flag).
+type CalendarLiveResponse struct {
+        IsLive   bool   `json:"is_live"`
+        VideoURL string `json:"video_url,omitempty"`
+        Title    string `json:"title,omitempty"`
+        House    string `json:"house,omitempty"`
+        // EventID is the calendar event ID of the in-session sitting so the
+        // frontend can deep-link to the calendar entry. Omitted when not live.
+        EventID string `json:"event_id,omitempty"`
+        // Date echoes the anchor's YYYY-MM-DD so the frontend can show
+        // "Live — [date]" without parsing the video URL. Omitted when not
+        // live.
+        Date string `json:"date,omitempty"`
+}
+
+// LiveSession returns the in-session parliament_session event for "today"
+// (the anchor's date), filtered by country. Returns (zero, false) when no
+// parliament_session event is scheduled for today.
+//
+// "Today" follows the same anchor contract as Today() — production uses
+// wall-clock UTC; tests inject a deterministic anchor so the seeded
+// sample schedule is reproducible.
+func (s *CalendarStore) LiveSession(country string) (CalendarEvent, bool) {
+        today := s.anchor.Format("2006-01-02")
+        for _, e := range s.Today(country) {
+                if e.Type == CalParliamentSession && e.Date == today {
+                        return e, true
+                }
+        }
+        return CalendarEvent{}, false
+}
+
+// handleCalendarLive handles GET /api/v1/calendar/live?country=KE (issue #283).
+//
+// Returns 200 with `{ "is_live": true, "video_url": ..., "title": ...,
+// "house": ... }` when a parliament_session event is scheduled for today,
+// or 200 with `{ "is_live": false }` when parliament is not sitting.
+//
+// The video URL is currently the placeholder constant above — in
+// production it would come from the Hansard crawl (HansardCandidate.VideoURL).
+func handleCalendarLive(w http.ResponseWriter, r *http.Request, store *CalendarStore) {
+        country := countryQuery(r, store.country)
+        event, ok := store.LiveSession(country)
+        if !ok {
+                writeJSON(w, http.StatusOK, CalendarLiveResponse{IsLive: false})
+                return
+        }
+        // TODO: wire to live Hansard discovery — replace livePlaceholderVideoURL
+        // with the sitting's HansardCandidate.VideoURL once the ingestion worker
+        // writes calendar events + their video URLs into the store.
+        title := event.Title
+        if title == "" {
+                title = "National Assembly Sitting — " + event.Date
+        }
+        house := event.Institution
+        if house == "" {
+                house = calendarEventHouse(event)
+                if house == "" {
+                        house = "National Assembly"
+                }
+        }
+        writeJSON(w, http.StatusOK, CalendarLiveResponse{
+                IsLive:   true,
+                VideoURL: livePlaceholderVideoURL,
+                Title:    title,
+                House:    house,
+                EventID:  event.ID,
+                Date:     event.Date,
+        })
+}
+
+// calendarEventHouse returns the parliamentary house implied by the event's
+// Institution or Title. Used as a fallback when callers want a short house
+// label ("National Assembly" / "Senate") and the event has Institution
+// populated. Returns "" when the house cannot be inferred.
+//
+// Named calendarEventHouse (rather than CalendarEvent.House) so it does
+// not collide with a future struct field of the same name; it is a pure
+// helper that operates on the event's existing Institution/Title strings.
+func calendarEventHouse(e CalendarEvent) string {
+        switch {
+        case strings.Contains(strings.ToLower(e.Institution), "senate"):
+                return "Senate"
+        case strings.Contains(strings.ToLower(e.Institution), "national assembly"):
+                return "National Assembly"
+        case strings.Contains(strings.ToLower(e.Institution), "parliament"):
+                return "Parliament"
+        case strings.Contains(strings.ToLower(e.Title), "senate"):
+                return "Senate"
+        case strings.Contains(strings.ToLower(e.Title), "national assembly"):
+                return "National Assembly"
+        }
+        return ""
 }
 
 // countryQuery returns the ?country= query value, upper-cased, defaulting

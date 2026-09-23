@@ -174,26 +174,6 @@ func main() {
         apiHandler.HandleFunc("/api/v1/brief/archive", makeBriefArchiveHandler(briefStore))
         apiHandler.HandleFunc("/api/v1/brief/", makeBriefDetailHandler(briefStore))
 
-        // Email alert subscriptions (issue #279). The EmailSender is wired
-        // here so the refresh handler (below) can fan out daily digest
-        // emails when RESEND_API_KEY is set. The brief/digest endpoint
-        // returns the same JSON the email pipeline renders to HTML, so
-        // /notifications can preview today's digest without waiting for
-        // the cron.
-        emailSender := NewEmailSender(nil)
-        // WEB_BASE_URL is the public web origin used for the per-item deep
-        // links + the unsubscribe link inside the digest email. Defaults to
-        // the production domain so the links work out-of-the-box in dev.
-        webBaseURL := os.Getenv("WEB_BASE_URL")
-        if webBaseURL == "" {
-                webBaseURL = "https://civicintelligence.com"
-        }
-        // The notifStore is constructed below (issue #112) but the digest
-        // handler needs it, so we re-use the package-level notifStore
-        // declaration that comes after this block. To keep the diff
-        // minimal, we register /brief/digest in the same block as
-        // /api/v1/notifications (see below).
-
         // People, committees, institutions — public read.
         // Each collection is registered TWICE — once with and once without
         // the trailing slash — so Go's http.ServeMux doesn't auto-301 the
@@ -246,38 +226,13 @@ func main() {
         // to actRepo) so the /api/v1/acts/{id}/follow endpoint (issue #216) can
         // write real subscriptions through the same store used by
         // /api/v1/subscriptions.
-        //
-        // userEmails (issue #279) is the in-memory registry that captures each
-        // subscriber's email claim (from the auth principal) when they PATCH
-        // their channels to include "email". The daily digest pipeline looks
-        // up recipients here — the refresh cron has no principal of its own.
-        userEmails := NewUserEmailStore()
         apiHandler.HandleFunc("/api/v1/subscriptions", makeSubscriptionsHandler(subscriptionStore))
-        apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore, userEmails))
+        apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore))
 
         // Notifications — requires auth (wired via middleware in the handler).
 
         // Civic Feed — public.
         apiHandler.HandleFunc("/api/v1/feed", makeCivicFeedHandler(kenyaLaw))
-
-        // RSS 2.0 feeds (issue #280). The four /api/v1/feed/*.rss endpoints
-        // reuse the JSON handlers' data sources (BillsAdapter, briefStore,
-        // sampleScorecards) but emit application/rss+xml so subscribers can
-        // follow Bills, what-changed, the daily brief, and per-MP activity
-        // from Feedly / Inoreader / NetNewsWire without creating an account.
-        // The bills + what-changed feeds share the same live-or-seed fallback
-        // contract as the JSON endpoints (issue #265); the brief feed renders
-        // an empty (but valid) feed before the day's first /brief/generate;
-        // the per-MP feed returns 404 for unknown person IDs so RSS readers
-        // surface the failure rather than silently subscribing to nothing.
-        // The per-MP route is registered on /feed/people/ (subtree) so it
-        // matches /feed/people/{id}.rss — RSS readers follow 301 redirects,
-        // so the no-slash form is intentionally NOT registered (unlike the
-        // JSON /api/v1/people routes, which need both forms for issue #266).
-        apiHandler.HandleFunc("/api/v1/feed/bills.rss", makeBillsRSSFeedHandler(kenyaLaw))
-        apiHandler.HandleFunc("/api/v1/feed/what-changed.rss", makeWhatChangedRSSFeedHandler(kenyaLaw))
-        apiHandler.HandleFunc("/api/v1/feed/brief.rss", makeBriefRSSFeedHandler(briefStore))
-        apiHandler.HandleFunc("/api/v1/feed/people/", makeMPRSSFeedHandler())
 
         // Countries — public metadata for every adapter registered with the
         // central registry (adapters/registry). The frontend Government
@@ -291,19 +246,8 @@ func main() {
         apiHandler.HandleFunc("/api/v1/sponsor/mpesa/callback", handleMpesaCallback)
         apiHandler.HandleFunc("/api/v1/sponsor/card/webhook", handleStripeWebhook)
 
-        // Notifications store (issue #112). Constructed here — earlier than
-        // the /api/v1/notifications handler registration — because the
-        // refresh handler (next block) needs it for the daily digest fan-out
-        // (issue #279). The handler registration itself happens below in
-        // the same block as the digest endpoint.
-        notifStore := NewNotificationStore()
-
-        // Data refresh — triggers adapter re-discovery (called by cron).
-        // The handler ALSO fans out daily digest emails to every subscriber
-        // who has "email" in their channels (issue #279) when RESEND_API_KEY
-        // is set. When the key is absent, the StubEmailSender logs the
-        // would-be sends in dev.
-        apiHandler.HandleFunc("/api/v1/refresh", makeRefreshHandler(kenyaLaw, subscriptionStore, userEmails, notifStore, emailSender, webBaseURL))
+        // Data refresh — triggers adapter re-discovery (called by cron)
+        apiHandler.HandleFunc("/api/v1/refresh", makeRefreshHandler(kenyaLaw))
 
         // What Changed — proactive change detection feed
         apiHandler.HandleFunc("/api/v1/what-changed", makeWhatChangedHandler(kenyaLaw))
@@ -316,14 +260,10 @@ func main() {
         apiHandler.HandleFunc("/api/v1/topics/", handleTopicDetail)
 
         // Apply OptionalAuth + rate limiting + metrics to the API routes.
+        // Notifications — in-memory store for now.
+        notifStore := NewNotificationStore()
         apiHandler.Handle("/api/v1/notifications", makeNotificationsHandler(notifStore))
         apiHandler.Handle("/api/v1/notifications/", makeNotificationDetailHandler(notifStore))
-
-        // Daily digest endpoint (issue #279). Returns the past 24h's
-        // notifications grouped into the same three sections the email
-        // template renders — Bills that changed stage, New gazette
-        // notices matching your alerts, Your MP's activity.
-        apiHandler.HandleFunc("/api/v1/brief/digest", makeBriefDigestHandler(notifStore, webBaseURL))
 
         // Trust + Provenance (issue #165) — in-memory trust store seeded
         // with sample Kenyan sources, claims, evidence, and one active
@@ -376,6 +316,10 @@ func main() {
         apiHandler.HandleFunc("/api/v1/calendar", makeCalendarHandler(calendarStore))
         apiHandler.HandleFunc("/api/v1/calendar/today", makeCalendarHandler(calendarStore))
         apiHandler.HandleFunc("/api/v1/calendar/upcoming", makeCalendarHandler(calendarStore))
+        // Plenary livestream status (issue #283). Mounted alongside the
+        // other calendar sub-routes so makeCalendarHandler's internal
+        // dispatch picks it up via the trailing "/live" path segment.
+        apiHandler.HandleFunc("/api/v1/calendar/live", makeCalendarHandler(calendarStore))
 
         // Gazette Alerts (task ENG-K1 — Feature 2). The gazetteAlertStore
         // holds keyword subscriptions + a seed set of 13 published Kenya
@@ -505,134 +449,33 @@ type BillsAdapter interface {
         FetchBill(ctx context.Context, url string) (string, error)
 }
 
-// SponsorRef is a lightweight reference to a person in their role as a
-// Bill sponsor or cosponsor. It carries enough information for the
-// frontend to render the sponsor's name + a link to their scorecard
-// page without an extra round-trip to /api/v1/people/{id}.
-//
-// The scorecard_url is the platform-internal path to the MP's
-// scorecard page (/api/v1/people/{id}/scorecard) — it is omitted on
-// the wire when the sponsor is not in the sample people slice (issue
-// #282 — the seed slice may carry sponsor_ids that aren't yet wired
-// to a full scorecard).
-type SponsorRef struct {
-        PersonID string `json:"person_id"`
-        Name     string `json:"name"`
-        URL      string `json:"scorecard_url,omitempty"`
-}
-
 // billResponse is the JSON shape returned by the bills endpoint.
 // `source` ("live" | "seed") and `degraded` flag whether the row was
 // sourced from the live upstream crawl or the seed fallback (issue #265).
 //
-// Sponsorship fields (issue #282):
-//   - sponsor_id      — platform-internal person ID of the primary
-//                       sponsor; empty when the Bill's sponsor is
-//                       unknown (seed pending or live crawl does not
-//                       extract it).
-//   - sponsor_name    — sponsor's display name; populated from the
-//                       sample people slice when sponsor_id is known
-//                       + matches a sample MP; empty otherwise.
-//   - scorecard_url   — /api/v1/people/{id}/scorecard URL; populated
-//                       alongside sponsor_name; empty otherwise.
-//   - cosponsors       — list of cosponsor SponsorRef entries; empty
-//                       (omitted on the wire) when the Bill has no
-//                       known cosponsors.
+// Video URL (issue #283):
+//   - video_url  — YouTube URL of the most-recent Hansard sitting in which
+//                  this Bill was debated; empty (omitted on the wire) when
+//                  no Hansard video is available yet. The frontend renders
+//                  an inline YouTube embed below the Bill title when the
+//                  field is present.
 type billResponse struct {
-        ID              string       `json:"id"`
-        Identifier      string       `json:"identifier"`
-        Title           string       `json:"title"`
-        House           string       `json:"house"`
-        Year            int          `json:"year"`
-        Status          string       `json:"status"`
-        CurrentStage    string       `json:"current_stage"`
-        Purpose         string       `json:"purpose,omitempty"`
-        Description     string       `json:"description,omitempty"`
-        Country         string       `json:"country"`
-        SourceURL       string       `json:"source_url"`
-        PublicationDate string       `json:"publication_date"`
-        Topics          []string     `json:"topics"`
-        Source          string       `json:"source"`   // "live" | "seed" (issue #265)
-        Degraded        bool         `json:"degraded"` // true when Source == "seed"
-        SponsorID       string       `json:"sponsor_id,omitempty"`
-        SponsorName     string       `json:"sponsor_name,omitempty"`
-        SponsorURL      string       `json:"scorecard_url,omitempty"`
-        Cosponsors      []SponsorRef `json:"cosponsors,omitempty"`
-}
-
-// lookupPerson returns the display name + scorecard URL for the given
-// platform-internal person ID. The lookup is against the sample 5 MPs
-// in scorecard.go (sampleScorecards) — the same source the
-// /api/v1/people/{id}/scorecard endpoint serves — so the sponsor_name
-// + scorecard_url surfaced on a Bill response are guaranteed to resolve
-// to a live scorecard page (issue #282).
-//
-// Returns empty strings when personID is empty or not in the sample
-// people slice. Callers MUST treat empty-name as "no sponsor info to
-// surface" — the billResponse struct's `omitempty` JSON tags then drop
-// the sponsor fields from the wire payload, so the frontend never
-// renders an empty "Sponsored by:" row.
-func lookupPerson(personID string) (name, scorecardURL string) {
-        if personID == "" {
-                return "", ""
-        }
-        for i := range sampleScorecards {
-                if sampleScorecards[i].PersonID == personID {
-                        return sampleScorecards[i].Name, "/api/v1/people/" + personID + "/scorecard"
-                }
-        }
-        return "", ""
-}
-
-// buildSponsorRef converts a person ID into a SponsorRef (looked up
-// from the sample people slice). Returns nil when the person is not
-// found so callers can append conditionally without leaving empty
-// SponsorRef entries in the cosponsors list.
-func buildSponsorRef(personID string) *SponsorRef {
-        name, url := lookupPerson(personID)
-        if name == "" {
-                return nil
-        }
-        return &SponsorRef{PersonID: personID, Name: name, URL: url}
-}
-
-// applySponsorFields populates the sponsor_id, sponsor_name, scorecard_url,
-// and cosponsors fields on the given billResponse. It mutates the response
-// in place so callers can build the rest of the response inline and then
-// call this helper once at the end (issue #282).
-//
-// The billSourceID parameter is used to enrich live-discovered Bills with
-// seed sponsor data when the candidate's SponsorID is empty (the live
-// kenya_law parser does not extract the sponsor — see BillCandidate docs).
-// When billSourceID matches a seeded Bill, the seed's sponsor_id +
-// cosponsor_ids are used; otherwise the response carries the candidate's
-// (possibly empty) values.
-func applySponsorFields(resp *billResponse, sponsorID string, cosponsorIDs []string, billSourceID string) {
-        // Issue #282: live-discovered Bills don't carry sponsor info on the
-        // candidate (the parser doesn't extract it). When the candidate's
-        // SponsorID is empty, try to enrich from the seed slice by SourceID
-        // so a Bill that's both in the seed + live crawl surfaces the
-        // sponsor the seed documents.
-        if sponsorID == "" && billSourceID != "" {
-                if seed := kenya_seed.FindSampleBillByID(billSourceID); seed != nil {
-                        sponsorID = seed.SponsorID
-                        if len(cosponsorIDs) == 0 {
-                                cosponsorIDs = seed.CosponsorIDs
-                        }
-                }
-        }
-        resp.SponsorID = sponsorID
-        if sponsorID != "" {
-                if name, url := lookupPerson(sponsorID); name != "" {
-                        resp.SponsorName = name
-                        resp.SponsorURL = url
-                }
-        }
-        for _, cid := range cosponsorIDs {
-                if ref := buildSponsorRef(cid); ref != nil {
-                        resp.Cosponsors = append(resp.Cosponsors, *ref)
-                }
-        }
+        ID              string   `json:"id"`
+        Identifier      string   `json:"identifier"`
+        Title           string   `json:"title"`
+        House           string   `json:"house"`
+        Year            int      `json:"year"`
+        Status          string   `json:"status"`
+        CurrentStage    string   `json:"current_stage"`
+        Purpose         string   `json:"purpose,omitempty"`
+        Description     string   `json:"description,omitempty"`
+        Country         string   `json:"country"`
+        SourceURL       string   `json:"source_url"`
+        PublicationDate string   `json:"publication_date"`
+        Topics          []string `json:"topics"`
+        Source          string   `json:"source"`   // "live" | "seed" (issue #265)
+        Degraded        bool     `json:"degraded"` // true when Source == "seed"
+        VideoURL        string   `json:"video_url,omitempty"` // issue #283 — Hansard plenary video
 }
 
 func makeBillsHandler(adapter BillsAdapter) http.HandlerFunc {
@@ -669,7 +512,7 @@ func makeBillsHandler(adapter BillsAdapter) http.HandlerFunc {
                         if !b.PublicationDate.IsZero() {
                                 year = b.PublicationDate.Year()
                         }
-                        resp := billResponse{
+                        items = append(items, billResponse{
                                 ID:              b.SourceID,
                                 Identifier:      b.Slug,
                                 Title:           b.Title,
@@ -683,13 +526,8 @@ func makeBillsHandler(adapter BillsAdapter) http.HandlerFunc {
                                 Topics:          []string{},
                                 Source:          source,
                                 Degraded:        degraded,
-                        }
-                        // Issue #282: populate sponsor fields. The live crawl does
-                        // not extract the sponsor (deliberate — see kenya_law.go),
-                        // so we enrich live Bills with seed sponsor data when the
-                        // SourceID matches a seeded Bill.
-                        applySponsorFields(&resp, b.SponsorID, b.CosponsorIDs, b.SourceID)
-                        items = append(items, resp)
+                                VideoURL:        b.VideoURL,
+                        })
                 }
 
                 writeJSON(w, http.StatusOK, map[string]any{
@@ -760,7 +598,7 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 if !found.PublicationDate.IsZero() {
                                         year = found.PublicationDate.Year()
                                 }
-                                resp := billResponse{
+                                writeJSON(w, http.StatusOK, billResponse{
                                         ID:              found.SourceID,
                                         Identifier:      found.Slug,
                                         Title:           found.Title,
@@ -774,11 +612,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                         Topics:          []string{},
                                         Source:          source,
                                         Degraded:        degraded,
-                                }
-                                // Issue #282: seed Bills carry sponsor_id on the candidate
-                                // directly; no SourceID enrichment lookup needed.
-                                applySponsorFields(&resp, found.SponsorID, found.CosponsorIDs, found.SourceID)
-                                writeJSON(w, http.StatusOK, resp)
+                                        VideoURL:        found.VideoURL,
+                                })
                                 return
                         }
                         // Live crawl failed AND the bill isn't in the seed
@@ -813,7 +648,7 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                         if !found.PublicationDate.IsZero() {
                                 year = found.PublicationDate.Year()
                         }
-                        resp := billResponse{
+                        writeJSON(w, http.StatusOK, billResponse{
                                 ID:              found.SourceID,
                                 Identifier:      found.Slug,
                                 Title:           found.Title,
@@ -827,12 +662,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 Topics:          []string{},
                                 Source:          source,
                                 Degraded:        degraded,
-                        }
-                        // Issue #282: live-discovered Bills don't carry sponsor info
-                        // on the candidate (the parser doesn't extract it); enrich
-                        // from the seed slice by SourceID when possible.
-                        applySponsorFields(&resp, found.SponsorID, found.CosponsorIDs, found.SourceID)
-                        writeJSON(w, http.StatusOK, resp)
+                                VideoURL:        found.VideoURL,
+                        })
                         return
                 }
 
@@ -841,7 +672,7 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                 if !rec.PublishedAt.IsZero() {
                         year = rec.PublishedAt.Year()
                 }
-                resp := billResponse{
+                writeJSON(w, http.StatusOK, billResponse{
                         ID:              found.SourceID,
                         Identifier:      found.Slug,
                         Title:           rec.Title,
@@ -855,13 +686,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                         Topics:          []string{},
                         Source:          source,
                         Degraded:        degraded,
-                }
-                // Issue #282: live-discovered Bills don't carry sponsor info on
-                // the candidate; enrich from the seed slice by SourceID when
-                // possible so the Bill detail page surfaces the sponsor + any
-                // cosponsors the seed slice documents.
-                applySponsorFields(&resp, found.SponsorID, found.CosponsorIDs, found.SourceID)
-                writeJSON(w, http.StatusOK, resp)
+                        VideoURL:        found.VideoURL,
+                })
         }
 }
 
@@ -1299,10 +1125,8 @@ func makeTrendingHandler(adapter BillsAdapter) http.HandlerFunc {
                                 Topics:          []string{},
                                 Source:          source,
                                 Degraded:        degraded,
+                                VideoURL:        b.VideoURL,
                         }
-                        // Issue #282: surface sponsor info on the trending lists
-                        // too — same enrichment as the bills handler.
-                        applySponsorFields(&resp, b.SponsorID, b.CosponsorIDs, b.SourceID)
 
                         // Recently published (last 30 days)
                         if !b.PublicationDate.IsZero() && now.Sub(b.PublicationDate) < 30*24*time.Hour {
@@ -1491,7 +1315,6 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // the trailing path tail:
         //   - "" (root, no trailing slash)  → list the 5 sample people
         //   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
-        //   - "{id}/bills"                    → MP's sponsored Bills (issue #282)
         //   - "{id}"                          → person detail (still pending,
         //                                       issue #19 — kept as stub)
         // Normalise: treat both /api/v1/people and /api/v1/people/ as the list call (issue #264).
@@ -1507,20 +1330,6 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // raw counts + rates only, never a composite score.
         if strings.HasSuffix(tail, "/scorecard") {
                 makeScorecardHandler()(w, r)
-                return
-        }
-        // Issue #282: Bills sponsored by the given MP. Powers the
-        // scorecard page's "Bills Sponsored: N" clickable list. Returns 404
-        // when the person ID doesn't match a sample MP — the seed Bills
-        // slice is the only source of sponsor attribution right now (the
-        // live kenya_law parser does not extract the sponsor).
-        if strings.HasSuffix(tail, "/bills") {
-                personID := strings.TrimSuffix(tail, "/bills")
-                if personID == "" {
-                        writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
-                        return
-                }
-                handleBillsByPerson(w, r, personID)
                 return
         }
         // Default: person detail lookup with country-scoped visibility gate.
@@ -1549,91 +1358,6 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
                 }
         }
         writeError(w, http.StatusNotFound, "not_found", "person not found: "+id)
-}
-
-// billsByPersonResponse is the JSON envelope returned by
-// GET /api/v1/people/{id}/bills (issue #282). It lists every Bill the
-// given MP sponsors (primary sponsor) plus the cosponsor references on
-// each Bill, so the MP scorecard page can render a "Bills Sponsored: N"
-// badge that links through to the Bills themselves.
-//
-// `source` is always "seed" right now because the live kenya_law
-// parser does not extract the sponsor — when a verified ingestion
-// path through parliament.go.ke ships, this will switch to "live"
-// for Bills sourced from that feed.
-type billsByPersonResponse struct {
-        PersonID   string         `json:"person_id"`
-        Name       string         `json:"name"`
-        Items      []billResponse `json:"items"`
-        Total      int            `json:"total"`
-        Source     string         `json:"source"`
-        ScorecardURL string       `json:"scorecard_url,omitempty"`
-}
-
-// handleBillsByPerson serves GET /api/v1/people/{id}/bills (issue #282).
-//
-// Behaviour:
-//   - 404 when the person ID doesn't match a sample MP (the seed Bills
-//     slice is the only source of sponsor attribution right now; an
-//     unknown person can't have sponsored any seed Bill).
-//   - 200 with `items: []` + `total: 0` when the person is known but
-//     has no sponsored Bills in the seed slice (the scorecard page
-//     renders the empty state — "No Bills sponsored in this period.").
-//   - 200 with the list of sponsored Bills otherwise. Each item carries
-//     the full billResponse shape, so the frontend can render the same
-//     Bill card it uses on /bills (with sponsor + cosponsor fields
-//     populated by applySponsorFields).
-//
-// The handler does NOT call the live kenya_law adapter — sponsor data
-// is seed-only (per the issue #282 contract: "Do NOT scrape the actual
-// sponsor from the live Bill detail page"). When a verified ingestion
-// path ships, this handler will be extended to merge live + seed results.
-func handleBillsByPerson(w http.ResponseWriter, r *http.Request, personID string) {
-        if r.Method != http.MethodGet {
-                writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-                return
-        }
-        sc := findScorecard(personID)
-        if sc == nil {
-                writeError(w, http.StatusNotFound, "not_found", "person not found: "+personID)
-                return
-        }
-        // Filter the seed Bills slice by SponsorID == personID. The seed
-        // slice is the canonical source of sponsor attribution until the
-        // verified ingestion path ships (issue #282).
-        seedBills := kenya_seed.FindSampleBillsBySponsor(personID)
-        items := make([]billResponse, 0, len(seedBills))
-        for _, b := range seedBills {
-                year := 0
-                if !b.PublicationDate.IsZero() {
-                        year = b.PublicationDate.Year()
-                }
-                resp := billResponse{
-                        ID:              b.SourceID,
-                        Identifier:      b.Slug,
-                        Title:           b.Title,
-                        House:           b.House,
-                        Year:            year,
-                        Status:          "in_progress",
-                        CurrentStage:    "published",
-                        Country:         "KE",
-                        SourceURL:       b.URL,
-                        PublicationDate: b.PublicationDate.Format("2006-01-02"),
-                        Topics:          []string{},
-                        Source:          "seed",
-                }
-                // Seed Bills carry sponsor_id on the candidate directly.
-                applySponsorFields(&resp, b.SponsorID, b.CosponsorIDs, b.SourceID)
-                items = append(items, resp)
-        }
-        writeJSON(w, http.StatusOK, billsByPersonResponse{
-                PersonID:     personID,
-                Name:         sc.Name,
-                Items:        items,
-                Total:        len(items),
-                Source:       "seed",
-                ScorecardURL: "/api/v1/people/" + personID + "/scorecard",
-        })
 }
 
 // sampleCommittees provides seed data for the committees endpoint. Each row
@@ -2263,22 +1987,8 @@ func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 // vercel.json) to keep data fresh. The Vercel Hobby plan only allows
 // daily crons — to run this more frequently, upgrade to Pro or wire
 // an external scheduler (GitHub Actions, Railway cron, etc.).
-//
-// As of issue #279, the refresh handler ALSO fans out daily digest emails
-// to every subscriber who has "email" in their channels. When the
-// RESEND_API_KEY env var is set, real emails are queued via the Resend
-// API; when it is absent, the StubEmailSender logs the would-be sends so
-// dev operators can see the pipeline firing without spending API quota.
-//
 // POST /api/v1/refresh
-func makeRefreshHandler(
-        adapter *kenya_law.Adapter,
-        subs *SubscriptionStore,
-        emails *UserEmailStore,
-        notifStore *NotificationStore,
-        sender EmailSender,
-        webBaseURL string,
-) http.HandlerFunc {
+func makeRefreshHandler(adapter *kenya_law.Adapter) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {
                 if r.Method != http.MethodPost {
                         writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
@@ -2296,40 +2006,13 @@ func makeRefreshHandler(
                 }
 
                 log.Printf("refresh: discovered %d bills from kenyalaw.org", len(bills))
-
-                // Fan out daily digest emails (issue #279). The digest pipeline is
-                // resilient: a single recipient's failure is logged and the loop
-                // continues, so one bad address never blocks the cron. The fan-out
-                // shares the refresh request's context so a slow Resend response
-                // propagates the cancellation (and the 60-second ctx above bounds
-                // the total time).
-                digestSent, digestFailed := 0, 0
-                if sender != nil {
-                        digestSent, digestFailed = sendDailyDigests(ctx, subs, emails, notifStore, sender, webBaseURL, time.Now().UTC())
-                        log.Printf("refresh: digest fan-out via %s sender — sent=%d failed=%d", sender.Name(), digestSent, digestFailed)
-                } else {
-                        log.Printf("refresh: digest skipped — no EmailSender wired (should not happen in production)")
-                }
-
                 writeJSON(w, http.StatusOK, map[string]any{
-                        "status":         "refreshed",
-                        "bills_found":    len(bills),
-                        "source":         "new.kenyalaw.org",
-                        "refreshed_at":   time.Now().UTC().Format(time.RFC3339),
-                        "digest_sent":    digestSent,
-                        "digest_failed":  digestFailed,
-                        "digest_sender":  senderName(sender),
+                        "status":       "refreshed",
+                        "bills_found":  len(bills),
+                        "source":       "new.kenyalaw.org",
+                        "refreshed_at": time.Now().UTC().Format(time.RFC3339),
                 })
         }
-}
-
-// senderName returns the EmailSender's Name() (or "none" when the sender
-// is nil — used to gracefully report in the refresh response JSON).
-func senderName(s EmailSender) string {
-        if s == nil {
-                return "none"
-        }
-        return s.Name()
 }
 
 // --- What Changed Engine (#186 Phase 14) ---

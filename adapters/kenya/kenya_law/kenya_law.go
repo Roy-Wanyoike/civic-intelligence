@@ -78,6 +78,7 @@ type BillCandidate struct {
 	PublicationDate time.Time // parsed from the URL date component
 	SourceID        string    // platform-internal ID (e.g., "ke-bill-2026-09-07-local-authorities...")
 
+<<<<<<< HEAD
 	// SponsorID is the platform-internal person ID of the Bill's primary
 	// sponsor (e.g., "person-001"). Empty when the sponsor is unknown — the
 	// live kenya_law parser does NOT extract the sponsor from the Bill
@@ -93,6 +94,16 @@ type BillCandidate struct {
 	// Bill's cosponsors (secondary supporters). Nil when unknown — same
 	// seed-only contract as SponsorID.
 	CosponsorIDs []string
+=======
+	// VideoURL is the YouTube URL of the most-recent Hansard sitting in
+	// which this Bill was debated (issue #283). Populated by the Hansard
+	// crawler's `HansardCandidate.VideoURL` field once the ingestion worker
+	// links a Bill to its most-recent sitting video. Empty until the
+	// cross-reference lands; the API layer surfaces the value as
+	// `video_url` on the billResponse so the frontend can embed the
+	// YouTube player below the Bill title.
+	VideoURL string
+>>>>>>> a551054 (feat(api): add GET /api/v1/calendar/live endpoint (#283))
 }
 
 // FetchBill downloads the bill detail page HTML.
