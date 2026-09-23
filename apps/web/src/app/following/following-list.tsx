@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bell, Loader2, Trash2, FileText, Users, Building2, Hash, User } from 'lucide-react';
-import { deleteSubscription, listSubscriptions, ApiError } from '@/lib/api';
+import { Bell, Loader2, Trash2, FileText, Users, Building2, Hash, User, Mail } from 'lucide-react';
+import { deleteSubscription, listSubscriptions, updateSubscriptionChannels, ApiError } from '@/lib/api';
 import type { Subscription } from '@/lib/api';
 
 const ENTITY_ICONS: Record<string, typeof FileText> = {
@@ -26,18 +26,36 @@ function entityHref(s: Subscription): string {
 }
 
 /**
+ * hasChannel reports whether the subscription's channels slice includes
+ * the given channel name. Mirrors the server-side hasChannel helper.
+ */
+function hasChannel(channels: string[] | undefined, want: string): boolean {
+  if (!channels || channels.length === 0) return false;
+  return channels.some((c) => c.toLowerCase() === want);
+}
+
+/**
  * FollowingList renders the caller's subscriptions, grouped by entity_type.
  *
  * Until the identity service (#20) issues real OIDC tokens, this component
  * gracefully renders an empty state — it does not block the page from
  * rendering. When a token is available (e.g., from localStorage), it is sent
  * as the Bearer token to the Go BFF.
+ *
+ * Issue #279 — each subscription now carries an "Also email me" checkbox.
+ * Toggling the checkbox PATCHes the subscription's channels array with
+ * `["in_app", "email"]` (when on) or `["in_app"]` (when off). The in_app
+ * channel is always on so the /notifications page always renders the alert.
  */
 export function FollowingList() {
   const [items, setItems] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | undefined>(undefined);
+  // pendingEmailIds tracks subscription IDs whose email-toggle PATCH is in
+  // flight — used to disable the checkbox while the request is pending so
+  // the user cannot double-toggle.
+  const [pendingEmailIds, setPendingEmailIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Try to read a token from localStorage — set by the (forthcoming) sign-in flow.
@@ -72,6 +90,23 @@ export function FollowingList() {
     return () => {
       cancelled = true;
     };
+  }, [token]);
+
+  const handleToggleEmail = useCallback(async (id: string, nextEmail: boolean) => {
+    if (!token) return;
+    setPendingEmailIds((prev) => new Set(prev).add(id));
+    try {
+      const updated = await updateSubscriptionChannels({ id, email: nextEmail, token });
+      setItems((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    } catch (err) {
+      setError(err instanceof ApiError ? `HTTP ${err.status}` : 'Email toggle failed');
+    } finally {
+      setPendingEmailIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   }, [token]);
 
   async function handleUnfollow(id: string) {
@@ -149,24 +184,41 @@ export function FollowingList() {
               <span className="text-xs font-normal text-civic-stone">({follows.length})</span>
             </h2>
             <ul className="grid gap-3 sm:grid-cols-2">
-              {follows.map((s) => (
-                <li key={s.id} className="flex items-start justify-between gap-2 rounded-lg border border-civic-border bg-civic-paper p-3">
-                  <Link href={entityHref(s)} className="block flex-1 hover:underline">
-                    <p className="font-mono text-xs text-civic-stone">{s.entity_id}</p>
-                    <p className="mt-1 text-xs text-civic-stone">
-                      Followed {new Date(s.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
-                    </p>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleUnfollow(s.id)}
-                    aria-label="Unfollow"
-                    className="rounded-md p-1 text-civic-stone hover:bg-civic-clay/10 hover:text-civic-clay"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
+              {follows.map((s) => {
+                const emailOn = hasChannel(s.channels, 'email');
+                const pending = pendingEmailIds.has(s.id);
+                return (
+                  <li key={s.id} className="flex items-start justify-between gap-2 rounded-lg border border-civic-border bg-civic-paper p-3">
+                    <Link href={entityHref(s)} className="block flex-1 hover:underline">
+                      <p className="font-mono text-xs text-civic-stone">{s.entity_id}</p>
+                      <p className="mt-1 text-xs text-civic-stone">
+                        Followed {new Date(s.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </p>
+                    </Link>
+                    <div className="flex flex-col items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleUnfollow(s.id)}
+                        aria-label="Unfollow"
+                        className="rounded-md p-1 text-civic-stone hover:bg-civic-clay/10 hover:text-civic-clay"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <label className="flex items-center gap-1.5 text-xs text-civic-stone" title="Also email me about this subscription">
+                        <input
+                          type="checkbox"
+                          checked={emailOn}
+                          disabled={pending}
+                          onChange={(e) => handleToggleEmail(s.id, e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-civic-border text-civic-leaf focus:ring-civic-leaf disabled:opacity-50"
+                        />
+                        <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span className="sr-only sm:not-sr-only">Also email me</span>
+                      </label>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         );

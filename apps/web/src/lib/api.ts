@@ -281,6 +281,13 @@ export interface Subscription {
   user_id: string;
   entity_type: 'bill' | 'committee' | 'topic' | 'institution' | 'person';
   entity_id: string;
+  /**
+   * Delivery channels for this subscription (issue #279). Defaults to
+   * ["in_app"] — the in-app channel is always on so the /notifications
+   * page always renders the alert. When "email" is present, the daily
+   * digest pipeline sends the recipient an email too.
+   */
+  channels?: string[];
   created_at: string;
 }
 
@@ -288,18 +295,28 @@ export interface Subscription {
  * Follow an entity (Bill, committee, topic, institution, person).
  * Requires an authenticated caller; the Bearer token is added by the
  * browser's fetch integration if the user is signed in (issue #20).
+ *
+ * Pass `channels: ['in_app', 'email']` to opt the recipient into the
+ * daily digest email (issue #279) at follow time. Omitting channels
+ * uses the default (["in_app"] — in-app only).
  */
 export async function createSubscription(params: {
   entityType: string;
   entityId: string;
+  channels?: string[];
   token?: string;
 }): Promise<Subscription> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const body: Record<string, unknown> = {
+    entity_type: params.entityType,
+    entity_id: params.entityId,
+  };
+  if (params.channels) body.channels = params.channels;
   const resp = await fetch('/api/v1/subscriptions', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ entity_type: params.entityType, entity_id: params.entityId }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) {
     let detail: unknown;
@@ -348,6 +365,83 @@ export async function deleteSubscription(params: {
     try { detail = await resp.json(); } catch { /* ignore */ }
     throw new ApiError(resp.status, 'Unfollow failed', detail);
   }
+}
+
+/**
+ * PATCH /api/v1/subscriptions/{id} — update the delivery channels on a
+ * follow (issue #279). Pass `email: true` to add the email channel
+ * (the daily digest pipeline will then send the recipient an email);
+ * pass `email: false` to remove it. The in_app channel is always on —
+ * a follow with no in-app channel would silently swallow alerts, so
+ * the server always preserves it.
+ *
+ * Returns the updated subscription (with the new channels array).
+ */
+export async function updateSubscriptionChannels(params: {
+  id: string;
+  email: boolean;
+  token?: string;
+}): Promise<Subscription> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  // Always include in_app (server enforces this anyway, but be explicit
+  // so the request is self-documenting).
+  const channels = params.email ? ['in_app', 'email'] : ['in_app'];
+  const resp = await fetch(`/api/v1/subscriptions/${encodeURIComponent(params.id)}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ channels }),
+  });
+  if (!resp.ok) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'Update channels failed', detail);
+  }
+  return resp.json();
+}
+
+/**
+ * GET /api/v1/brief/digest — the past 24h's notifications grouped into
+ * the same three sections the email pipeline renders to HTML (issue #279).
+ * Used by the /notifications page to preview the email content.
+ */
+export interface DigestItem {
+  title: string;
+  description?: string;
+  link_url: string;
+  kind: string;
+  date?: string;
+}
+
+export interface DigestSection {
+  title: string;
+  items: DigestItem[];
+}
+
+export interface Digest {
+  user_id: string;
+  email?: string;
+  headline: string;
+  generated_at: string;
+  since: string;
+  until: string;
+  sections: DigestSection[];
+  total_items: number;
+  unsubscribe_url: string;
+}
+
+export async function getDailyDigest(params: {
+  token?: string;
+} = {}): Promise<Digest> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (params.token) headers.Authorization = `Bearer ${params.token}`;
+  const resp = await fetch('/api/v1/brief/digest', { headers });
+  if (!resp.ok) {
+    let detail: unknown;
+    try { detail = await resp.json(); } catch { /* ignore */ }
+    throw new ApiError(resp.status, 'Get digest failed', detail);
+  }
+  return resp.json();
 }
 
 // ----- Trust + Provenance (issue #165) -----

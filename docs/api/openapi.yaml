@@ -2290,6 +2290,58 @@ security:
         '200':
           description: List of archived briefs
 
+  /brief/digest:
+    get:
+      tags: [brief, notifications]
+      summary: Get the past 24h digest of the caller's notifications
+      description: |
+        Returns the per-user daily digest payload — the same shape the
+        email pipeline renders to HTML — covering the past 24 hours of
+        the authenticated caller's notifications (issue #279). Used by
+        the /notifications frontend to preview the email content
+        without waiting for the daily cron.
+        Sections are fixed: "Bills that changed stage",
+        "New gazette notices matching your alerts", "Your MP's activity".
+        Every item carries a non-empty link_url that deep-links back to
+        the platform. The unsubscribe_url carries the user_id as a query
+        parameter so the (future) /api/v1/subscriptions/unsubscribe
+        endpoint can locate the user's follows without an auth header.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Today's digest
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id: { type: string }
+                  email: { type: string, description: The caller's email claim, if present. }
+                  headline: { type: string }
+                  generated_at: { type: string, format: date-time }
+                  since: { type: string, format: date-time }
+                  until: { type: string, format: date-time }
+                  total_items: { type: integer }
+                  unsubscribe_url: { type: string, format: uri }
+                  sections:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title: { type: string }
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              title: { type: string }
+                              description: { type: string }
+                              link_url: { type: string, format: uri }
+                              kind: { type: string }
+                              date: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /brief/{id}:
     get:
       tags: [brief]
