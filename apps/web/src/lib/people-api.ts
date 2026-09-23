@@ -53,6 +53,17 @@ export interface MPScorecard {
   parliamentary_period: string;
   photo_url?: string;
 
+  // Contact info — issue #281. Every field is optional because the API
+  // uses omitempty (empty values are omitted from the JSON rather than
+  // rendered as empty rows). The _note field marks the contact info as
+  // seed data pending live scraping from parliament.go.ke.
+  email?: string;
+  phone?: string;
+  office_address?: string;
+  twitter?: string;
+  facebook?: string;
+  _note?: string;
+
   // 0.0 – 1.0 — the platform does NOT compute a composite performance score.
   attendance_rate: number;
   attendance_source_url: string;

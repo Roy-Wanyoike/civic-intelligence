@@ -1748,6 +1748,121 @@ components:
         institution_id: { type: string, format: uuid, nullable: true }
         country: { type: string }
 
+    MPScorecard:
+      type: object
+      description: |
+        Factual, evidence-backed record of a single MP's parliamentary activity.
+        The platform NEVER aggregates these metrics into a composite "performance
+        score" or "rating" (rule: NO_POLITICAL_PERFORMANCE_SCORE) — every numeric
+        metric is a raw count or rate sourced from official parliamentary records
+        (Hansard, Votes and Proceedings, parliament.go.ke).
+      properties:
+        person_id: { type: string, example: 'person-001' }
+        name: { type: string, example: "Kimani Ichung'wah" }
+        role: { type: string, example: 'Majority Leader, National Assembly' }
+        constituency: { type: string, example: 'Kikuyu' }
+        party: { type: string, example: 'UDA' }
+        parliamentary_period: { type: string, example: '13th Parliament (2022–present)' }
+        photo_url: { type: string, nullable: true, description: 'Optional portrait photo URL — the platform does not fabricate photos.' }
+
+        # Contact info — issue #281. All fields use omitempty so empty
+        # values (e.g. for a future MP whose data has not been scraped
+        # yet) are omitted from the JSON rather than rendered as empty
+        # rows on the frontend. The _note field marks the contact info as
+        # seed data pending live scraping from parliament.go.ke.
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: 'Official parliamentary email (mailto: link on the frontend).'
+          example: 'kimani.ichungwah@parliament.go.ke'
+        phone:
+          type: string
+          nullable: true
+          description: 'Contact phone, E.164-style (tel: link on the frontend).'
+          example: '+254 700 123 456'
+        office_address:
+          type: string
+          nullable: true
+          description: 'Physical office address (typically Parliament Buildings).'
+          example: 'Parliament Buildings, Parliament Road, Nairobi'
+        twitter:
+          type: string
+          nullable: true
+          description: 'Twitter handle including the leading @ — frontend links to twitter.com/@handle.'
+          example: '@KimaniIchungwah'
+        facebook:
+          type: string
+          nullable: true
+          description: 'Facebook profile path (without the https:// prefix) — frontend links to the full URL.'
+          example: 'facebook.com/kimani.ichungwah'
+        _note:
+          type: string
+          nullable: true
+          description: |
+            Provenance marker attached to the contact fields. Present whenever
+            any contact field is non-empty. Marks the contact info as seed
+            data pending live scraping from parliament.go.ke — the platform
+            does NOT yet scrape parliament.go.ke for contact info.
+          example: 'Contact info is seed data pending live scraping from parliament.go.ke'
+
+        attendance_rate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: '0.0–1.0 rate — NOT a performance score.'
+        attendance_source_url: { type: string, format: uri }
+        bills_sponsored: { type: integer, description: 'Raw count.' }
+        bills_sponsored_list:
+          type: array
+          items: { $ref: '#/components/schemas/ScorecardBillRef' }
+        committee_memberships:
+          type: array
+          items: { $ref: '#/components/schemas/ScorecardCommitteeRef' }
+        questions_asked: { type: integer, description: 'Raw count.' }
+        votes_recorded: { type: integer, description: 'Raw count.' }
+        statements_made: { type: integer, description: 'Raw count.' }
+        metrics:
+          type: object
+          description: 'Per-metric source_url + period — lets a citizen verify each datum.'
+        recent_activity:
+          type: array
+          items: { $ref: '#/components/schemas/ScorecardActivityItem' }
+        disclaimer: { type: string, description: 'Editorial posture — rendered verbatim by the frontend.' }
+        reality_layer: { type: string, enum: ['FACT'], description: 'Always "FACT".' }
+        source_agencies:
+          type: array
+          items: { type: string }
+          description: 'Official source families a citizen can cross-check against.'
+
+    ScorecardBillRef:
+      type: object
+      properties:
+        title: { type: string }
+        url: { type: string, description: 'Deep link into the platform.' }
+        source_url: { type: string, format: uri, description: 'Link to the official parliamentary record.' }
+        house: { type: string, nullable: true, example: 'National Assembly' }
+
+    ScorecardCommitteeRef:
+      type: object
+      properties:
+        name: { type: string }
+        role: { type: string, example: 'Chair' }
+        source_url: { type: string, format: uri }
+
+    ScorecardActivityItem:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [question, statement, vote, bill_sponsored, committee_meeting]
+        date: { type: string, format: date }
+        title: { type: string }
+        detail: { type: string, nullable: true }
+        source_url: { type: string, format: uri }
+        source: { type: string }
+
     Committee:
       type: object
       properties:
@@ -2403,6 +2518,10 @@ security:
       responses:
         '200':
           description: MP scorecard with factual records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MPScorecard'
         '404': { $ref: '#/components/responses/NotFound' }
 
   /constituencies:
