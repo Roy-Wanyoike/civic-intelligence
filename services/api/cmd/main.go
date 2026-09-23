@@ -260,6 +260,25 @@ func main() {
         // Civic Feed — public.
         apiHandler.HandleFunc("/api/v1/feed", makeCivicFeedHandler(kenyaLaw))
 
+        // RSS 2.0 feeds (issue #280). The four /api/v1/feed/*.rss endpoints
+        // reuse the JSON handlers' data sources (BillsAdapter, briefStore,
+        // sampleScorecards) but emit application/rss+xml so subscribers can
+        // follow Bills, what-changed, the daily brief, and per-MP activity
+        // from Feedly / Inoreader / NetNewsWire without creating an account.
+        // The bills + what-changed feeds share the same live-or-seed fallback
+        // contract as the JSON endpoints (issue #265); the brief feed renders
+        // an empty (but valid) feed before the day's first /brief/generate;
+        // the per-MP feed returns 404 for unknown person IDs so RSS readers
+        // surface the failure rather than silently subscribing to nothing.
+        // The per-MP route is registered on /feed/people/ (subtree) so it
+        // matches /feed/people/{id}.rss — RSS readers follow 301 redirects,
+        // so the no-slash form is intentionally NOT registered (unlike the
+        // JSON /api/v1/people routes, which need both forms for issue #266).
+        apiHandler.HandleFunc("/api/v1/feed/bills.rss", makeBillsRSSFeedHandler(kenyaLaw))
+        apiHandler.HandleFunc("/api/v1/feed/what-changed.rss", makeWhatChangedRSSFeedHandler(kenyaLaw))
+        apiHandler.HandleFunc("/api/v1/feed/brief.rss", makeBriefRSSFeedHandler(briefStore))
+        apiHandler.HandleFunc("/api/v1/feed/people/", makeMPRSSFeedHandler())
+
         // Countries — public metadata for every adapter registered with the
         // central registry (adapters/registry). The frontend Government
         // Selector fetches this list so the dropdown reflects the

@@ -153,7 +153,14 @@ func normalizeRoute(route string) string {
                         "/subscriptions", "/notifications", "/sources", "/corrections",
                         "/debt", "/terminology", "/people", "/committees", "/institutions",
                         "/loans", "/grants", "/provenance", "/evidence", "/claims",
-                        "/constitution/articles", "/graph":
+                        "/constitution/articles", "/graph",
+                        // issue #280 — the per-MP RSS feed sub-router. The
+                        // actual openapi path is /feed/people/{id}.rss (with
+                        // a literal .rss suffix on the path parameter), so the
+                        // /{id} default-normalised form does not match. The
+                        // sub-router contract is satisfied by /feed/people/{id}.rss
+                        // (which starts with /feed/people/).
+                        "/feed/people":
                         // The sub-router serves {id}-style sub-resources. Return the
                         // base so the caller can verify "at least one path starting
                         // with base/" exists in openapi.

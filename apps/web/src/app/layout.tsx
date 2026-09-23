@@ -72,6 +72,29 @@ export const metadata: Metadata = {
       'en-KE': '/',
       'sw-KE': '/',
     },
+    // RSS 2.0 auto-discovery (issue #280). Each entry emits a
+    // <link rel="alternate" type="application/rss+xml" title="…" href="…">
+    // in the rendered <head> so RSS readers (Feedly, Inoreader, NetNewsWire)
+    // auto-discover the platform's three primary feeds on any page. The
+    // per-MP feed (/api/v1/feed/people/{id}.rss) is intentionally NOT
+    // listed here — it's per-person, so it's discovered via the RSS icon
+    // on each /people/{id} page rather than globally.
+    types: {
+      'application/rss+xml': [
+        {
+          url: '/api/v1/feed/bills.rss',
+          title: 'Civic Intelligence — Bills',
+        },
+        {
+          url: '/api/v1/feed/what-changed.rss',
+          title: 'Civic Intelligence — What Changed',
+        },
+        {
+          url: '/api/v1/feed/brief.rss',
+          title: 'Civic Intelligence — Daily Brief',
+        },
+      ],
+    },
   },
   openGraph: {
     title: `${SITE_NAME} — ${SITE_TAGLINE}`,

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { TrendingUp, ExternalLink, ShieldCheck } from 'lucide-react';
+import { TrendingUp, ExternalLink, ShieldCheck, Rss } from 'lucide-react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -66,14 +66,27 @@ export default async function WhatChangedPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <header className="mb-8">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-6 w-6 text-civic-leaf" aria-hidden="true" />
-          <h1 className="font-serif text-3xl font-semibold text-civic-forest">What Changed</h1>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-6 w-6 text-civic-leaf" aria-hidden="true" />
+              <h1 className="font-serif text-3xl font-semibold text-civic-forest">What Changed</h1>
+            </div>
+            <p className="mt-2 text-sm text-civic-stone">
+              Verified civic changes from official sources. Every item links to evidence.
+              Source: {data.source} · Updated: {data.generated_at}
+            </p>
+          </div>
+          <a
+            href="/api/v1/feed/what-changed.rss"
+            title="Subscribe to the What Changed RSS feed"
+            aria-label="Subscribe to the What Changed RSS feed"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-civic-border bg-civic-paper px-3 py-2 text-xs font-medium text-civic-stone transition hover:border-civic-leaf hover:text-civic-leaf"
+          >
+            <Rss className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">RSS</span>
+          </a>
         </div>
-        <p className="mt-2 text-sm text-civic-stone">
-          Verified civic changes from official sources. Every item links to evidence.
-          Source: {data.source} · Updated: {data.generated_at}
-        </p>
       </header>
 
       <ul className="space-y-4">
