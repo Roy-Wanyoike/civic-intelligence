@@ -169,6 +169,9 @@ func main() {
         // item carries an evidence_url. The briefStore is the package-level
         // in-memory cache populated by /generate and /today.
         briefStore := newBriefStore()
+	emailSender := NewEmailSender(nil)
+	_ = emailSender // wired to the refresh handler for daily digests
+	userEmailStore := NewUserEmailStore()
         apiHandler.HandleFunc("/api/v1/brief/generate", makeBriefGenerateHandler(kenyaLaw, cfg.AIServiceURL, briefStore))
         apiHandler.HandleFunc("/api/v1/brief/today", makeBriefTodayHandler(kenyaLaw, cfg.AIServiceURL, briefStore))
         apiHandler.HandleFunc("/api/v1/brief/archive", makeBriefArchiveHandler(briefStore))
@@ -227,7 +230,7 @@ func main() {
         // write real subscriptions through the same store used by
         // /api/v1/subscriptions.
         apiHandler.HandleFunc("/api/v1/subscriptions", makeSubscriptionsHandler(subscriptionStore))
-        apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore))
+        apiHandler.HandleFunc("/api/v1/subscriptions/", makeSubscriptionDetailHandler(subscriptionStore, userEmailStore))
 
         // Notifications — requires auth (wired via middleware in the handler).
 
@@ -264,6 +267,7 @@ func main() {
         notifStore := NewNotificationStore()
         apiHandler.Handle("/api/v1/notifications", makeNotificationsHandler(notifStore))
         apiHandler.Handle("/api/v1/notifications/", makeNotificationDetailHandler(notifStore))
+	apiHandler.HandleFunc("/api/v1/brief/digest", makeBriefDigestHandler(notifStore, ""))
 
         // Trust + Provenance (issue #165) — in-memory trust store seeded
         // with sample Kenyan sources, claims, evidence, and one active
