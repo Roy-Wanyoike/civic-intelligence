@@ -21,6 +21,8 @@ import {
 } from '@/components/trending-carousel';
 import { ConstitutionSpotlight } from '@/components/constitution-spotlight';
 import { RealityBadge } from '@/components/reality-labels';
+import { LiveParliamentBanner } from '@/components/live-parliament-banner';
+import { fetchCalendarLiveFromBFF } from '@/lib/api';
 import type { Bill } from '@/lib/types';
 
 /**
@@ -138,10 +140,13 @@ function billToHighlight(b: Bill): CivicHighlight {
 }
 
 export default async function HomePage() {
-  const [{ items: bills, source: billsSource }, whatChanged] = await Promise.all([
-    fetchBills(),
-    fetchWhatChanged(),
-  ]);
+  // The plenary livestream fetch (issue #283) runs in parallel with the
+  // bills + what-changed fetches so the homepage's TTFB is unchanged.
+  // `cache: 'no-store'` is set inside fetchCalendarLiveFromBFF so the
+  // banner always reflects the current live status — a stale cached
+  // `is_live: false` would hide the banner during a sitting.
+  const [{ items: bills, source: billsSource }, whatChanged, liveStatus] =
+    await Promise.all([fetchBills(), fetchWhatChanged(), fetchCalendarLiveFromBFF(API_BASE)]);
 
   // Top 5 bills become Civic Highlights; non-enacted bills become Trending.
   const highlights = bills.slice(0, 5).map(billToHighlight);
@@ -157,6 +162,20 @@ export default async function HomePage() {
 
   return (
     <div>
+      {/* === Plenary livestream banner (issue #283) ===
+          Rendered at the very top so a citizen landing on the homepage
+          during a sitting sees the "🔴 Parliament is live — Watch now"
+          banner before any other content. The LiveParliamentBanner
+          client component renders nothing when live.is_live is false,
+          so the banner slot collapses cleanly during recesses. */}
+      {liveStatus && (
+        <div className="border-b border-red-200 bg-civic-paper">
+          <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+            <LiveParliamentBanner live={liveStatus} />
+          </div>
+        </div>
+      )}
+
       {/* === SECTION 1: First viewport — Ask + Civic Highlights Carousel === */}
       <section className="bg-gradient-to-b from-civic-forest to-civic-ink text-white">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:py-20">

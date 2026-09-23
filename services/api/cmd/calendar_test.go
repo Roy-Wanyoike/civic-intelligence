@@ -407,3 +407,185 @@ func TestSeedCalendarSampleData_Idempotent(t *testing.T) {
                 t.Errorf("idempotency: re-seed changed count from %d to %d", firstCount, secondCount)
         }
 }
+
+// --- Plenary livestream (issue #283) ---
+
+// TestCalendarLiveHandler_ParliamentInSession verifies that
+// GET /api/v1/calendar/live returns is_live=true + a non-empty video URL,
+// title, and house when a parliament_session event is scheduled for
+// today (the anchor's date). The handler is contractually required to
+// surface the YouTube URL so the frontend can embed the player without a
+// second round-trip; the title + house power the "🔴 Parliament is live"
+// banner copy.
+//
+// The seeded sample schedule (SeedCalendarSampleData) intentionally keeps
+// today's date free of parliament_session events (they land on offsets
+// +2, +9, +28, +56) so this test seeds its own session-anchored event
+// with anchorDay(0). The video URL is currently the documented
+// placeholder; in production it would come from
+// HansardCandidate.VideoURL (TODO: wire to live Hansard discovery).
+func TestCalendarLiveHandler_ParliamentInSession(t *testing.T) {
+        store := newSeededCalendarStore(t)
+        // Upsert a parliament_session event whose date equals the anchor's
+        // date so the LiveSession() lookup finds it.
+        store.Upsert(CalendarEvent{
+                ID:          "cal_parl_na_today_live_test",
+                Title:       "National Assembly — Morning Sitting",
+                Date:        fixedCalendarAnchor.Format("2006-01-02"),
+                Type:        CalParliamentSession,
+                Description: "Order of the Day: Second Reading of the Public Finance Management (Amendment) Bill, 2026.",
+                SourceURL:   "https://www.parliament.go.ke/the-national-assembly/order-paper",
+                Country:     "KE",
+                Institution: "National Assembly of Kenya",
+        })
+
+        handler := makeCalendarHandler(store)
+        req := httptest.NewRequest(http.MethodGet, "/api/v1/calendar/live?country=KE", nil)
+        rr := httptest.NewRecorder()
+        handler.ServeHTTP(rr, req)
+
+        if rr.Code != http.StatusOK {
+                t.Fatalf("expected 200, got %d (body=%s)", rr.Code, rr.Body.String())
+        }
+
+        var resp CalendarLiveResponse
+        if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+                t.Fatalf("invalid JSON: %v", err)
+        }
+
+        if !resp.IsLive {
+                t.Errorf("expected is_live=true, got false")
+        }
+        if resp.VideoURL == "" {
+                t.Errorf("expected non-empty video_url when is_live=true")
+        }
+        if !strings.HasPrefix(resp.VideoURL, "https://youtu.be/") {
+                t.Errorf("expected video_url to be a YouTube URL, got %q", resp.VideoURL)
+        }
+        if resp.Title == "" {
+                t.Errorf("expected non-empty title when is_live=true")
+        }
+        if resp.House == "" {
+                t.Errorf("expected non-empty house when is_live=true")
+        }
+        if resp.EventID == "" {
+                t.Errorf("expected non-empty event_id when is_live=true")
+        }
+        if resp.Date != fixedCalendarAnchor.Format("2006-01-02") {
+                t.Errorf("expected date %q, got %q", fixedCalendarAnchor.Format("2006-01-02"), resp.Date)
+        }
+}
+
+// TestCalendarLiveHandler_NotInSession verifies that
+// GET /api/v1/calendar/live returns is_live=false when no
+// parliament_session event is scheduled for today. The seeded sample
+// schedule (SeedCalendarSampleData) keeps the anchor's date free of
+// parliament_session events by design — sessions land on offsets +2, +9,
+// +28, +56 — so a freshly-seeded store with no extra events produces the
+// "not live" response.
+//
+// The response MUST be the minimal `{ "is_live": false }` payload: the
+// video_url, title, house, event_id, and date fields must all be omitted
+// so the frontend can short-circuit and skip the embed entirely.
+func TestCalendarLiveHandler_NotInSession(t *testing.T) {
+        store := newSeededCalendarStore(t)
+
+        handler := makeCalendarHandler(store)
+        req := httptest.NewRequest(http.MethodGet, "/api/v1/calendar/live?country=KE", nil)
+        rr := httptest.NewRecorder()
+        handler.ServeHTTP(rr, req)
+
+        if rr.Code != http.StatusOK {
+                t.Fatalf("expected 200, got %d (body=%s)", rr.Code, rr.Body.String())
+        }
+
+        var resp CalendarLiveResponse
+        if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+                t.Fatalf("invalid JSON: %v", err)
+        }
+
+        if resp.IsLive {
+                t.Errorf("expected is_live=false, got true")
+        }
+        if resp.VideoURL != "" {
+                t.Errorf("expected video_url to be omitted when not live, got %q", resp.VideoURL)
+        }
+        if resp.Title != "" {
+                t.Errorf("expected title to be omitted when not live, got %q", resp.Title)
+        }
+        if resp.House != "" {
+                t.Errorf("expected house to be omitted when not live, got %q", resp.House)
+        }
+        if resp.EventID != "" {
+                t.Errorf("expected event_id to be omitted when not live, got %q", resp.EventID)
+        }
+        if resp.Date != "" {
+                t.Errorf("expected date to be omitted when not live, got %q", resp.Date)
+        }
+
+        // The wire payload must be exactly `{"is_live":false}` (no trailing
+        // comma on omitted fields, no extra whitespace). Decode into a raw
+        // map to assert the field count is 1.
+        var raw map[string]any
+        if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
+                t.Fatalf("decode to map: %v", err)
+        }
+        if len(raw) != 1 {
+                t.Errorf("expected exactly 1 field (is_live), got %d: %+v", len(raw), raw)
+        }
+        if v, ok := raw["is_live"].(bool); !ok || v {
+                t.Errorf("expected is_live=false as the sole boolean field, got %+v", raw)
+        }
+}
+
+// TestCalendarLiveHandler_IgnoresNonParliamentEvents verifies the
+// /calendar/live handler does NOT treat committee_meeting,
+// bill_reading, or other event types as "parliament is in session" —
+// only parliament_session events trigger the live response. This catches
+// regressions where a refactor forgets the Type==CalParliamentSession
+// filter in LiveSession().
+func TestCalendarLiveHandler_IgnoresNonParliamentEvents(t *testing.T) {
+        store := newSeededCalendarStore(t)
+        // Seed a committee_meeting on the anchor date — must NOT count.
+        store.Upsert(CalendarEvent{
+                ID:          "cal_cmte_today_test",
+                Title:       "Budget & Appropriations Committee — Pre-Budget Hearing",
+                Date:        fixedCalendarAnchor.Format("2006-01-02"),
+                Type:        CalCommitteeMeeting,
+                Country:     "KE",
+                Institution: "Budget & Appropriations Committee",
+        })
+
+        handler := makeCalendarHandler(store)
+        req := httptest.NewRequest(http.MethodGet, "/api/v1/calendar/live", nil)
+        rr := httptest.NewRecorder()
+        handler.ServeHTTP(rr, req)
+
+        if rr.Code != http.StatusOK {
+                t.Fatalf("expected 200, got %d (body=%s)", rr.Code, rr.Body.String())
+        }
+        var resp CalendarLiveResponse
+        if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+                t.Fatalf("invalid JSON: %v", err)
+        }
+        if resp.IsLive {
+                t.Errorf("committee_meeting on today must NOT trigger is_live=true; only parliament_session counts")
+        }
+}
+
+// TestCalendarLiveHandler_MethodNotAllowed verifies the handler rejects
+// non-GET methods with 405 + Allow: GET (the calendar handler family's
+// shared method guard).
+func TestCalendarLiveHandler_MethodNotAllowed(t *testing.T) {
+        store := newSeededCalendarStore(t)
+        handler := makeCalendarHandler(store)
+        req := httptest.NewRequest(http.MethodPost, "/api/v1/calendar/live", nil)
+        rr := httptest.NewRecorder()
+        handler.ServeHTTP(rr, req)
+        if rr.Code != http.StatusMethodNotAllowed {
+                t.Errorf("expected 405 for POST, got %d", rr.Code)
+        }
+        if rr.Header().Get("Allow") != "GET" {
+                t.Errorf("expected Allow: GET, got %q", rr.Header().Get("Allow"))
+        }
+}

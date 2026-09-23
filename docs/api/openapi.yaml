@@ -1640,6 +1640,18 @@ components:
         event_count: { type: integer }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        video_url:
+          type: string
+          format: uri
+          nullable: true
+          description: |
+            YouTube URL of the plenary sitting in which this Bill was
+            discussed (issue #283). Populated by the Hansard crawler's
+            `HansardCandidate.VideoURL` field once the ingestion worker
+            links a Bill to its most-recent sitting video. When present,
+            the frontend renders an inline YouTube embed below the Bill
+            title so citizens can watch the actual debate. Omitted when
+            no Hansard video is available yet.
 
     SponsorRef:
       type: object
@@ -2635,6 +2647,42 @@ security:
       responses:
         '200':
           description: Upcoming events
+
+  /calendar/live:
+    get:
+      tags: [calendar]
+      summary: Is parliament sitting right now? (issue #283)
+      description: |
+        Returns the live plenary status. When a `parliament_session` calendar
+        event is scheduled for today, the response carries `is_live: true`
+        plus the YouTube video URL of the live stream, a human-readable
+        sitting title, and the house (e.g., "National Assembly") so the
+        frontend can render a "🔴 Parliament is live — Watch now" banner
+        and embed the YouTube player without a second round-trip.
+
+        When parliament is not in session, the response is the minimal
+        `{ "is_live": false }` payload — the frontend can short-circuit
+        and skip the embed entirely.
+      parameters:
+        - { in: query, name: country, required: false, schema: { type: string }, description: "ISO 3166-1 alpha-2 country code (defaults to KE)" }
+      responses:
+        '200':
+          description: Live plenary status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [is_live]
+                properties:
+                  is_live: { type: boolean, description: "true when a parliament_session event is scheduled for today" }
+                  video_url:
+                    type: string
+                    format: uri
+                    description: "YouTube URL of the live stream — present iff is_live is true. Currently a placeholder; in production it would come from the Hansard crawl (HansardCandidate.VideoURL)."
+                  title: { type: string, description: "Sitting title (e.g., 'National Assembly — Morning Sitting') — present iff is_live is true" }
+                  house: { type: string, description: "Short house label (e.g., 'National Assembly', 'Senate') — present iff is_live is true" }
+                  event_id: { type: string, description: "Calendar event ID of the in-session sitting — present iff is_live is true" }
+                  date: { type: string, description: "YYYY-MM-DD of the sitting — present iff is_live is true" }
 
   /gazette/alerts:
     get:
