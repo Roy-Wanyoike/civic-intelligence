@@ -287,6 +287,16 @@ paths:
         '200': { description: Person, content: { application/json: { schema: { $ref: '#/components/schemas/Person' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /committees:
+    get:
+      tags: [committees]
+      summary: List committees
+      description: Lists all committees, optionally filtered by country via the X-Civic-Country header. Both /committees and /committees/ return the same response (issue #266).
+      parameters:
+        - { $ref: '#/components/parameters/CountryHeader' }
+      responses:
+        '200': { description: List of committees, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Committee' } }, total: { type: integer }, country: { type: string } } } } } }
+
   /committees/{id}:
     get:
       tags: [committees]
@@ -295,6 +305,16 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
         '200': { description: Committee, content: { application/json: { schema: { $ref: '#/components/schemas/Committee' } } } }
+
+  /institutions:
+    get:
+      tags: [institutions]
+      summary: List institutions
+      description: Lists all institutions, optionally filtered by country via the X-Civic-Country header. Both /institutions and /institutions/ return the same response (issue #266).
+      parameters:
+        - { $ref: '#/components/parameters/CountryHeader' }
+      responses:
+        '200': { description: List of institutions, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Institution' } }, total: { type: integer }, country: { type: string } } } } }
 
   /institutions/{id}:
     get:
