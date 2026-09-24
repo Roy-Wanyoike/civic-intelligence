@@ -11,17 +11,25 @@ import {
   Mail,
   MapPin,
   MessageCircle,
+  MinusCircle,
   Phone,
+  ThumbsDown,
+  ThumbsUp,
   Twitter,
   Users,
+  XCircle,
 } from 'lucide-react';
 import type { Metadata } from 'next';
+<<<<<<< HEAD
 import {
   getMPScorecard,
   getRegisteredInterests,
   type RegisteredInterest,
   type RegisteredInterestCategory,
 } from '@/lib/people-api';
+=======
+import { getMPScorecard, getMPVotes, type VoteKind } from '@/lib/people-api';
+>>>>>>> origin/main
 import { RealityBadge } from '@/components/reality-labels';
 import { PrintButton } from '@/components/print-button';
 import { ScorecardShareButton } from './share-button';
@@ -124,13 +132,56 @@ const activityKindIcon: Record<string, typeof FileText> = {
   committee_meeting: Users,
 };
 
+// voteStyling maps each VoteKind to its label + icon + tailwind classes
+// for the per-row badge in the Voting Record section (issue #284).
+// The colour code is:
+//   - aye     → green (ThumbsUp)       — voted in favour
+//   - nay     → red   (ThumbsDown)     — voted against
+//   - abstain → gray  (MinusCircle)    — present but abstained
+//   - absent  → gray  (XCircle)         — not present for the division
+// abstain + absent share the gray palette (both "did not vote aye or
+// nay") but the icon + label keep them visually distinct so a citizen
+// can still tell them apart. The platform NEVER ranks these — the
+// colour coding is purely a readability affordance, not a verdict.
+const voteStyling: Record<
+  VoteKind,
+  { label: string; icon: typeof ThumbsUp; badge: string }
+> = {
+  aye: {
+    label: 'Aye',
+    icon: ThumbsUp,
+    badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  },
+  nay: {
+    label: 'Nay',
+    icon: ThumbsDown,
+    badge: 'bg-rose-100 text-rose-800 border-rose-200',
+  },
+  abstain: {
+    label: 'Abstain',
+    icon: MinusCircle,
+    badge: 'bg-stone-100 text-stone-700 border-stone-200',
+  },
+  absent: {
+    label: 'Absent',
+    icon: XCircle,
+    badge: 'bg-stone-100 text-stone-700 border-stone-200',
+  },
+};
+
 export default async function ScorecardPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // Fetch the scorecard + votes in parallel. The scorecard is the page's
+  // primary data — if it fails, we 404. The votes fetch is best-effort:
+  // if it fails (e.g. transient upstream hiccup), the page still renders
+  // the rest of the scorecard and the Voting Record section falls back
+  // to its empty state (issue #284 graceful-degradation contract).
   let sc: Awaited<ReturnType<typeof getMPScorecard>> | null = null;
+<<<<<<< HEAD
   // Registered interests are fetched in parallel with the scorecard
   // (issue #288). A failure to load interests does NOT 404 the whole
   // page — the scorecard is the primary resource and interests are a
@@ -145,6 +196,14 @@ export default async function ScorecardPage({
     const interestsResp = await getRegisteredInterests(id);
     interests = interestsResp.items ?? [];
     interestsDisclaimer = interestsResp.disclaimer;
+=======
+  let votes: Awaited<ReturnType<typeof getMPVotes>> | null = null;
+  try {
+    [sc, votes] = await Promise.all([
+      getMPScorecard(id),
+      getMPVotes(id).catch(() => null),
+    ]);
+>>>>>>> origin/main
   } catch {
     notFound();
   }
@@ -558,6 +617,71 @@ export default async function ScorecardPage({
               );
             })}
           </ol>
+        )}
+      </section>
+
+      {/* Voting record — issue #284. Per-division votes the MP cast in
+          this parliamentary period, color-coded: green=aye, red=nay,
+          gray=abstain/absent. The colour coding is a readability
+          affordance ONLY — the platform NEVER ranks these. Each row
+          links to the official Votes-and-Proceedings entry. */}
+      <section aria-labelledby="votes-heading" className="mb-8">
+        <h2
+          id="votes-heading"
+          className="font-serif text-xl font-semibold text-civic-forest"
+        >
+          Voting record
+        </h2>
+        <p className="mt-1 text-xs text-civic-stone">
+          Per-division votes cast in this parliamentary period — color-coded
+          for readability only. Each entry links to the official
+          Votes-and-Proceedings record.
+        </p>
+        {!votes || votes.items.length === 0 ? (
+          <p className="mt-3 rounded-md border border-civic-border bg-civic-mist p-4 text-sm text-civic-stone">
+            No recorded votes in this parliamentary period.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {votes.items.map((v, i) => {
+              const styling = voteStyling[v.vote] ?? voteStyling.absent;
+              const VoteIcon = styling.icon;
+              return (
+                <li
+                  key={`${v.bill_id}-${v.person_id}-${i}`}
+                  className="flex items-start justify-between gap-3 rounded-md border border-civic-border bg-white p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${styling.badge}`}
+                      >
+                        <VoteIcon className="h-3 w-3" aria-hidden="true" />
+                        {styling.label}
+                      </span>
+                      <span className="text-xs text-civic-stone">
+                        {formatDate(v.date)} · {v.division}
+                      </span>
+                    </div>
+                    <p className="mt-1 font-medium text-civic-forest">
+                      {v.bill_title}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-civic-stone">
+                      Source: Votes and Proceedings
+                    </p>
+                  </div>
+                  <a
+                    href={v.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-shrink-0 items-center gap-1 text-xs text-sky-700 hover:underline"
+                  >
+                    Source <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 

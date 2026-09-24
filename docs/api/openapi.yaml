@@ -184,6 +184,40 @@ paths:
                         summary: { type: string }
                         diff_url: { type: string }
 
+  /bills/{id}/amendments:
+    get:
+      tags: [bills]
+      summary: List amendments proposed against a Bill
+      description: |
+        Returns the per-Bill amendment tracker — every amendment proposed
+        against the Bill (in committee stage or third reading) with its
+        lifecycle status (proposed | accepted | rejected) and a
+        plain-language summary of the substantive change.
+
+        Amendments are seed-only for FEAT-15 (issue #293); the response
+        always carries `source: "seed"` until the live Hansard
+        committee-stage ingestion path lands (issue #19 + ADR-0011).
+        The endpoint never returns 503 for a known Bill — when the live
+        crawl of new.kenyalaw.org fails, the handler falls back to the
+        seed Bills slice to verify the Bill exists (issue #265 contract).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Amendments proposed against the Bill (oldest first)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bill_id:    { type: string, description: 'The parent Bill\'s SourceID (matches /api/v1/bills/{id}.id)' }
+                  amendments: { type: array, items: { $ref: '#/components/schemas/Amendment' } }
+                  total:      { type: integer }
+                  source:     { type: string, enum: [seed], description: '`seed` for FEAT-15 — amendments are seed-only pending issue #19' }
+                  note:       { type: string, description: 'Provenance note explaining the seed-data status' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /bills/{id}/summary:
     get:
       tags: [bills]
@@ -206,6 +240,57 @@ paths:
           description: Followed
           content: { application/json: { schema: { type: object, properties: { followed: { type: boolean } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /bills/{id}/votes:
+    get:
+      tags: [bills, people]
+      summary: Division summary for a single Bill (issue #284)
+      description: |
+        Returns the per-division tally (aye / nay / abstain / absent /
+        total) + the per-MP roll-call items list for a single Bill.
+
+        The endpoint is seed-only — the verified Votes-and-Proceedings
+        ingestion path has not shipped yet (issue #284 acceptance bar:
+        "Use seed data only. Do NOT parse actual PDFs."). When the
+        ingestion path ships, this endpoint will be extended to merge
+        live + seed results; until then, `source` is always `"seed"`.
+
+        The platform NEVER derives a "pass / fail" verdict from the
+        counts — they are surfaced raw (rule:
+        NO_POLITICAL_PERFORMANCE_SCORE). A Bill with 0 aye + 0 nay is
+        recorded as such; the citizen interprets the result, the
+        platform does not.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal vote Bill ID (e.g. "bill-vote-001"). Lives in a separate ID space from the canonical /bills/{id} Bill IDs until the verified ingestion path ships (issue #284).' }
+      responses:
+        '200':
+          description: Division summary with aye / nay / abstain / absent counts + per-MP roll call
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bill_id: { type: string, description: 'The requested Bill ID (echoed)' }
+                  bill_title: { type: string, description: 'The Bill title from the seed slice' }
+                  division: { type: string, description: 'The division stage (e.g. "Third Reading", "Second Reading", "Committee Stage")' }
+                  date: { type: string, format: date, description: 'The division date (ISO 8601 YYYY-MM-DD)' }
+                  source_url: { type: string, description: 'URL of the official Votes-and-Proceedings entry the tally was derived from' }
+                  counts:
+                    type: object
+                    description: 'Per-division tally. aye + nay + abstain + absent always sums to total. The platform NEVER derives a "pass / fail" verdict from these counts.'
+                    properties:
+                      aye: { type: integer, description: 'Number of MPs who voted in favour' }
+                      nay: { type: integer, description: 'Number of MPs who voted against' }
+                      abstain: { type: integer, description: 'Number of MPs present but abstaining' }
+                      absent: { type: integer, description: 'Number of MPs not present for the division' }
+                      total: { type: integer, description: 'Total vote records (sum of aye + nay + abstain + absent)' }
+                  items:
+                    type: array
+                    description: 'Per-MP roll call — every MP appears exactly once. Order matches the seed matrix (person-001 first, person-005 last).'
+                    items: { $ref: '#/components/schemas/VoteRecord' }
+                  total: { type: integer, description: 'Total vote records (matches len(items) + counts.total)' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" until the verified Votes-and-Proceedings ingestion path ships (issue #284).' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the Bill ID does not match a sample vote Bill.' }
 
   /follow:
     post:
@@ -1714,6 +1799,31 @@ components:
         source_url: { type: string }
         is_current: { type: boolean }
 
+    Amendment:
+      type: object
+      description: |
+        A single proposed change to a Bill — raised by an MP (or, in
+        committee-of-the-whole form, by a committee) during the Bill's
+        committee stage or third reading. Each amendment carries a
+        lifecycle (proposed → accepted | rejected) and a plain-language
+        summary of the substantive change.
+
+        Amendments are seed-only for FEAT-15 (issue #293). The live
+        ingestion path (Hansard committee-stage parsing) is pending
+        issue #19 + ADR-0011's immutable Bill version storage. Until
+        that lands, every amendment returned by the API carries
+        `source_url` pointing at the parent Bill's kenyalaw.org page —
+        per-sitting Hansard URLs are not yet minted.
+      properties:
+        id:          { type: string, description: 'Stable platform ID (e.g., "amend-001")' }
+        bill_id:     { type: string, description: 'The parent Bill\'s SourceID — matches /api/v1/bills/{id}.id' }
+        title:       { type: string, description: 'One-line description of the substantive change (e.g., "Clause 14(2) — increase contribution rate to 8%")' }
+        proposed_by: { type: string, description: 'Platform-internal person ID of the sponsor (e.g., "person-001"). Cross-references /api/v1/people/{id}/scorecard' }
+        proposed_at: { type: string, format: date-time, description: 'Timestamp of the committee sitting at which the amendment was tabled' }
+        status:      { type: string, enum: [proposed, accepted, rejected], description: 'Lifecycle state — proposed (tabled, not yet voted), accepted (carried), rejected (defeated)' }
+        summary:     { type: string, description: 'Plain-language description of what the amendment would change + why the sponsor moved it' }
+        source_url:  { type: string, description: 'Link to the official record (Hansard, Order Paper, or kenyalaw.org Bill page). Seed amendments point at the parent Bill URL until per-sitting URLs are minted (issue #19).' }
+
     BillSummary:
       type: object
       properties:
@@ -1802,6 +1912,37 @@ components:
         primary_role: { type: string }
         institution_id: { type: string, format: uuid, nullable: true }
         country: { type: string }
+
+    VoteRecord:
+      type: object
+      description: |
+        A single MP's vote on a single Bill at a single division
+        (issue #284). Both the /people/{id}/votes and /bills/{id}/votes
+        endpoints return the same VoteRecord shape so the frontend can
+        render a vote row identically on either page.
+
+        The platform NEVER derives a "pass / fail" verdict from the
+        vote field — every value (aye / nay / abstain / absent) is
+        surfaced raw (rule: NO_POLITICAL_PERFORMANCE_SCORE).
+      properties:
+        person_id: { type: string, description: 'Platform-internal person ID (e.g. "person-001")' }
+        person_name: { type: string, description: 'The MP display name (looked up from sampleScorecards)' }
+        vote: { type: string, enum: [aye, nay, abstain, absent], description: 'The vote cast. aye = in favour, nay = against, abstain = present but abstaining, absent = not present for the division.' }
+        bill_id: { type: string, description: 'Platform-internal vote Bill ID (e.g. "bill-vote-001"). Lives in a separate ID space from the canonical /bills/{id} Bill IDs until the verified ingestion path ships (issue #284).' }
+        bill_title: { type: string, description: 'The Bill title from the seed slice' }
+        division: { type: string, description: 'The division stage (e.g. "Third Reading", "Second Reading", "Committee Stage")' }
+        date: { type: string, format: date, description: 'The division date (ISO 8601 YYYY-MM-DD)' }
+        source_url: { type: string, description: 'URL of the official Votes-and-Proceedings entry the vote was derived from' }
+      required: [person_id, person_name, vote, bill_id, bill_title, division, date, source_url]
+      example:
+        person_id: person-001
+        person_name: Kimani Ichung'wah
+        vote: aye
+        bill_id: bill-vote-001
+        bill_title: Affordable Housing Bill
+        division: Third Reading
+        date: '2024-09-10'
+        source_url: https://www.parliament.go.ke/the-national-assembly/votes-and-proceedings/2024-09-10
 
     MPScorecard:
       type: object
@@ -1917,52 +2058,6 @@ components:
         detail: { type: string, nullable: true }
         source_url: { type: string, format: uri }
         source: { type: string }
-
-    RegisteredInterest:
-      type: object
-      description: |
-        A single declared interest sourced from the MP's official
-        Declaration of Interests Register entry. The register is the
-        public record maintained by the Clerk of the Senate / National
-        Assembly under the Leadership and Integrity Act, 2012 + the
-        Public Officer Ethics Act, 2003 — every Kenyan MP must declare
-        directorships, land + property holdings, shareholdings, gifts
-        received, other income streams, and outstanding loans so citizens
-        can spot conflicts of interest before the MP votes on a Bill or
-        participates in a committee inquiry that touches one of their
-        declared holdings.
-
-        The platform does NOT yet scrape the live register — this seed
-        slice is illustrative placeholder data. Every record carries a
-        `source_url` pointing at the canonical register entry on
-        parliament.go.ke so a citizen can verify it once the live
-        ingestion pipeline ships (planned Wave 16+). Until then `source`
-        is always "Declaration of Interests Register" (the canonical
-        register name) and the response-level `disclaimer` string makes
-        the seed-only posture explicit on the wire.
-      properties:
-        person_id: { type: string, description: 'Platform-internal person ID (e.g. "person-001"). Matches the scorecard\'s person_id.' }
-        person_name: { type: string, description: 'Display name — echoed from sampleScorecards so the frontend can render the scorecard-style header without an extra round-trip.' }
-        category:
-          type: string
-          enum: [directorship, land_property, shares, gifts, other_income, loans]
-          description: |
-            Closed enum of declaration categories. Matches the six
-            categories Kenyan MPs declare under the Leadership and
-            Integrity Act, 2012 + the Public Officer Ethics Act, 2003.
-        description: { type: string, description: 'Free-text summary of the declared holding — sourced verbatim from the register entry.' }
-        value_kes:
-          type: integer
-          format: int64
-          minimum: 0
-          description: |
-            KES monetary value of the declared holding. 0 means "value
-            not disclosed / not applicable" (e.g. a non-monetary gift or
-            a state commendation medallion) — the description text
-            carries the qualifier in that case.
-        declared_at: { type: string, format: date, description: 'YYYY-MM-DD when the interest was declared to the Clerk (NOT the date the holding was acquired).' }
-        source_url: { type: string, format: uri, description: 'Link to the canonical register entry on parliament.go.ke — the platform NEVER invents a declaration without a source link.' }
-        source: { type: string, description: 'Canonical register name — always "Declaration of Interests Register".' }
 
     Committee:
       type: object
@@ -2450,6 +2545,48 @@ components:
         message: { type: string }
         detail: { type: object, nullable: true }
 
+    # ----- Public Participation Portal (issue #287 / FEAT-9) -----
+
+    Petition:
+      type: object
+      description: |
+        A single e-petition record. The status enum is the 3-valued
+        lifecycle state (open / closed / answered). The platform NEVER
+        derives a "popular support score" or "approval rating" from
+        these records (rule: NO_POLITICAL_PERFORMANCE_SCORE).
+      required: [id, title, description, created_by, created_at, status, signatures_count, target_signatures, closes_at, country]
+      properties:
+        id:                 { type: string, example: pet-001 }
+        title:              { type: string }
+        description:        { type: string, description: "Petition body — the full text of what the petition asks the authority to do" }
+        created_by:         { type: string, description: "Petitioner name + identifier (e.g. 'Wanjiku Mwangi (citizen, Nairobi County)')" }
+        created_at:         { type: string, format: date-time }
+        status:             { type: string, enum: [open, closed, answered] }
+        signatures_count:   { type: integer, description: "Denormalised count; re-derived from the signatures slice on every read" }
+        target_signatures:  { type: integer, minimum: 1 }
+        closes_at:          { type: string, format: date-time }
+        country:            { type: string, description: "ISO 3166-1 alpha-2 country code" }
+
+    PetitionSignature:
+      type: object
+      description: |
+        A single signature on a petition. The `verified` flag is
+        `false` on creation and flips to `true` only after the email
+        verification pipeline confirms the signer's email out-of-band.
+        The platform NEVER publishes the signer's email on the public
+        list (the list endpoint returns Name + SignedAt + Verified
+        only); the email is collected solely so the verification
+        pipeline can confirm the signer's identity.
+      required: [id, petition_id, name, email, signed_at, verified]
+      properties:
+        id:          { type: string, example: sig-001-01 }
+        petition_id: { type: string, example: pet-001 }
+        name:        { type: string }
+        email:       { type: string, format: email, description: "Collected for verification; NOT published on the public list" }
+        signed_at:   { type: string, format: date-time }
+        verified:    { type: boolean, description: "False until the email verification pipeline confirms the signer's email" }
+
+
 security:
   - bearerAuth: []
 
@@ -2666,67 +2803,49 @@ security:
                   scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
         '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP (the seed Bills slice is the only source of sponsor attribution).' }
 
-  /people/{id}/interests:
+  /people/{id}/votes:
     get:
-      tags: [people]
-      summary: MP registered interests / asset declarations (issue #288)
+      tags: [people, bills]
+      summary: MP voting history (issue #284)
       description: |
-        Returns every declared interest the seed slice attributes to the
-        given MP — directorships, land + property holdings, shareholdings,
-        gifts received, other income streams, and outstanding loans. Powers
-        the scorecard page's "Registered Interests" tab so citizens can spot
-        conflicts of interest before an MP votes on a Bill or participates
-        in a committee inquiry that touches one of their declared holdings.
+        Returns the requested MP's per-division voting history — every
+        vote the MP cast on every sample Bill in the seed matrix,
+        most-recent-first.
 
-        The endpoint is seed-only — the platform does NOT yet scrape the
-        live parliamentary Declaration of Interests Register (the public
-        register maintained by the Clerk of the Senate / National Assembly
-        under the Leadership and Integrity Act, 2012 + the Public Officer
-        Ethics Act, 2003). Every record carries a `source_url` pointing at
-        the canonical register entry on parliament.go.ke so a citizen can
-        verify it once the live ingestion pipeline ships (planned Wave 16+).
-        Until then, `source` is always `"seed"` and the `disclaimer` string
-        makes the provenance explicit on the wire.
+        The endpoint is seed-only — the verified
+        Votes-and-Proceedings ingestion path has not shipped yet
+        (issue #284 acceptance bar: "Use seed data only. Do NOT parse
+        actual PDFs."). When the ingestion path ships, this endpoint
+        will be extended to merge live + seed results; until then,
+        `source` is always `"seed"`.
 
-        The optional `?category=` query param narrows the response to a
-        single category from the closed enum
-        `{directorship, land_property, shares, gifts, other_income, loans}`.
-        Unknown category values return 400 (NOT 200 with an empty items
-        list) so a typo never looks like a legitimate "no interests of this
-        kind" response — mirrors the strict-status-filter rule on /petitions.
+        Each item carries the full VoteRecord shape (person_id,
+        person_name, vote, bill_id, bill_title, division, date,
+        source_url) so the frontend can render a vote row identically
+        on the MP scorecard page and the Bill detail page. The vote
+        field is one of `aye`, `nay`, `abstain`, `absent` — the
+        platform NEVER derives a "pass / fail" verdict from the
+        counts (rule: NO_POLITICAL_PERFORMANCE_SCORE).
       parameters:
         - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal person ID (e.g. "person-001")' }
-        - in: query
-          name: category
-          required: false
-          schema:
-            type: string
-            enum: [directorship, land_property, shares, gifts, other_income, loans]
-          description: |
-            Optional category filter — narrows the response to a single
-            category. Unknown enum values return 400 (NOT 200 with an empty
-            items list) so a typo never silently looks like a legitimate
-            "no interests of this kind" response.
       responses:
         '200':
-          description: List of declared interests attributed to the given MP
+          description: The MP's voting history, most-recent-first
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  person_id: { type: string, description: 'The requested MP\'s platform-internal person ID' }
-                  person_name: { type: string, description: 'The requested MP\'s display name (looked up from sampleScorecards)' }
+                  person_id: { type: string, description: 'The requested MP''s platform-internal person ID' }
+                  name: { type: string, description: 'The requested MP''s display name (looked up from sampleScorecards)' }
                   items:
                     type: array
-                    items: { $ref: '#/components/schemas/RegisteredInterest' }
-                  total: { type: integer }
-                  category: { type: string, nullable: true, description: 'Echoed ?category= filter value when a filter was applied; omitted otherwise.' }
-                  source: { type: string, enum: [seed], description: 'Always "seed" — declarations are seed-only until the live Declaration of Interests Register ingestion path ships (issue #288).' }
-                  scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
-                  disclaimer: { type: string, description: 'Canonical provenance marker — rendered verbatim by the frontend so the seed-only posture is never silently lost.' }
-        '400': { $ref: '#/components/responses/BadRequest', description: 'Returned when ?category= is not one of the six canonical enum values.' }
-        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP (an unknown person cannot have declared interests).' }
+                    description: 'Vote records most-recent-first by division date. Every item carries all 8 required fields (person_id, person_name, vote, bill_id, bill_title, division, date, source_url).'
+                    items: { $ref: '#/components/schemas/VoteRecord' }
+                  total: { type: integer, description: 'Total vote records (matches len(items))' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" until the verified Votes-and-Proceedings ingestion path ships (issue #284).' }
+                  scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP''s scorecard page' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP — the platform surfaces 404 (NOT an empty 200 items list) so a typo in a person ID does not silently look like a legitimate "no votes" response.' }
 
   /constituencies:
     get:
@@ -2956,3 +3075,181 @@ security:
                 description: RSS 2.0 XML document (<rss version="2.0">).
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----- Public Participation Portal (issue #287 / FEAT-9) -----
+  #
+  # The e-petition endpoints let citizens browse, create, and sign
+  # public-participation petitions. The platform NEVER derives a
+  # "popular support score" or "approval rating" from these records
+  # (rule: NO_POLITICAL_PERFORMANCE_SCORE). A petition with 50,000
+  # signatures is recorded as such; the citizen interprets the
+  # result, the platform does not.
+
+  /petitions:
+    get:
+      tags: [participation]
+      summary: List e-petitions (filterable by status + country)
+      description: |
+        Returns the list of e-petitions sorted most-recent-first by
+        created_at. Both `status` + `country` are optional filters;
+        when omitted, the response carries every petition in the
+        store. The status filter is strict — any value outside the
+        {open, closed, answered} enum returns 400 (NOT 200 with an
+        empty items list) so a typo in the status does not silently
+        look like a legitimate "no petitions match" response.
+
+        The country filter is case-insensitive + accepts any non-empty
+        ISO 3166-1 alpha-2 code (the platform does NOT validate
+        against the supported-countries list here because petitions
+        can be tabled for any country). A country with no matching
+        petitions returns 200 with an empty items list (NOT 404) —
+        the list endpoint is a search-style filter, so "no matches"
+        is a legitimate response.
+
+        The seed slice is 5 hand-curated Kenyan petitions (2 open,
+        1 closed, 2 answered) spanning Affordable Housing, SHA
+        rollout, education capitation, pending-bills audit, and
+        digital-identity framework themes.
+      parameters:
+        - { in: query, name: status,  required: false, schema: { type: string, enum: [open, closed, answered] }, description: "Filter to petitions with the given status" }
+        - { in: query, name: country, required: false, schema: { type: string }, description: "ISO 3166-1 alpha-2 country code (e.g. KE, UG); case-insensitive" }
+      responses:
+        '200':
+          description: Petition list (most-recent-first by created_at)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, source]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Petition' }
+                  total: { type: integer, description: "Number of items in the response (after filters)" }
+                  source: { type: string, description: "Always 'seed' until the verified ingestion pipeline ships" }
+                  status:  { type: string, enum: [open, closed, answered], description: "Echoed status filter (empty when omitted)" }
+                  country: { type: string, description: "Echoed country filter (empty when omitted)" }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [participation]
+      summary: Create a new e-petition
+      description: |
+        Creates a new e-petition. The petition starts with status
+        `open` + signatures_count 0 + an empty signatures slice. The
+        `created_at` timestamp is set server-side so callers cannot
+        back-date a petition. The `closes_at` MUST be an RFC3339
+        timestamp in the future (a back-dated close deadline is a
+        programmer error + returns 400). The `id` is a random hex
+        string prefixed with "pet-" so it is distinguishable from
+        the curated seed ids ("pet-001".."pet-005").
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description, created_by, target_signatures, closes_at, country]
+              properties:
+                title:             { type: string, description: "Petition title (non-empty)" }
+                description:       { type: string, description: "Petition body — the full text of what the petition asks the authority to do" }
+                created_by:        { type: string, description: "Petitioner name + identifier (e.g. 'Wanjiku Mwangi (citizen, Nairobi County)')" }
+                target_signatures: { type: integer, minimum: 1, description: "Signature count threshold the petition aims to reach" }
+                closes_at:         { type: string, format: date-time, description: "RFC3339 timestamp; MUST be in the future" }
+                country:           { type: string, description: "ISO 3166-1 alpha-2 country code (e.g. KE)" }
+      responses:
+        '201':
+          description: Petition created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Petition' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /petitions/{id}:
+    get:
+      tags: [participation]
+      summary: Petition detail (full description + signatures)
+      description: |
+        Returns a single petition + its full signatures slice. The
+        list endpoint does NOT hydrate the signatures (so it can
+        render progress bars without paying the cost of hydrating
+        every signature on every row); the detail endpoint hydrates
+        them so the frontend can render a "who signed" list.
+
+        The `signatures_count` field on the returned petition is
+        re-derived from the signatures slice so a stale denormalised
+        value can never drift away from the actual signature list.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: "Petition ID (e.g. 'pet-001')" }
+      responses:
+        '200':
+          description: Petition detail + signatures
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [petition, signatures, source]
+                properties:
+                  petition:   { $ref: '#/components/schemas/Petition' }
+                  signatures:
+                    type: array
+                    items: { $ref: '#/components/schemas/PetitionSignature' }
+                  source: { type: string, description: "Always 'seed' until the verified ingestion pipeline ships" }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /petitions/{id}/sign:
+    post:
+      tags: [participation]
+      summary: Sign a petition (increments signatures_count)
+      description: |
+        Appends a signature to the petition's signatures slice +
+        increments the denormalised `signatures_count` by 1. The
+        created signature carries `verified: false` — the email
+        verification pipeline has not yet shipped, so every newly-
+        created signature starts unverified + flips to `verified:
+        true` only after the pipeline confirms the signer's email
+        out-of-band.
+
+        Signing a closed / answered petition returns 409 (conflict) —
+        the request itself is well-formed; the petition is simply
+        not in a state that accepts signatures. Signing an unknown
+        petition id returns 404 (not 201 with a fabricated petition).
+
+        The platform NEVER publishes the signer's email on the public
+        signatures list (the list endpoint returns Name + SignedAt +
+        Verified only); the email is collected solely so the
+        verification pipeline can confirm the signer's identity
+        out-of-band.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: "Petition ID" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:  { type: string, description: "Signer display name (non-empty)" }
+                email: { type: string, format: email, description: "Signer email — collected for verification; NOT published on the public list" }
+      responses:
+        '201':
+          description: Signature created + petition updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [signature, petition]
+                properties:
+                  signature: { $ref: '#/components/schemas/PetitionSignature' }
+                  petition:  { $ref: '#/components/schemas/Petition' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Petition is not open for signatures (status is closed or answered)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:   { type: string, example: petition_closed }
+                  message: { type: string, example: "petition pet-004 is not open for signatures (status: closed)" }
