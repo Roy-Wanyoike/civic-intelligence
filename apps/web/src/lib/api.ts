@@ -79,21 +79,11 @@ export function getCountryFromCookie(): string {
 //
 // Wave 12 (2026) added Rwanda, Zambia, Senegal, Egypt.
 // Wave 13 (2026) added Morocco, DR Congo, Ethiopia, Malawi.
+// Wave 14 (2026) added Cameroon, Mozambique, Ivory Coast, Burkina Faso, Niger.
 export const SUPPORTED_COUNTRY_CODES = new Set<string>([
-  'KE',
-  'UG',
-  'TZ',
-  'GH',
-  'NG',
-  'ZA',
-  'RW',
-  'ZM',
-  'SN',
-  'EG',
-  'MA',
-  'CD',
-  'ET',
-  'MW',
+  'KE', 'UG', 'TZ', 'GH', 'NG', 'ZA',
+  'RW', 'ZM', 'SN', 'EG', 'MA', 'CD', 'ET', 'MW',
+  'CM', 'MZ', 'CI', 'BF', 'NE',
 ]);
 
 export class ApiError extends Error {

@@ -75,7 +75,9 @@ const GlobalCountry = "ALL"
 // and Egypt (EG) — bringing the platform from 6 to 10 supported countries.
 // Wave 13 (ENG-L2, 2026) added Morocco (MA), DR Congo (CD), Ethiopia (ET),
 // and Malawi (MW) — bringing the platform from 10 to 14 supported countries.
-var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG", "MA", "CD", "ET", "MW"}
+// Wave 14 (2026) added Cameroon (CM), Mozambique (MZ), Ivory Coast (CI),
+// Burkina Faso (BF), and Niger (NE) — bringing the platform to 19 countries.
+var SupportedCountries = []string{"KE", "UG", "TZ", "GH", "NG", "ZA", "RW", "ZM", "SN", "EG", "MA", "CD", "ET", "MW", "CM", "MZ", "CI", "BF", "NE"}
 
 // countryCtxKey is the typed context key for country storage. A distinct
 // type avoids collisions with other packages' context keys (and with the

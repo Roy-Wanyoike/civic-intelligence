@@ -23,11 +23,16 @@ require (
 )
 
 require (
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/burkina_faso v0.0.0 // indirect
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/cameroon v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/dr_congo v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/egypt v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/ethiopia v0.0.0 // indirect
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/ivory_coast v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/malawi v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/morocco v0.0.0 // indirect
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/mozambique v0.0.0 // indirect
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/niger v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/rwanda v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/senegal v0.0.0 // indirect
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/zambia v0.0.0 // indirect
@@ -36,13 +41,18 @@ require (
 
 replace (
 	github.com/Roy-Wanyoike/civic-intelligence => ../..
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/burkina_faso => ../../adapters/burkina_faso
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/cameroon => ../../adapters/cameroon
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/dr_congo => ../../adapters/dr_congo
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/egypt => ../../adapters/egypt
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/ethiopia => ../../adapters/ethiopia
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana => ../../adapters/ghana
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/ivory_coast => ../../adapters/ivory_coast
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya => ../../adapters/kenya
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/malawi => ../../adapters/malawi
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/morocco => ../../adapters/morocco
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/mozambique => ../../adapters/mozambique
+	github.com/Roy-Wanyoike/civic-intelligence/adapters/niger => ../../adapters/niger
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/nigeria => ../../adapters/nigeria
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/registry => ../../adapters/registry
 	github.com/Roy-Wanyoike/civic-intelligence/adapters/rwanda => ../../adapters/rwanda
