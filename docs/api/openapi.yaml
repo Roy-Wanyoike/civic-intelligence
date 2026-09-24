@@ -207,6 +207,57 @@ paths:
           content: { application/json: { schema: { type: object, properties: { followed: { type: boolean } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /bills/{id}/votes:
+    get:
+      tags: [bills, people]
+      summary: Division summary for a single Bill (issue #284)
+      description: |
+        Returns the per-division tally (aye / nay / abstain / absent /
+        total) + the per-MP roll-call items list for a single Bill.
+
+        The endpoint is seed-only — the verified Votes-and-Proceedings
+        ingestion path has not shipped yet (issue #284 acceptance bar:
+        "Use seed data only. Do NOT parse actual PDFs."). When the
+        ingestion path ships, this endpoint will be extended to merge
+        live + seed results; until then, `source` is always `"seed"`.
+
+        The platform NEVER derives a "pass / fail" verdict from the
+        counts — they are surfaced raw (rule:
+        NO_POLITICAL_PERFORMANCE_SCORE). A Bill with 0 aye + 0 nay is
+        recorded as such; the citizen interprets the result, the
+        platform does not.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal vote Bill ID (e.g. "bill-vote-001"). Lives in a separate ID space from the canonical /bills/{id} Bill IDs until the verified ingestion path ships (issue #284).' }
+      responses:
+        '200':
+          description: Division summary with aye / nay / abstain / absent counts + per-MP roll call
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bill_id: { type: string, description: 'The requested Bill ID (echoed)' }
+                  bill_title: { type: string, description: 'The Bill title from the seed slice' }
+                  division: { type: string, description: 'The division stage (e.g. "Third Reading", "Second Reading", "Committee Stage")' }
+                  date: { type: string, format: date, description: 'The division date (ISO 8601 YYYY-MM-DD)' }
+                  source_url: { type: string, description: 'URL of the official Votes-and-Proceedings entry the tally was derived from' }
+                  counts:
+                    type: object
+                    description: 'Per-division tally. aye + nay + abstain + absent always sums to total. The platform NEVER derives a "pass / fail" verdict from these counts.'
+                    properties:
+                      aye: { type: integer, description: 'Number of MPs who voted in favour' }
+                      nay: { type: integer, description: 'Number of MPs who voted against' }
+                      abstain: { type: integer, description: 'Number of MPs present but abstaining' }
+                      absent: { type: integer, description: 'Number of MPs not present for the division' }
+                      total: { type: integer, description: 'Total vote records (sum of aye + nay + abstain + absent)' }
+                  items:
+                    type: array
+                    description: 'Per-MP roll call — every MP appears exactly once. Order matches the seed matrix (person-001 first, person-005 last).'
+                    items: { $ref: '#/components/schemas/VoteRecord' }
+                  total: { type: integer, description: 'Total vote records (matches len(items) + counts.total)' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" until the verified Votes-and-Proceedings ingestion path ships (issue #284).' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the Bill ID does not match a sample vote Bill.' }
+
   /follow:
     post:
       tags: [subscriptions]
@@ -1803,6 +1854,37 @@ components:
         institution_id: { type: string, format: uuid, nullable: true }
         country: { type: string }
 
+    VoteRecord:
+      type: object
+      description: |
+        A single MP's vote on a single Bill at a single division
+        (issue #284). Both the /people/{id}/votes and /bills/{id}/votes
+        endpoints return the same VoteRecord shape so the frontend can
+        render a vote row identically on either page.
+
+        The platform NEVER derives a "pass / fail" verdict from the
+        vote field — every value (aye / nay / abstain / absent) is
+        surfaced raw (rule: NO_POLITICAL_PERFORMANCE_SCORE).
+      properties:
+        person_id: { type: string, description: 'Platform-internal person ID (e.g. "person-001")' }
+        person_name: { type: string, description: 'The MP display name (looked up from sampleScorecards)' }
+        vote: { type: string, enum: [aye, nay, abstain, absent], description: 'The vote cast. aye = in favour, nay = against, abstain = present but abstaining, absent = not present for the division.' }
+        bill_id: { type: string, description: 'Platform-internal vote Bill ID (e.g. "bill-vote-001"). Lives in a separate ID space from the canonical /bills/{id} Bill IDs until the verified ingestion path ships (issue #284).' }
+        bill_title: { type: string, description: 'The Bill title from the seed slice' }
+        division: { type: string, description: 'The division stage (e.g. "Third Reading", "Second Reading", "Committee Stage")' }
+        date: { type: string, format: date, description: 'The division date (ISO 8601 YYYY-MM-DD)' }
+        source_url: { type: string, description: 'URL of the official Votes-and-Proceedings entry the vote was derived from' }
+      required: [person_id, person_name, vote, bill_id, bill_title, division, date, source_url]
+      example:
+        person_id: person-001
+        person_name: Kimani Ichung'wah
+        vote: aye
+        bill_id: bill-vote-001
+        bill_title: Affordable Housing Bill
+        division: Third Reading
+        date: '2024-09-10'
+        source_url: https://www.parliament.go.ke/the-national-assembly/votes-and-proceedings/2024-09-10
+
     MPScorecard:
       type: object
       description: |
@@ -2619,6 +2701,50 @@ security:
                   source: { type: string, enum: [seed], description: 'Always "seed" — sponsor attribution is seed-only until a verified ingestion path ships (issue #282).' }
                   scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
         '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP (the seed Bills slice is the only source of sponsor attribution).' }
+
+  /people/{id}/votes:
+    get:
+      tags: [people, bills]
+      summary: MP voting history (issue #284)
+      description: |
+        Returns the requested MP's per-division voting history — every
+        vote the MP cast on every sample Bill in the seed matrix,
+        most-recent-first.
+
+        The endpoint is seed-only — the verified
+        Votes-and-Proceedings ingestion path has not shipped yet
+        (issue #284 acceptance bar: "Use seed data only. Do NOT parse
+        actual PDFs."). When the ingestion path ships, this endpoint
+        will be extended to merge live + seed results; until then,
+        `source` is always `"seed"`.
+
+        Each item carries the full VoteRecord shape (person_id,
+        person_name, vote, bill_id, bill_title, division, date,
+        source_url) so the frontend can render a vote row identically
+        on the MP scorecard page and the Bill detail page. The vote
+        field is one of `aye`, `nay`, `abstain`, `absent` — the
+        platform NEVER derives a "pass / fail" verdict from the
+        counts (rule: NO_POLITICAL_PERFORMANCE_SCORE).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal person ID (e.g. "person-001")' }
+      responses:
+        '200':
+          description: The MP's voting history, most-recent-first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  person_id: { type: string, description: 'The requested MP''s platform-internal person ID' }
+                  name: { type: string, description: 'The requested MP''s display name (looked up from sampleScorecards)' }
+                  items:
+                    type: array
+                    description: 'Vote records most-recent-first by division date. Every item carries all 8 required fields (person_id, person_name, vote, bill_id, bill_title, division, date, source_url).'
+                    items: { $ref: '#/components/schemas/VoteRecord' }
+                  total: { type: integer, description: 'Total vote records (matches len(items))' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" until the verified Votes-and-Proceedings ingestion path ships (issue #284).' }
+                  scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP''s scorecard page' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP — the platform surfaces 404 (NOT an empty 200 items list) so a typo in a person ID does not silently look like a legitimate "no votes" response.' }
 
   /constituencies:
     get:
