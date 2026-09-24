@@ -107,6 +107,63 @@ export async function getMPScorecard(personId: string): Promise<MPScorecard> {
   return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/scorecard`);
 }
 
+// === Registered Interests (issue #288) ===
+
+// RegisteredInterestCategory is the closed enum of declaration categories
+// the API accepts on the ?category= filter. Mirrors the Go-side
+// RegisteredInterestCategory const block in services/api/cmd/interests.go.
+export type RegisteredInterestCategory =
+  | 'directorship'
+  | 'land_property'
+  | 'shares'
+  | 'gifts'
+  | 'other_income'
+  | 'loans';
+
+// RegisteredInterest is a single declared interest sourced from the MP's
+// official Declaration of Interests Register entry. value_kes is 0 when
+// the value is not disclosed / not applicable (e.g. a non-monetary gift)
+// — the description text carries the qualifier in that case.
+export interface RegisteredInterest {
+  person_id: string;
+  person_name: string;
+  category: RegisteredInterestCategory;
+  description: string;
+  value_kes: number;
+  declared_at: string;
+  source_url: string;
+  source: string;
+}
+
+// RegisteredInterestsResponse is the JSON envelope returned by
+// /api/v1/people/{id}/interests. The category field is the echoed
+// ?category= filter value when a filter was applied; omitted otherwise.
+export interface RegisteredInterestsResponse {
+  person_id: string;
+  person_name: string;
+  items: RegisteredInterest[];
+  total: number;
+  category?: RegisteredInterestCategory;
+  source: 'seed';
+  scorecard_url: string;
+  disclaimer: string;
+}
+
+// getRegisteredInterests fetches the declared interests for the given MP.
+// Pass a category to narrow the response to a single declaration category;
+// omit it to fetch every declared interest for the MP.
+export async function getRegisteredInterests(
+  personId: string,
+  params: { category?: RegisteredInterestCategory } = {},
+): Promise<RegisteredInterestsResponse> {
+  const qs = new URLSearchParams();
+  if (params.category) qs.set('category', params.category);
+  const tail = qs.size ? `?${qs.toString()}` : '';
+  return getJSON(
+    `/api/v1/people/${encodeURIComponent(personId)}/interests${tail}`,
+  );
+}
+
 // === Constituencies ===
 
 export interface ConstituencyBillRef {

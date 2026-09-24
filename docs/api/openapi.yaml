@@ -1918,6 +1918,52 @@ components:
         source_url: { type: string, format: uri }
         source: { type: string }
 
+    RegisteredInterest:
+      type: object
+      description: |
+        A single declared interest sourced from the MP's official
+        Declaration of Interests Register entry. The register is the
+        public record maintained by the Clerk of the Senate / National
+        Assembly under the Leadership and Integrity Act, 2012 + the
+        Public Officer Ethics Act, 2003 — every Kenyan MP must declare
+        directorships, land + property holdings, shareholdings, gifts
+        received, other income streams, and outstanding loans so citizens
+        can spot conflicts of interest before the MP votes on a Bill or
+        participates in a committee inquiry that touches one of their
+        declared holdings.
+
+        The platform does NOT yet scrape the live register — this seed
+        slice is illustrative placeholder data. Every record carries a
+        `source_url` pointing at the canonical register entry on
+        parliament.go.ke so a citizen can verify it once the live
+        ingestion pipeline ships (planned Wave 16+). Until then `source`
+        is always "Declaration of Interests Register" (the canonical
+        register name) and the response-level `disclaimer` string makes
+        the seed-only posture explicit on the wire.
+      properties:
+        person_id: { type: string, description: 'Platform-internal person ID (e.g. "person-001"). Matches the scorecard\'s person_id.' }
+        person_name: { type: string, description: 'Display name — echoed from sampleScorecards so the frontend can render the scorecard-style header without an extra round-trip.' }
+        category:
+          type: string
+          enum: [directorship, land_property, shares, gifts, other_income, loans]
+          description: |
+            Closed enum of declaration categories. Matches the six
+            categories Kenyan MPs declare under the Leadership and
+            Integrity Act, 2012 + the Public Officer Ethics Act, 2003.
+        description: { type: string, description: 'Free-text summary of the declared holding — sourced verbatim from the register entry.' }
+        value_kes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: |
+            KES monetary value of the declared holding. 0 means "value
+            not disclosed / not applicable" (e.g. a non-monetary gift or
+            a state commendation medallion) — the description text
+            carries the qualifier in that case.
+        declared_at: { type: string, format: date, description: 'YYYY-MM-DD when the interest was declared to the Clerk (NOT the date the holding was acquired).' }
+        source_url: { type: string, format: uri, description: 'Link to the canonical register entry on parliament.go.ke — the platform NEVER invents a declaration without a source link.' }
+        source: { type: string, description: 'Canonical register name — always "Declaration of Interests Register".' }
+
     Committee:
       type: object
       properties:
@@ -2619,6 +2665,68 @@ security:
                   source: { type: string, enum: [seed], description: 'Always "seed" — sponsor attribution is seed-only until a verified ingestion path ships (issue #282).' }
                   scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
         '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP (the seed Bills slice is the only source of sponsor attribution).' }
+
+  /people/{id}/interests:
+    get:
+      tags: [people]
+      summary: MP registered interests / asset declarations (issue #288)
+      description: |
+        Returns every declared interest the seed slice attributes to the
+        given MP — directorships, land + property holdings, shareholdings,
+        gifts received, other income streams, and outstanding loans. Powers
+        the scorecard page's "Registered Interests" tab so citizens can spot
+        conflicts of interest before an MP votes on a Bill or participates
+        in a committee inquiry that touches one of their declared holdings.
+
+        The endpoint is seed-only — the platform does NOT yet scrape the
+        live parliamentary Declaration of Interests Register (the public
+        register maintained by the Clerk of the Senate / National Assembly
+        under the Leadership and Integrity Act, 2012 + the Public Officer
+        Ethics Act, 2003). Every record carries a `source_url` pointing at
+        the canonical register entry on parliament.go.ke so a citizen can
+        verify it once the live ingestion pipeline ships (planned Wave 16+).
+        Until then, `source` is always `"seed"` and the `disclaimer` string
+        makes the provenance explicit on the wire.
+
+        The optional `?category=` query param narrows the response to a
+        single category from the closed enum
+        `{directorship, land_property, shares, gifts, other_income, loans}`.
+        Unknown category values return 400 (NOT 200 with an empty items
+        list) so a typo never looks like a legitimate "no interests of this
+        kind" response — mirrors the strict-status-filter rule on /petitions.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal person ID (e.g. "person-001")' }
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+            enum: [directorship, land_property, shares, gifts, other_income, loans]
+          description: |
+            Optional category filter — narrows the response to a single
+            category. Unknown enum values return 400 (NOT 200 with an empty
+            items list) so a typo never silently looks like a legitimate
+            "no interests of this kind" response.
+      responses:
+        '200':
+          description: List of declared interests attributed to the given MP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  person_id: { type: string, description: 'The requested MP\'s platform-internal person ID' }
+                  person_name: { type: string, description: 'The requested MP\'s display name (looked up from sampleScorecards)' }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegisteredInterest' }
+                  total: { type: integer }
+                  category: { type: string, nullable: true, description: 'Echoed ?category= filter value when a filter was applied; omitted otherwise.' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" — declarations are seed-only until the live Declaration of Interests Register ingestion path ships (issue #288).' }
+                  scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
+                  disclaimer: { type: string, description: 'Canonical provenance marker — rendered verbatim by the frontend so the seed-only posture is never silently lost.' }
+        '400': { $ref: '#/components/responses/BadRequest', description: 'Returned when ?category= is not one of the six canonical enum values.' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP (an unknown person cannot have declared interests).' }
 
   /constituencies:
     get:

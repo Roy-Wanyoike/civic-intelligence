@@ -1471,6 +1471,21 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 		handleBillsByPerson(w, r, personID)
 		return
 	}
+
+	// Registered interests sub-resource (task FEAT-10 / issue #288). The
+	// handler returns the MP's declared directorships, land + property,
+	// shareholdings, gifts, other income, and loans from the seed slice
+	// pending the live Declaration of Interests Register ingestion path.
+	// Supports an optional ?category= filter (closed enum, 400 on typo).
+	if strings.HasSuffix(tail, "/interests") {
+		personID := strings.TrimSuffix(tail, "/interests")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleInterestsByPerson(w, r, personID)
+		return
+	}
         // Default: person detail lookup with country-scoped visibility gate.
         id := tail
         country := middleware.CountryFromContext(r.Context())
