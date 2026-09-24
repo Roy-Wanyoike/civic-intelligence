@@ -263,9 +263,156 @@ curl -s -X POST -H "Authorization: Bearer $JWT" \\
         </pre>
       </div>
 
+      <EmbeddableWidgets />
+
       <div className="mt-4 rounded-lg border border-dashed border-civic-border p-6 text-center text-sm text-civic-stone">
         API keys, rate limiting (300 req/min), and SDKs coming soon.
       </div>
     </div>
+  );
+}
+
+/**
+ * Embeddable Widgets — issue #291.
+ *
+ * Three chrome-less, iframe-able widgets for third-party civic-tech
+ * sites: newsrooms embedding a Bill tracker on an article page, a
+ * civil-society org embedding an MP finder on a voter-guide page,
+ * or a school embedding today's parliament agenda on a resources page.
+ *
+ * Each widget is a server-rendered page under /embed/* that:
+ *   - renders with NO navbar/footer (the root layout skips the chrome
+ *     for /embed/* routes via the `x-civic-embed` middleware marker),
+ *   - uses minimal inline CSS scoped to `.civic-embed *` so the host
+ *     page's stylesheet can't leak in or out,
+ *   - falls back to mock data when the Go BFF is unreachable so the
+ *     widget never renders a stack trace inside someone else's page,
+ *   - carries a "Powered by Civic Intelligence" link at the bottom.
+ *
+ * CSP `frame-ancestors *` is set on /embed/* in next.config.mjs so
+ * browsers permit embedding from any origin.
+ */
+function EmbeddableWidgets() {
+  const WIDGET_BASE = 'https://civicintel.africa';
+  const widgets = [
+    {
+      name: 'MP Finder',
+      path: '/embed/mp-finder',
+      width: 400,
+      height: 320,
+      description:
+        'Constituency name → MP name + party + scorecard link. A simple GET form (works without JS).',
+      snippet: `<iframe
+  src="${WIDGET_BASE}/embed/mp-finder"
+  width="400"
+  height="320"
+  style="border:1px solid #c8d3cc;border-radius:10px"
+  loading="lazy"
+  title="Civic Intelligence — MP Finder"
+></iframe>`,
+    },
+    {
+      name: 'Bill Tracker',
+      path: '/embed/bill-tracker',
+      width: 480,
+      height: 240,
+      description:
+        "Shows a Bill's current stage on an 8-step horizontal timeline (First Reading → Commencement). Pass ?bill_id=…",
+      snippet: `<iframe
+  src="${WIDGET_BASE}/embed/bill-tracker?bill_id=00000000-0000-0000-0000-000000000001"
+  width="480"
+  height="240"
+  style="border:1px solid #c8d3cc;border-radius:10px"
+  loading="lazy"
+  title="Civic Intelligence — Bill Tracker"
+></iframe>`,
+    },
+    {
+      name: "Today in Parliament",
+      path: '/embed/today',
+      width: 400,
+      height: 360,
+      description:
+        "Today's parliament calendar events in a compact list. Refreshes on each load (no caching).",
+      snippet: `<iframe
+  src="${WIDGET_BASE}/embed/today"
+  width="400"
+  height="360"
+  style="border:1px solid #c8d3cc;border-radius:10px"
+  loading="lazy"
+  title="Civic Intelligence — Today in Parliament"
+></iframe>`,
+    },
+  ];
+
+  return (
+    <section className="mt-8">
+      <h2 className="font-serif text-xl font-semibold text-civic-forest">
+        Embeddable widgets
+      </h2>
+      <p className="mt-1 text-sm text-civic-stone">
+        Drop these chrome-less iframe widgets into any third-party site —
+        newsroom articles, civil-society voter guides, school resource pages.
+        Each widget renders with no navbar/footer and minimal inline CSS, so
+        the host page&rsquo;s styles can&rsquo;t leak in or out.{' '}
+        <code className="rounded bg-civic-paper px-1.5 py-0.5 font-mono text-xs text-civic-forest">
+          frame-ancestors *
+        </code>{' '}
+        is set on <code className="font-mono text-xs">/embed/*</code> routes so
+        any origin may embed them.
+      </p>
+
+      <div className="mt-4 space-y-6">
+        {widgets.map((w) => (
+          <div
+            key={w.path}
+            className="rounded-lg border border-civic-border bg-civic-paper p-5"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-serif text-base font-semibold text-civic-forest">
+                {w.name}
+              </h3>
+              <code className="font-mono text-xs text-civic-stone">{w.path}</code>
+            </div>
+            <p className="mt-2 text-sm text-civic-ink">{w.description}</p>
+
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wider text-civic-stone">
+                  Live preview
+                </p>
+                <iframe
+                  src={w.path}
+                  width={w.width}
+                  height={w.height}
+                  style={{ border: '1px solid #c8d3cc', borderRadius: 10 }}
+                  loading="lazy"
+                  title={`Civic Intelligence — ${w.name}`}
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wider text-civic-stone">
+                  Copy-paste
+                </p>
+                <pre className="overflow-x-auto rounded bg-civic-ink p-3 text-xs text-civic-paper">
+                  {w.snippet}
+                </pre>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-4 text-xs text-civic-stone">
+        Tip: widgets fetch from the same Go BFF as the rest of the platform, so
+        they reflect live data. If the BFF is unreachable, each widget falls back
+        to a small built-in sample so the iframe never renders a stack trace on
+        your page. Replace{' '}
+        <code className="rounded bg-civic-paper px-1 py-0.5 font-mono text-xs text-civic-forest">
+          civicintel.africa
+        </code>{' '}
+        with your dev/staging origin to test locally.
+      </p>
+    </section>
   );
 }

@@ -92,6 +92,29 @@ export interface BillVersion {
   document_id: string;
 }
 
+// AmendmentStatus mirrors the Go AmendmentStatus enum in
+// services/api/cmd/amendments.go. The three values match the
+// parliamentary committee-stage vocabulary:
+//   - proposed: tabled, not yet voted on
+//   - accepted: carried (majority vote) → folded into the Bill's text
+//   - rejected: defeated → Bill's text unchanged
+export type AmendmentStatus = 'proposed' | 'accepted' | 'rejected';
+
+// Amendment mirrors the Go Amendment struct returned by
+// GET /api/v1/bills/{id}/amendments (issue #293 / FEAT-15). The
+// amendments tracker is seed-only for FEAT-15 — the live Hansard
+// committee-stage ingestion path is pending issue #19 + ADR-0011.
+export interface Amendment {
+  id: string;
+  bill_id: string;
+  title: string;
+  proposed_by: string;
+  proposed_at: string;
+  status: AmendmentStatus;
+  summary: string;
+  source_url: string;
+}
+
 export interface BillSummary {
   bill_id: string;
   short_title: string;
