@@ -702,6 +702,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 handleBillSummary(w, r, adapter, billID, aiServiceURL)
                         case strings.HasPrefix(sub, "follow"):
                                 handleFollow(w, r)
+                        case strings.HasPrefix(sub, "votes"):
+                                handleVotesByBill(w, r, billID)
                         default:
                                 writeError(w, http.StatusNotFound, "not_found", "unknown sub-route: "+sub)
                         }
@@ -1445,6 +1447,8 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // the trailing path tail:
         //   - "" (root, no trailing slash)  → list the 5 sample people
         //   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
+        //   - "{id}/votes"                    → MP voting history (issue #284)
+        //   - "{id}/bills"                    → Bills sponsored (issue #282)
         //   - "{id}"                          → person detail (still pending,
         //                                       issue #19 — kept as stub)
         // Normalise: treat both /api/v1/people and /api/v1/people/ as the list call (issue #264).
@@ -1462,6 +1466,15 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
                 makeScorecardHandler()(w, r)
                 return
         }
+	if strings.HasSuffix(tail, "/votes") {
+		personID := strings.TrimSuffix(tail, "/votes")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleVotesByPerson(w, r, personID)
+		return
+	}
 	if strings.HasSuffix(tail, "/bills") {
 		personID := strings.TrimSuffix(tail, "/bills")
 		if personID == "" {
