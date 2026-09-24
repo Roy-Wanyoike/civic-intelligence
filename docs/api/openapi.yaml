@@ -184,6 +184,40 @@ paths:
                         summary: { type: string }
                         diff_url: { type: string }
 
+  /bills/{id}/amendments:
+    get:
+      tags: [bills]
+      summary: List amendments proposed against a Bill
+      description: |
+        Returns the per-Bill amendment tracker — every amendment proposed
+        against the Bill (in committee stage or third reading) with its
+        lifecycle status (proposed | accepted | rejected) and a
+        plain-language summary of the substantive change.
+
+        Amendments are seed-only for FEAT-15 (issue #293); the response
+        always carries `source: "seed"` until the live Hansard
+        committee-stage ingestion path lands (issue #19 + ADR-0011).
+        The endpoint never returns 503 for a known Bill — when the live
+        crawl of new.kenyalaw.org fails, the handler falls back to the
+        seed Bills slice to verify the Bill exists (issue #265 contract).
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Amendments proposed against the Bill (oldest first)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bill_id:    { type: string, description: 'The parent Bill\'s SourceID (matches /api/v1/bills/{id}.id)' }
+                  amendments: { type: array, items: { $ref: '#/components/schemas/Amendment' } }
+                  total:      { type: integer }
+                  source:     { type: string, enum: [seed], description: '`seed` for FEAT-15 — amendments are seed-only pending issue #19' }
+                  note:       { type: string, description: 'Provenance note explaining the seed-data status' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /bills/{id}/summary:
     get:
       tags: [bills]
@@ -1713,6 +1747,31 @@ components:
         retrieved_at: { type: string, format: date-time }
         source_url: { type: string }
         is_current: { type: boolean }
+
+    Amendment:
+      type: object
+      description: |
+        A single proposed change to a Bill — raised by an MP (or, in
+        committee-of-the-whole form, by a committee) during the Bill's
+        committee stage or third reading. Each amendment carries a
+        lifecycle (proposed → accepted | rejected) and a plain-language
+        summary of the substantive change.
+
+        Amendments are seed-only for FEAT-15 (issue #293). The live
+        ingestion path (Hansard committee-stage parsing) is pending
+        issue #19 + ADR-0011's immutable Bill version storage. Until
+        that lands, every amendment returned by the API carries
+        `source_url` pointing at the parent Bill's kenyalaw.org page —
+        per-sitting Hansard URLs are not yet minted.
+      properties:
+        id:          { type: string, description: 'Stable platform ID (e.g., "amend-001")' }
+        bill_id:     { type: string, description: 'The parent Bill\'s SourceID — matches /api/v1/bills/{id}.id' }
+        title:       { type: string, description: 'One-line description of the substantive change (e.g., "Clause 14(2) — increase contribution rate to 8%")' }
+        proposed_by: { type: string, description: 'Platform-internal person ID of the sponsor (e.g., "person-001"). Cross-references /api/v1/people/{id}/scorecard' }
+        proposed_at: { type: string, format: date-time, description: 'Timestamp of the committee sitting at which the amendment was tabled' }
+        status:      { type: string, enum: [proposed, accepted, rejected], description: 'Lifecycle state — proposed (tabled, not yet voted), accepted (carried), rejected (defeated)' }
+        summary:     { type: string, description: 'Plain-language description of what the amendment would change + why the sponsor moved it' }
+        source_url:  { type: string, description: 'Link to the official record (Hansard, Order Paper, or kenyalaw.org Bill page). Seed amendments point at the parent Bill URL until per-sitting URLs are minted (issue #19).' }
 
     BillSummary:
       type: object
