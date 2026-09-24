@@ -13,6 +13,8 @@ import {
   FlaskConical,
   Newspaper,
   Bell,
+  FileText,
+  Sparkles,
 } from 'lucide-react';
 import { mockBills } from '@/lib/mock-data';
 import {
@@ -176,76 +178,128 @@ export default async function HomePage() {
         </div>
       )}
 
-      {/* === SECTION 1: First viewport — Ask + Civic Highlights Carousel === */}
-      <section className="bg-gradient-to-b from-civic-forest to-civic-ink text-white">
-        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
-          <p className="text-sm uppercase tracking-widest text-civic-acacia">
-            Kenya · 🇰🇪
-          </p>
-          <h1 className="mt-4 max-w-3xl font-serif text-3xl font-semibold leading-tight sm:text-4xl md:text-5xl">
-            Understand what your government is doing.
+      {/* === SECTION 1: First viewport — Hero with parliament image + Ask bar === */}
+      <section className="relative min-h-[560px] overflow-hidden">
+        {/* Background image — Kenya Parliament Buildings */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: 'url(/hero-parliament.jpg)' }}
+          aria-hidden="true"
+        />
+        {/* Dark gradient overlay for text readability */}
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-civic-forest/95 via-civic-forest/80 to-civic-ink/90"
+          aria-hidden="true"
+        />
+
+        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:py-28">
+          {/* Country badge */}
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-civic-acacia backdrop-blur-sm">
+              <span className="text-base" aria-hidden="true">🇰🇪</span>
+              Now serving 14 African countries
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="mt-6 max-w-3xl font-serif text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl">
+            Understand what your{' '}
+            <span className="text-civic-acacia">government</span>{' '}
+            is doing.
           </h1>
-          <p className="mt-4 max-w-2xl text-base text-civic-mist/90 sm:text-lg">
-            Evidence-grounded explanations of Kenyan legislation, regulations, and civic activity.
+
+          {/* Subheadline */}
+          <p className="mt-5 max-w-2xl text-lg text-white/85 sm:text-xl">
+            Evidence-grounded explanations of legislation, regulations, and civic activity across Africa.
             No legal jargon. No political bias. Just the facts — with sources you can verify.
           </p>
 
-          {/* Ask bar (left) + Civic Highlights Carousel (right) — first viewport */}
-          <div className="mt-8 grid gap-8 lg:grid-cols-5">
-            {/* Ask search bar */}
-            <div className="lg:col-span-2">
-              <form action="/ask" className="flex flex-col gap-3">
-                <label htmlFor="q" className="sr-only">
-                  Search a Bill, law, topic, or ask a question
-                </label>
-                <input
-                  id="q"
-                  type="search"
-                  name="q"
-                  placeholder="Ask Kenya anything…"
-                  className="w-full rounded-lg border border-white/20 bg-white/10 px-5 py-4 text-base text-white placeholder:text-white/60 focus:border-civic-acacia focus:bg-white/15"
-                  autoComplete="off"
-                />
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-civic-acacia px-6 py-4 font-semibold text-civic-ink hover:bg-civic-acacia/90"
+          {/* Ask bar + quick actions */}
+          <div className="mt-8 max-w-2xl">
+            <form action="/ask" className="flex flex-col gap-3 sm:flex-row">
+              <label htmlFor="q" className="sr-only">
+                Search a Bill, law, topic, or ask a question
+              </label>
+              <input
+                id="q"
+                type="search"
+                name="q"
+                placeholder="Ask Kenya anything…"
+                className="w-full flex-1 rounded-lg border border-white/20 bg-white/10 px-5 py-4 text-base text-white placeholder:text-white/60 backdrop-blur-sm focus:border-civic-acacia focus:bg-white/15 focus:outline-none"
+                autoComplete="off"
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-civic-acacia px-6 py-4 font-semibold text-civic-ink transition hover:bg-civic-acacia/90"
+              >
+                <Search className="h-5 w-5" aria-hidden="true" />
+                Ask
+              </button>
+            </form>
+            {/* Quick suggestions */}
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <span className="text-white/70">Try:</span>
+              {[
+                'What is happening with housing?',
+                'What did the President sign today?',
+                'What changed in data protection?',
+              ].map((q) => (
+                <Link
+                  key={q}
+                  href={`/ask?q=${encodeURIComponent(q)}`}
+                  className="rounded-full border border-white/20 px-3 py-1.5 text-white/90 backdrop-blur-sm transition hover:border-civic-acacia hover:text-white"
                 >
-                  <Search className="h-5 w-5" aria-hidden="true" />
-                  Ask
-                </button>
-              </form>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <span className="text-white/70">Try:</span>
-                {[
-                  'What is happening with housing?',
-                  'What did the President sign today?',
-                  'What changed in data protection?',
-                ].map((q) => (
-                  <Link
-                    key={q}
-                    href={`/ask?q=${encodeURIComponent(q)}`}
-                    className="rounded-full border border-white/20 px-3 py-1.5 text-white/90 transition hover:border-civic-acacia hover:text-white"
-                  >
-                    {q}
-                  </Link>
-                ))}
+                  {q}
+                </Link>
+              ))}
+            </div>
+
+            {/* Stats row */}
+            <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-civic-acacia" aria-hidden="true" />
+                <span className="text-white/80"><strong className="text-white">50+</strong> Bills tracked</span>
               </div>
-
-              {billsSource === 'mock' && (
-                <p className="mt-4 rounded-md bg-civic-acacia/10 px-3 py-1.5 text-xs text-civic-acacia">
-                  Showing sample data — connect the Go API (port 9000) for live Bills from kenyalaw.org
-                </p>
-              )}
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-civic-acacia" aria-hidden="true" />
+                <span className="text-white/80"><strong className="text-white">14</strong> Countries</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-civic-acacia" aria-hidden="true" />
+                <span className="text-white/80"><strong className="text-white">12</strong> Official sources</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Radio className="h-4 w-4 text-civic-acacia" aria-hidden="true" />
+                <span className="text-white/80"><strong className="text-white">Daily</strong> Gazette alerts</span>
+              </div>
             </div>
 
-            {/* Civic Highlights Carousel — prominent, in the first viewport */}
-            <div className="lg:col-span-3">
-              <CivicHighlightsCarousel highlights={highlights} />
-              <p className="mt-3 text-xs text-white/60">
-                Top verified developments today. Every highlight links to evidence.
+            {billsSource === 'mock' && (
+              <p className="mt-4 rounded-md bg-civic-acacia/10 px-3 py-1.5 text-xs text-civic-acacia">
+                Showing sample data — connect the Go API (port 9000) for live Bills from kenyalaw.org
               </p>
-            </div>
+            )}
           </div>
+        </div>
+
+        {/* Bottom fade into next section */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-civic-paper to-transparent"
+          aria-hidden="true"
+        />
+      </section>
+
+      {/* === SECTION 1b: Civic Highlights Carousel === */}
+      <section className="bg-civic-paper">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-civic-acacia" aria-hidden="true" />
+            <h2 className="font-serif text-xl font-semibold text-civic-forest">
+              Civic Highlights
+            </h2>
+            <span className="text-xs text-civic-stone">Top verified developments today</span>
+          </div>
+          <CivicHighlightsCarousel highlights={highlights} />
         </div>
       </section>
 
