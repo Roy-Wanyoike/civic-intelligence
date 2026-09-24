@@ -421,6 +421,22 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+        // Public Participation Portal (issue #287 / task FEAT-9). The
+        // petitionStore is an in-memory store pre-populated with 5
+        // hand-curated e-petitions spanning the 3 statuses (open,
+        // closed, answered) and varying signature counts. The
+        // platform NEVER derives a "popular support score" or
+        // "approval rating" from these records (rule:
+        // NO_POLITICAL_PERFORMANCE_SCORE). The list endpoint accepts
+        // optional status + country query filters; the detail
+        // sub-router handles /api/v1/petitions/{id} (GET detail) +
+        // /api/v1/petitions/{id}/sign (POST sign — increments the
+        // count + appends a signature). In production this would be a
+        // public_participation.petitions + .signatures SQL repository.
+        petitionStore := NewPetitionStoreSeeded()
+        apiHandler.HandleFunc("/api/v1/petitions", makePetitionsHandler(petitionStore))
+        apiHandler.HandleFunc("/api/v1/petitions/", makePetitionDetailHandler(petitionStore))
+
         // Civic Calendar (task ENG-K1 — Feature 1). The calendarStore is a
         // package-level in-memory store seeded with 26 realistic Kenya
         // Parliament events spanning ~3 months. In production this would
