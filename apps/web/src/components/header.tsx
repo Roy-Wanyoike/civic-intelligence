@@ -38,6 +38,7 @@ import {
   MapPin,
   LogIn,
   Network,
+  GraduationCap,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
@@ -56,7 +57,7 @@ import { openCommandPalette } from './command-palette';
  *   Intelligence  — What Changed, Feed, Trending, Research, Trust, Reports
  *   Scenarios     — What If?
  *   Resources     — Briefing, Gazette, Datasets, Dashboard, Topics,
- *                   Developers, About, Sponsor
+ *                   Developers, About, Sponsor, Learn
  *
  * i18n (spec §66): labels are pulled from the `nav` message namespace via
  * `useTranslations('nav')`. Each nav item carries an `i18nKey` (e.g.
@@ -141,6 +142,7 @@ const navGroups: NavGroup[] = [
     i18nKey: 'groups.resources',
     icon: Database,
     items: [
+      { href: '/learn', i18nKey: 'pages.learn', icon: GraduationCap, description: 'Civic education guides — Bills, Parliament, Constitution, participation' },
       { href: '/briefing', i18nKey: 'pages.daily_briefing', icon: Newspaper, description: 'Today\'s civic brief' },
       { href: '/gazette', i18nKey: 'pages.kenya_gazette', icon: FileText, description: 'Official gazette notices' },
       { href: '/gazette/alerts', i18nKey: 'pages.gazette_alerts', icon: BellRing, description: 'Subscribe to keywords in the Kenya Gazette' },

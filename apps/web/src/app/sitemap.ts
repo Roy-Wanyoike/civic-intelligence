@@ -75,6 +75,7 @@ const UTILITY_PAGES = [
   { path: '/following', priority: 0.2, changeFrequency: 'daily' as const },
   { path: '/notifications', priority: 0.2, changeFrequency: 'daily' as const },
   { path: '/gazette/alerts', priority: 0.4, changeFrequency: 'weekly' as const },
+  { path: '/learn', priority: 0.8, changeFrequency: 'monthly' as const },
 ];
 
 // Helper for the per-record routes — emit the index page only.
@@ -87,6 +88,7 @@ function recordPages() {
     { path: '/governments/[id]', priority: 0.6, changeFrequency: 'monthly' as const },
     { path: '/scenarios/[id]', priority: 0.5, changeFrequency: 'weekly' as const },
     { path: '/legislatures/[id]', priority: 0.5, changeFrequency: 'monthly' as const },
+    { path: '/learn/[slug]', priority: 0.7, changeFrequency: 'monthly' as const },
   ];
 }
 
