@@ -20,7 +20,16 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { Metadata } from 'next';
+<<<<<<< HEAD
+import {
+  getMPScorecard,
+  getRegisteredInterests,
+  type RegisteredInterest,
+  type RegisteredInterestCategory,
+} from '@/lib/people-api';
+=======
 import { getMPScorecard, getMPVotes, type VoteKind } from '@/lib/people-api';
+>>>>>>> origin/main
 import { RealityBadge } from '@/components/reality-labels';
 import { PrintButton } from '@/components/print-button';
 import { ScorecardShareButton } from './share-button';
@@ -62,6 +71,50 @@ function formatDate(d?: string): string {
     return d;
   }
 }
+
+// formatKES renders a KES integer with the Kenyan grouping (e.g.
+// "KES 2,500,000"). Returns "Value not disclosed" when value is 0 — the
+// API uses 0 to mean "value not disclosed / not applicable" (e.g. a
+// non-monetary gift or a state commendation medallion) and the
+// description text carries the qualifier in that case (issue #288).
+function formatKES(kes: number): string {
+  if (!kes) return 'Value not disclosed';
+  return `KES ${kes.toLocaleString('en-KE')}`;
+}
+
+// interestCategoryConfig maps each declaration category to a label +
+// Tailwind colour triplet so the badge on each interest card is
+// visually distinct (Gate K — UI Clarity). The colour families are
+// chosen so adjacent categories on the same card never collide.
+const interestCategoryConfig: Record<
+  RegisteredInterestCategory,
+  { label: string; badge: string }
+> = {
+  directorship: {
+    label: 'Directorship',
+    badge: 'bg-indigo-50 text-indigo-800 border-indigo-200',
+  },
+  land_property: {
+    label: 'Land & property',
+    badge: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  },
+  shares: {
+    label: 'Shares',
+    badge: 'bg-sky-50 text-sky-800 border-sky-200',
+  },
+  gifts: {
+    label: 'Gifts',
+    badge: 'bg-amber-50 text-amber-800 border-amber-200',
+  },
+  other_income: {
+    label: 'Other income',
+    badge: 'bg-violet-50 text-violet-800 border-violet-200',
+  },
+  loans: {
+    label: 'Loans',
+    badge: 'bg-rose-50 text-rose-800 border-rose-200',
+  },
+};
 
 const activityKindLabel: Record<string, string> = {
   question: 'Question',
@@ -128,12 +181,29 @@ export default async function ScorecardPage({
   // the rest of the scorecard and the Voting Record section falls back
   // to its empty state (issue #284 graceful-degradation contract).
   let sc: Awaited<ReturnType<typeof getMPScorecard>> | null = null;
+<<<<<<< HEAD
+  // Registered interests are fetched in parallel with the scorecard
+  // (issue #288). A failure to load interests does NOT 404 the whole
+  // page — the scorecard is the primary resource and interests are a
+  // secondary tab. An empty items list (e.g. for a future MP whose
+  // declaration has not been seeded yet) is rendered as "No declared
+  // interests" rather than omitting the section, so citizens can see
+  // the platform tracks declarations even when none are on record.
+  let interests: RegisteredInterest[] = [];
+  let interestsDisclaimer = '';
+  try {
+    sc = await getMPScorecard(id);
+    const interestsResp = await getRegisteredInterests(id);
+    interests = interestsResp.items ?? [];
+    interestsDisclaimer = interestsResp.disclaimer;
+=======
   let votes: Awaited<ReturnType<typeof getMPVotes>> | null = null;
   try {
     [sc, votes] = await Promise.all([
       getMPScorecard(id),
       getMPVotes(id).catch(() => null),
     ]);
+>>>>>>> origin/main
   } catch {
     notFound();
   }
@@ -356,6 +426,89 @@ export default async function ScorecardPage({
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      {/* Registered interests — issue #288. Each declared interest renders
+          as a card with a category badge, the description (verbatim from
+          the Declaration of Interests Register), the KES value (or
+          "Value not disclosed" when 0), the declaration date, and a
+          source link to the canonical register entry on parliament.go.ke.
+          The platform does NOT yet scrape the live register — the
+          disclaimer below makes the seed-only provenance explicit so the
+          declarations are never silently shipped as authoritative. */}
+      <section aria-labelledby="interests-heading" className="mb-8">
+        <h2
+          id="interests-heading"
+          className="font-serif text-xl font-semibold text-civic-forest"
+        >
+          Registered interests
+        </h2>
+        <p className="mt-1 text-xs text-civic-stone">
+          Directorships, land + property, shareholdings, gifts, other income
+          and loans declared to the Clerk of the Senate / National Assembly
+          under the Leadership and Integrity Act, 2012. Every entry links to
+          its canonical register entry so a citizen can spot conflicts of
+          interest before an MP votes on a Bill or sits in a committee
+          inquiry that touches one of their declared holdings.
+        </p>
+        {interests.length === 0 ? (
+          <p className="mt-3 rounded-md border border-civic-border bg-civic-mist p-4 text-sm text-civic-stone">
+            No declared interests on record in this parliamentary period.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {interests.map((ri, i) => {
+              const cfg = interestCategoryConfig[ri.category] ?? {
+                label: ri.category,
+                badge:
+                  'bg-stone-100 text-stone-700 border-stone-300',
+              };
+              return (
+                <li
+                  key={`${ri.category}-${ri.declared_at}-${i}`}
+                  className="rounded-md border border-civic-border bg-white p-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cfg.badge}`}
+                        >
+                          {cfg.label}
+                        </span>
+                        <span className="text-[11px] uppercase tracking-wide text-civic-stone">
+                          Declared {formatDate(ri.declared_at)}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-sm text-civic-ink">
+                        {ri.description}
+                      </p>
+                      <p className="mt-1 text-xs text-civic-stone">
+                        Value:{' '}
+                        <span className="font-semibold text-civic-ink">
+                          {formatKES(ri.value_kes)}
+                        </span>
+                      </p>
+                    </div>
+                    <a
+                      href={ri.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex flex-shrink-0 items-center gap-1 text-xs text-sky-700 hover:underline"
+                    >
+                      Source <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                    </a>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {interestsDisclaimer && (
+          <p className="mt-2 text-[11px] text-civic-stone">
+            {interestsDisclaimer}
+          </p>
         )}
       </section>
 

@@ -461,28 +461,22 @@ func main() {
         apiHandler.HandleFunc("/api/v1/gazette/alerts", makeGazetteAlertsHandler(gazetteAlertStore))
         apiHandler.HandleFunc("/api/v1/gazette/alerts/", makeGazetteAlertDetailHandler(gazetteAlertStore))
 
-        // WhatsApp Business bot (issue #290). The bot receives inbound
-        // WhatsApp messages on /api/v1/whatsapp/webhook, applies per-phone
-        // rate limiting (5 questions/day free, configurable via
-        // WHATSAPP_FREE_DAILY_LIMIT), routes by keyword (BILL / MP / GAZETTE /
-        // HELP), and dispatches free-form questions to the AI Q&A endpoint
-        // (services/ai). The WhatsAppSender is selected at startup from the
-        // WHATSAPP_API_KEY env var — a *StubWhatsAppSender when the key is
-        // missing (dev + tests, logs messages but doesn't deliver them), a
-        // *CloudWhatsAppSender when set (POSTs to Meta's Graph API). The bot
-        // reuses the same Kenya Law adapter (for the BILL keyword), the same
-        // gazetteAlertStore (for the GAZETTE keyword), and the same
-        // sampleScorecards slice (for the MP keyword) as the existing HTTP
-        // endpoints so the bot's data is identical to the web frontend's
-        // data. The status endpoint surfaces the sender name + daily limit so
-        // an operator can immediately see whether real WhatsApp delivery is
-        // wired.
-        whatsappFreeDailyLimit := parseIntDefaultEnv("WHATSAPP_FREE_DAILY_LIMIT", defaultWhatsAppFreeDailyLimit)
-        whatsappRateLimiter := NewWhatsAppRateLimiter(whatsappFreeDailyLimit)
-        whatsappSender := NewWhatsAppSender(nil)
-        whatsappBot := NewWhatsAppBot(whatsappRateLimiter, cfg.AIServiceURL, kenyaLaw, gazetteAlertStore)
-        apiHandler.HandleFunc("/api/v1/whatsapp/webhook", makeWhatsAppWebhookHandler(whatsappBot, whatsappSender))
-        apiHandler.HandleFunc("/api/v1/whatsapp/status", makeWhatsAppStatusHandler(whatsappSender, whatsappRateLimiter))
+        // SMS + USSD alerts (issue #289). The smsSubscriberStore is the
+        // package-level in-memory store, seeded with 10 sample
+        // subscribers spanning 5 countries (KE, UG, TZ, GH, NG). The
+        // SMSSender is selected at startup from the AFRICAS_TALKING_API_KEY
+        // env var — a *StubSMSSender when the key is missing (dev + tests),
+        // an *AfricasTalkingSMSSender when set (production wiring follows
+        // in a follow-up task; the architecture is ready today). The
+        // USSD endpoint is the Africa's Talking callback URL: a citizen
+        // dials the USSD code, AT calls /api/v1/ussd on every keystroke,
+        // and the platform responds with the next menu screen.
+        smsSender := NewSMSSender(nil)
+        _ = smsSender // also referenced below for the broadcast + list handlers
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribe", makeSMSSubscribeHandler(smsSubscriberStore))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribers", makeSMSSubscribersHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/send", makeSMSSendHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/ussd", makeUSSDHandler(smsSubscriberStore))
         // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
         // differentiator: a visual relationship explorer that traces how
         // Bills, Acts, Institutions, People, Constitution Articles, and
@@ -1525,6 +1519,21 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 		handleBillsByPerson(w, r, personID)
 		return
 	}
+
+	// Registered interests sub-resource (task FEAT-10 / issue #288). The
+	// handler returns the MP's declared directorships, land + property,
+	// shareholdings, gifts, other income, and loans from the seed slice
+	// pending the live Declaration of Interests Register ingestion path.
+	// Supports an optional ?category= filter (closed enum, 400 on typo).
+	if strings.HasSuffix(tail, "/interests") {
+		personID := strings.TrimSuffix(tail, "/interests")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleInterestsByPerson(w, r, personID)
+		return
+	}
         // Default: person detail lookup with country-scoped visibility gate.
         id := tail
         country := middleware.CountryFromContext(r.Context())
@@ -2012,14 +2021,6 @@ func parseIntDefault(s string, def int) int {
                 return def
         }
         return n
-}
-
-// parseIntDefaultEnv reads an integer from the named env var, returning
-// def when the var is empty or unparseable. Used by the WhatsApp bot's
-// WHATSAPP_FREE_DAILY_LIMIT override (issue #290) so an operator can
-// tune the free-tier ceiling without a code change.
-func parseIntDefaultEnv(name string, def int) int {
-        return parseIntDefault(os.Getenv(name), def)
 }
 
 // --- Civic Feed (#113) ---
