@@ -710,6 +710,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 handleBillTimeline(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "changes"):
                                 handleBillChanges(w, r, adapter, billID)
+                        case strings.HasPrefix(sub, "amendments"):
+                                handleBillAmendments(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "versions"):
                                 writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
                         case strings.HasPrefix(sub, "documents"):
