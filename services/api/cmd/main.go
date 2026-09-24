@@ -421,6 +421,16 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+        // National Budget Allocations (issue #285). The platform NEVER
+        // derives a "best-performing ministry" verdict from the
+        // allocations — they are surfaced raw (rule:
+        // NO_POLITICAL_PERFORMANCE_SCORE). handleBudget reads the seed
+        // slice from kenya_seed.SampleBudgetAllocations (21 ministries,
+        // ~KES 3.9T for FY 2026/27, sourced from the National Treasury
+        // Budget Statement). Only KE has seed data today; other supported
+        // countries return 200 with an empty items list (NOT 404).
+        apiHandler.HandleFunc("/api/v1/budget", handleBudget)
+
         // Civic Calendar (task ENG-K1 — Feature 1). The calendarStore is a
         // package-level in-memory store seeded with 26 realistic Kenya
         // Parliament events spanning ~3 months. In production this would

@@ -36,6 +36,7 @@ tags:
   - name: transitions
   - name: scenarios
   - name: debt
+  - name: budget
   - name: loans
   - name: grants
   - name: trust
@@ -1035,6 +1036,62 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/DebtDashboard' } } }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /budget:
+    get:
+      tags: [budget]
+      summary: National budget allocations by ministry (issue #285)
+      description: |
+        Returns the seed budget allocations for the requested country +
+        fiscal year. Each row is a single ministry's total allocation,
+        tagged with the ministry's dominant category — recurrent for
+        service-delivery ministries (Education, Health, Interior, Defence,
+        Consolidated Fund Services), development for capital-heavy
+        ministries (Roads, Energy, Water, ICT).
+
+        The endpoint is seed-only — the verified Programme-Based Budget
+        ingestion path has not shipped yet (issue #285 acceptance bar:
+        "Use seed data only. Do NOT parse actual PDFs."). When the
+        ingestion path ships, this endpoint will be extended to merge
+        live + seed results; until then, `source` is always `"seed"`.
+
+        Only Kenya (KE) has seed data today. Other supported countries
+        (UG, TZ, GH, NG, ZA, RW, ZM, SN, EG, …) return 200 with an empty
+        items list — NOT 404 — so a typo in the country code does not
+        silently look like "this country has no budget data at all".
+
+        The platform NEVER derives a "best-performing ministry" verdict
+        from the allocations — they are surfaced raw (rule:
+        NO_POLITICAL_PERFORMANCE_SCORE). A ministry with a 0.5% allocation
+        is recorded as such; the citizen interprets the priority, the
+        platform does not.
+
+        The frontend renders the allocations as an interactive D3 treemap
+        (`/budget` page). Cells are sized by allocation amount and coloured
+        by category — forest green for recurrent, acacia gold for
+        development — so a citizen can see at a glance how the budget
+        splits between running costs and new investment.
+      parameters:
+        - { in: query, name: country, required: false, schema: { type: string, default: KE }, description: 'ISO 3166-1 alpha-2 country code. Only KE has seed data today; other supported countries return 200 with an empty items list (NOT 404).' }
+        - { in: query, name: year, required: false, schema: { type: string, default: '2026' }, description: 'Calendar year. Both 2026 and 2027 refer to FY 2026/27 — Kenya''s fiscal year straddles two calendar years. Other year values return 200 with an empty items list (NOT 404).' }
+      responses:
+        '200':
+          description: National budget allocations for the requested country + fiscal year
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  country: { type: string, description: 'The requested ISO 3166-1 alpha-2 country code (echoed)' }
+                  year: { type: string, description: 'The fiscal-year label (e.g. "2026/27"). Both 2026 and 2027 refer to the same fiscal year, so the response surfaces the label rather than the ambiguous calendar year.' }
+                  items:
+                    type: array
+                    description: 'Per-ministry allocations, most-expensive-first (largest allocation at the top). Every item carries all 5 required fields (ministry, amount_kes_billions, percentage, category, source_url).'
+                    items: { $ref: '#/components/schemas/BudgetAllocation' }
+                  total: { type: number, description: 'Sum of every allocation''s amount_kes_billions — i.e. the national budget envelope for the requested fiscal year (in KES billions).' }
+                  source_url: { type: string, format: uri, description: 'Canonical National Treasury Budget Statement URL — the source of every allocation in the items list.' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" until the verified Programme-Based Budget ingestion path ships (issue #285).' }
+        '405': { description: 'Returned for non-GET methods — the endpoint is read-only (budget allocations are seeded, not user-mutable).' }
+
   /debt/loans:
     get:
       tags: [debt, loans]
@@ -1802,6 +1859,33 @@ components:
         primary_role: { type: string }
         institution_id: { type: string, format: uuid, nullable: true }
         country: { type: string }
+
+    BudgetAllocation:
+      type: object
+      description: |
+        A single ministry's budget allocation for a single fiscal year
+        (issue #285). The /api/v1/budget endpoint returns a list of
+        these — one per ministry — with the `percentage` field
+        representing the ministry's share of the total budget envelope.
+
+        The platform NEVER derives a "best-performing ministry" verdict
+        from these figures — they are surfaced raw (rule:
+        NO_POLITICAL_PERFORMANCE_SCORE). A ministry with a 0.5%
+        allocation is recorded as such; the citizen interprets the
+        priority, the platform does not.
+      properties:
+        ministry: { type: string, description: 'Ministry / state department / constitutional commission name (e.g. "Ministry of Education", "Consolidated Fund Services", "Teachers Service Commission")' }
+        amount_kes_billions: { type: number, description: 'Allocation amount in KES billions (e.g. 1500.0 for KES 1,500B = KES 1.5T)' }
+        percentage: { type: number, minimum: 0, maximum: 100, description: 'The ministry''s share of the total budget envelope, in percent (0–100). Computed at seed-init from the amounts so the field stays consistent with the per-row amount_kes_billions even if the seed is edited.' }
+        category: { type: string, enum: [recurrent, development], description: 'The ministry''s dominant category — recurrent (salaries, operations, debt servicing) or development (capital projects, infrastructure). The frontend renders recurrent cells in forest green (#0c3b2e) and development cells in acacia gold (#d4a017). Every ministry has both recurrent and development components in the real budget; this field surfaces the dominant share for at-a-glance reading.' }
+        source_url: { type: string, format: uri, description: 'URL of the National Treasury Budget Statement the allocation was sourced from' }
+      required: [ministry, amount_kes_billions, percentage, category, source_url]
+      example:
+        ministry: Consolidated Fund Services
+        amount_kes_billions: 1500.0
+        percentage: 38.34
+        category: recurrent
+        source_url: https://www.treasury.go.ke/budget-statement/
 
     MPScorecard:
       type: object
