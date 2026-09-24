@@ -325,20 +325,6 @@ func main() {
         apiHandler.Handle("/api/v1/questions", questionsHandler)
         apiHandler.Handle("/api/v1/questions/stream", questionsHandler)
 
-        // Written Questions tracker (issue #286) — PUBLIC parliamentary
-        // records (MP → Minister written questions + responses). These
-        // are NOT the AI Q&A /api/v1/questions route (which requires
-        // auth + ScopeAIAsk). Written questions are public because
-        // they are part of the official parliamentary record (the same
-        // provenance as /bills + /acts + /votes). The list endpoint
-        // accepts optional mp_id + status query filters; the detail
-        // sub-router handles /api/v1/questions/written/{id}. Per-MP
-        // questions are also exposed at
-        // /api/v1/people/{id}/questions (dispatched from handlePeople
-        // alongside /scorecard + /bills).
-        apiHandler.HandleFunc("/api/v1/questions/written", makeWrittenQuestionsListHandler())
-        apiHandler.HandleFunc("/api/v1/questions/written/", makeWrittenQuestionDetailHandler())
-
         // Follow (legacy single-shot endpoint, kept for backward compat).
         followHandler := middleware.RequireToken(verifier)(
                 middleware.RequireScope(auth.ScopeNotificationWrite)(http.HandlerFunc(handleFollow)),
@@ -434,6 +420,22 @@ func main() {
         // above (seeded with Kenya's CBK + Treasury observations).
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
+
+        // Public Participation Portal (issue #287 / task FEAT-9). The
+        // petitionStore is an in-memory store pre-populated with 5
+        // hand-curated e-petitions spanning the 3 statuses (open,
+        // closed, answered) and varying signature counts. The
+        // platform NEVER derives a "popular support score" or
+        // "approval rating" from these records (rule:
+        // NO_POLITICAL_PERFORMANCE_SCORE). The list endpoint accepts
+        // optional status + country query filters; the detail
+        // sub-router handles /api/v1/petitions/{id} (GET detail) +
+        // /api/v1/petitions/{id}/sign (POST sign — increments the
+        // count + appends a signature). In production this would be a
+        // public_participation.petitions + .signatures SQL repository.
+        petitionStore := NewPetitionStoreSeeded()
+        apiHandler.HandleFunc("/api/v1/petitions", makePetitionsHandler(petitionStore))
+        apiHandler.HandleFunc("/api/v1/petitions/", makePetitionDetailHandler(petitionStore))
 
         // Civic Calendar (task ENG-K1 — Feature 1). The calendarStore is a
         // package-level in-memory store seeded with 26 realistic Kenya
@@ -708,6 +710,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 handleBillTimeline(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "changes"):
                                 handleBillChanges(w, r, adapter, billID)
+                        case strings.HasPrefix(sub, "amendments"):
+                                handleBillAmendments(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "versions"):
                                 writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
                         case strings.HasPrefix(sub, "documents"):
@@ -716,6 +720,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 handleBillSummary(w, r, adapter, billID, aiServiceURL)
                         case strings.HasPrefix(sub, "follow"):
                                 handleFollow(w, r)
+                        case strings.HasPrefix(sub, "votes"):
+                                handleVotesByBill(w, r, billID)
                         default:
                                 writeError(w, http.StatusNotFound, "not_found", "unknown sub-route: "+sub)
                         }
@@ -1459,8 +1465,8 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // the trailing path tail:
         //   - "" (root, no trailing slash)  → list the 5 sample people
         //   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
-        //   - "{id}/bills"                   → Bills sponsored (issue #282)
-        //   - "{id}/questions"               → MP written questions (issue #286)
+        //   - "{id}/votes"                    → MP voting history (issue #284)
+        //   - "{id}/bills"                    → Bills sponsored (issue #282)
         //   - "{id}"                          → person detail (still pending,
         //                                       issue #19 — kept as stub)
         // Normalise: treat both /api/v1/people and /api/v1/people/ as the list call (issue #264).
@@ -1478,6 +1484,15 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
                 makeScorecardHandler()(w, r)
                 return
         }
+	if strings.HasSuffix(tail, "/votes") {
+		personID := strings.TrimSuffix(tail, "/votes")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleVotesByPerson(w, r, personID)
+		return
+	}
 	if strings.HasSuffix(tail, "/bills") {
 		personID := strings.TrimSuffix(tail, "/bills")
 		if personID == "" {
@@ -1485,18 +1500,6 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleBillsByPerson(w, r, personID)
-		return
-	}
-	// Written Questions sub-resource (issue #286). Returns the MP's
-	// written questions tabled to Cabinet Secretaries + Ministers.
-	// Dispatched parallel to /scorecard + /bills.
-	if strings.HasSuffix(tail, "/questions") {
-		personID := strings.TrimSuffix(tail, "/questions")
-		if personID == "" {
-			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
-			return
-		}
-		handleWrittenQuestionsByPerson(w, r, personID)
 		return
 	}
         // Default: person detail lookup with country-scoped visibility gate.
