@@ -2404,6 +2404,48 @@ components:
         message: { type: string }
         detail: { type: object, nullable: true }
 
+    # ----- Public Participation Portal (issue #287 / FEAT-9) -----
+
+    Petition:
+      type: object
+      description: |
+        A single e-petition record. The status enum is the 3-valued
+        lifecycle state (open / closed / answered). The platform NEVER
+        derives a "popular support score" or "approval rating" from
+        these records (rule: NO_POLITICAL_PERFORMANCE_SCORE).
+      required: [id, title, description, created_by, created_at, status, signatures_count, target_signatures, closes_at, country]
+      properties:
+        id:                 { type: string, example: pet-001 }
+        title:              { type: string }
+        description:        { type: string, description: "Petition body — the full text of what the petition asks the authority to do" }
+        created_by:         { type: string, description: "Petitioner name + identifier (e.g. 'Wanjiku Mwangi (citizen, Nairobi County)')" }
+        created_at:         { type: string, format: date-time }
+        status:             { type: string, enum: [open, closed, answered] }
+        signatures_count:   { type: integer, description: "Denormalised count; re-derived from the signatures slice on every read" }
+        target_signatures:  { type: integer, minimum: 1 }
+        closes_at:          { type: string, format: date-time }
+        country:            { type: string, description: "ISO 3166-1 alpha-2 country code" }
+
+    PetitionSignature:
+      type: object
+      description: |
+        A single signature on a petition. The `verified` flag is
+        `false` on creation and flips to `true` only after the email
+        verification pipeline confirms the signer's email out-of-band.
+        The platform NEVER publishes the signer's email on the public
+        list (the list endpoint returns Name + SignedAt + Verified
+        only); the email is collected solely so the verification
+        pipeline can confirm the signer's identity.
+      required: [id, petition_id, name, email, signed_at, verified]
+      properties:
+        id:          { type: string, example: sig-001-01 }
+        petition_id: { type: string, example: pet-001 }
+        name:        { type: string }
+        email:       { type: string, format: email, description: "Collected for verification; NOT published on the public list" }
+        signed_at:   { type: string, format: date-time }
+        verified:    { type: boolean, description: "False until the email verification pipeline confirms the signer's email" }
+
+
 security:
   - bearerAuth: []
 
@@ -2848,3 +2890,181 @@ security:
                 description: RSS 2.0 XML document (<rss version="2.0">).
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----- Public Participation Portal (issue #287 / FEAT-9) -----
+  #
+  # The e-petition endpoints let citizens browse, create, and sign
+  # public-participation petitions. The platform NEVER derives a
+  # "popular support score" or "approval rating" from these records
+  # (rule: NO_POLITICAL_PERFORMANCE_SCORE). A petition with 50,000
+  # signatures is recorded as such; the citizen interprets the
+  # result, the platform does not.
+
+  /petitions:
+    get:
+      tags: [participation]
+      summary: List e-petitions (filterable by status + country)
+      description: |
+        Returns the list of e-petitions sorted most-recent-first by
+        created_at. Both `status` + `country` are optional filters;
+        when omitted, the response carries every petition in the
+        store. The status filter is strict — any value outside the
+        {open, closed, answered} enum returns 400 (NOT 200 with an
+        empty items list) so a typo in the status does not silently
+        look like a legitimate "no petitions match" response.
+
+        The country filter is case-insensitive + accepts any non-empty
+        ISO 3166-1 alpha-2 code (the platform does NOT validate
+        against the supported-countries list here because petitions
+        can be tabled for any country). A country with no matching
+        petitions returns 200 with an empty items list (NOT 404) —
+        the list endpoint is a search-style filter, so "no matches"
+        is a legitimate response.
+
+        The seed slice is 5 hand-curated Kenyan petitions (2 open,
+        1 closed, 2 answered) spanning Affordable Housing, SHA
+        rollout, education capitation, pending-bills audit, and
+        digital-identity framework themes.
+      parameters:
+        - { in: query, name: status,  required: false, schema: { type: string, enum: [open, closed, answered] }, description: "Filter to petitions with the given status" }
+        - { in: query, name: country, required: false, schema: { type: string }, description: "ISO 3166-1 alpha-2 country code (e.g. KE, UG); case-insensitive" }
+      responses:
+        '200':
+          description: Petition list (most-recent-first by created_at)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, source]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Petition' }
+                  total: { type: integer, description: "Number of items in the response (after filters)" }
+                  source: { type: string, description: "Always 'seed' until the verified ingestion pipeline ships" }
+                  status:  { type: string, enum: [open, closed, answered], description: "Echoed status filter (empty when omitted)" }
+                  country: { type: string, description: "Echoed country filter (empty when omitted)" }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [participation]
+      summary: Create a new e-petition
+      description: |
+        Creates a new e-petition. The petition starts with status
+        `open` + signatures_count 0 + an empty signatures slice. The
+        `created_at` timestamp is set server-side so callers cannot
+        back-date a petition. The `closes_at` MUST be an RFC3339
+        timestamp in the future (a back-dated close deadline is a
+        programmer error + returns 400). The `id` is a random hex
+        string prefixed with "pet-" so it is distinguishable from
+        the curated seed ids ("pet-001".."pet-005").
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description, created_by, target_signatures, closes_at, country]
+              properties:
+                title:             { type: string, description: "Petition title (non-empty)" }
+                description:       { type: string, description: "Petition body — the full text of what the petition asks the authority to do" }
+                created_by:        { type: string, description: "Petitioner name + identifier (e.g. 'Wanjiku Mwangi (citizen, Nairobi County)')" }
+                target_signatures: { type: integer, minimum: 1, description: "Signature count threshold the petition aims to reach" }
+                closes_at:         { type: string, format: date-time, description: "RFC3339 timestamp; MUST be in the future" }
+                country:           { type: string, description: "ISO 3166-1 alpha-2 country code (e.g. KE)" }
+      responses:
+        '201':
+          description: Petition created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Petition' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /petitions/{id}:
+    get:
+      tags: [participation]
+      summary: Petition detail (full description + signatures)
+      description: |
+        Returns a single petition + its full signatures slice. The
+        list endpoint does NOT hydrate the signatures (so it can
+        render progress bars without paying the cost of hydrating
+        every signature on every row); the detail endpoint hydrates
+        them so the frontend can render a "who signed" list.
+
+        The `signatures_count` field on the returned petition is
+        re-derived from the signatures slice so a stale denormalised
+        value can never drift away from the actual signature list.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: "Petition ID (e.g. 'pet-001')" }
+      responses:
+        '200':
+          description: Petition detail + signatures
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [petition, signatures, source]
+                properties:
+                  petition:   { $ref: '#/components/schemas/Petition' }
+                  signatures:
+                    type: array
+                    items: { $ref: '#/components/schemas/PetitionSignature' }
+                  source: { type: string, description: "Always 'seed' until the verified ingestion pipeline ships" }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /petitions/{id}/sign:
+    post:
+      tags: [participation]
+      summary: Sign a petition (increments signatures_count)
+      description: |
+        Appends a signature to the petition's signatures slice +
+        increments the denormalised `signatures_count` by 1. The
+        created signature carries `verified: false` — the email
+        verification pipeline has not yet shipped, so every newly-
+        created signature starts unverified + flips to `verified:
+        true` only after the pipeline confirms the signer's email
+        out-of-band.
+
+        Signing a closed / answered petition returns 409 (conflict) —
+        the request itself is well-formed; the petition is simply
+        not in a state that accepts signatures. Signing an unknown
+        petition id returns 404 (not 201 with a fabricated petition).
+
+        The platform NEVER publishes the signer's email on the public
+        signatures list (the list endpoint returns Name + SignedAt +
+        Verified only); the email is collected solely so the
+        verification pipeline can confirm the signer's identity
+        out-of-band.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: "Petition ID" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:  { type: string, description: "Signer display name (non-empty)" }
+                email: { type: string, format: email, description: "Signer email — collected for verification; NOT published on the public list" }
+      responses:
+        '201':
+          description: Signature created + petition updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [signature, petition]
+                properties:
+                  signature: { $ref: '#/components/schemas/PetitionSignature' }
+                  petition:  { $ref: '#/components/schemas/Petition' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Petition is not open for signatures (status is closed or answered)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:   { type: string, example: petition_closed }
+                  message: { type: string, example: "petition pet-004 is not open for signatures (status: closed)" }
