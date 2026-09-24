@@ -246,6 +246,106 @@ paths:
           description: Validated AI response with citations
           content: { application/json: { schema: { $ref: '#/components/schemas/AIResponse' } } }
 
+  /questions/written:
+    get:
+      tags: [questions, people]
+      summary: List written questions tabled by MPs (issue #286)
+      description: |
+        Returns the platform's seed slice of MP → Minister written
+        questions, most-recent-first by asked_at date. Each record
+        carries the question text, the asked_at date, the Minister +
+        ministry it was directed to, the response text + responded_at
+        (when answered), the deadline, and the canonical source URL
+        of the official parliament.go.ke record.
+
+        The endpoint is seed-only — the verified
+        parliament.go.ke/the-national-assembly/questions ingestion
+        path has not shipped yet (issue #286 acceptance bar: "Use
+        seed data only."). When the ingestion path ships, this
+        endpoint will be extended to merge live + seed results; until
+        then, `source` is always `"seed"`.
+
+        The platform NEVER derives a "responsiveness score" or
+        "approval rating" from these records (rule:
+        NO_POLITICAL_PERFORMANCE_SCORE). A Minister with 5 overdue
+        responses is recorded as such; the citizen interprets the
+        result, the platform does not.
+
+        NOTE: this route is distinct from the AI Q&A
+        /api/v1/questions endpoint (which is auth-protected +
+        returns AI-generated responses to citizen questions).
+        Written questions are PUBLIC parliamentary records (the
+        same provenance as /bills, /acts, /votes).
+      parameters:
+        - in: query
+          name: mp_id
+          required: false
+          schema: { type: string }
+          description: |
+            Filter to questions tabled by the given MP (e.g.
+            "person-001"). An unknown mp_id returns 200 with an
+            empty items list (NOT 404) — the list endpoint is a
+            search-style filter, so "no matches" is a legitimate
+            response rather than a "resource not found" error.
+        - in: query
+          name: status
+          required: false
+          schema: { type: string, enum: [pending, answered, overdue] }
+          description: |
+            Filter to the given lifecycle status. MUST be one of
+            "pending" (tabled + referred, deadline not yet passed,
+            no response published), "answered" (Minister has
+            published a written response), or "overdue" (deadline
+            passed without a published response). Any other value
+            returns 400 (NOT 200 with an empty items list) so a typo
+            in the status does not silently look like a "no matches"
+            response.
+      responses:
+        '200':
+          description: List of written questions, most-recent-first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    description: 'Written questions most-recent-first by asked_at. Every item carries all 11 required fields (id, mp_id, mp_name, minister, ministry, question_text, asked_at, deadline, status, source_url + optional response_text/responded_at).'
+                    items: { $ref: '#/components/schemas/WrittenQuestion' }
+                  total: { type: integer, description: 'Total written questions in the (possibly filtered) result set (matches len(items)).' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" until the verified parliament.go.ke questions ingestion path ships (issue #286).' }
+                  mp_id:
+                    type: string
+                    description: 'Echo of the mp_id filter (omitted when the filter was not supplied). Lets the frontend verify the filter was honoured + render the active filter as a chip / breadcrumb.'
+                  status:
+                    type: string
+                    enum: [pending, answered, overdue]
+                    description: 'Echo of the status filter (omitted when the filter was not supplied). Lets the frontend verify the filter was honoured.'
+        '400': { $ref: '#/components/responses/BadRequest', description: 'Returned when the status query param is supplied with a value outside the [pending, answered, overdue] enum.' }
+
+  /questions/written/{id}:
+    get:
+      tags: [questions, people]
+      summary: Get a single written question (issue #286)
+      description: |
+        Returns the full WrittenQuestion record for the given id,
+        including the response_text + responded_at fields when the
+        question has been answered.
+
+        The platform NEVER derives a "responsiveness score" from the
+        record — the lifecycle status (pending / answered / overdue)
+        is a statement of the parliamentary record, not a verdict on
+        the Minister or the MP.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal written question ID (e.g. "wq-001"). Stable across regenerations of the seed slice.' }
+      responses:
+        '200':
+          description: The written question record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WrittenQuestion' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the id does not match a sample written question — the platform surfaces 404 (NOT 200 with an empty body) so a typo in the id does not silently look like a legitimate "question not yet answered" response.' }
+
   /search:
     get:
       tags: [search]
@@ -1918,6 +2018,56 @@ components:
         source_url: { type: string, format: uri }
         source: { type: string }
 
+    WrittenQuestion:
+      type: object
+      description: |
+        A single MP → Minister written question record (issue #286).
+        Both the /questions/written list endpoint, the
+        /questions/written/{id} detail endpoint, and the
+        /people/{id}/questions per-MP endpoint return the same
+        WrittenQuestion shape so the frontend can render a question
+        row identically on any page.
+
+        The platform NEVER derives a "responsiveness score" or
+        "approval rating" from the status field — every value
+        (pending / answered / overdue) is surfaced raw (rule:
+        NO_POLITICAL_PERFORMANCE_SCORE). A Minister with 5 overdue
+        responses is recorded as such; the citizen interprets the
+        result, the platform does not.
+
+        response_text + responded_at are omitempty because pending +
+        overdue questions have no response yet. This mirrors the
+        real-world lifecycle: a question is tabled BEFORE a response
+        exists, and the API surface should not invent empty-string
+        responses for unanswered questions.
+      properties:
+        id: { type: string, description: 'Platform-internal written question ID (e.g. "wq-001"). Stable across regenerations of the seed slice.' }
+        mp_id: { type: string, description: 'Platform-internal person ID of the MP who tabled the question (e.g. "person-001"). Cross-references the /api/v1/people/{id} + /api/v1/people/{id}/scorecard endpoints.' }
+        mp_name: { type: string, description: 'The MP display name (looked up from sampleScorecards so the frontend does not have to do a second round-trip to render the row).' }
+        minister: { type: string, description: 'The Minister the question was directed to (e.g. "Cabinet Secretary, National Treasury").' }
+        ministry: { type: string, description: 'The ministry the question was directed to (e.g. "The National Treasury & Economic Planning").' }
+        question_text: { type: string, description: 'The full text of the written question as tabled by the MP.' }
+        asked_at: { type: string, format: date, description: 'The date the question was tabled (ISO 8601 YYYY-MM-DD).' }
+        response_text: { type: string, description: 'The full text of the Minister\'s written response. Present iff status is "answered"; omitted (not empty-string) for pending + overdue.' }
+        responded_at: { type: string, format: date, description: 'The date the response was published (ISO 8601 YYYY-MM-DD). Present iff status is "answered"; omitted for pending + overdue.' }
+        deadline: { type: string, format: date, description: 'The statutory deadline by which the Minister was required to respond (ISO 8601 YYYY-MM-DD). When asked_at + deadline have passed without a response, status flips to "overdue".' }
+        status: { type: string, enum: [pending, answered, overdue], description: 'The lifecycle status. pending = tabled + referred, deadline not yet passed, no response published. answered = Minister has published a written response. overdue = deadline passed without a published response. The platform NEVER labels a Minister "non-responsive" — the overdue status is a statement of the parliamentary record, not a verdict.' }
+        source_url: { type: string, description: 'URL of the official parliament.go.ke record the question was derived from.' }
+      required: [id, mp_id, mp_name, minister, ministry, question_text, asked_at, deadline, status, source_url]
+      example:
+        id: wq-001
+        mp_id: person-001
+        mp_name: Kimani Ichung'wah
+        minister: Cabinet Secretary, National Treasury
+        ministry: The National Treasury & Economic Planning
+        question_text: 'Could the Cabinet Secretary for the National Treasury clarify the upper bound on domestic borrowing for the fiscal year 2024/25?'
+        asked_at: '2024-09-05'
+        response_text: 'The domestic borrowing ceiling for FY 2024/25 was set at KES 584.0 billion under the Public Finance Management (National Government) Regulations.'
+        responded_at: '2024-09-19'
+        deadline: '2024-09-26'
+        status: answered
+        source_url: https://www.parliament.go.ke/the-national-assembly/questions/2024-09-05
+
     Committee:
       type: object
       properties:
@@ -2619,6 +2769,56 @@ security:
                   source: { type: string, enum: [seed], description: 'Always "seed" — sponsor attribution is seed-only until a verified ingestion path ships (issue #282).' }
                   scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
         '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP (the seed Bills slice is the only source of sponsor attribution).' }
+
+  /people/{id}/questions:
+    get:
+      tags: [people, questions]
+      summary: MP written questions tabled to Ministers (issue #286)
+      description: |
+        Returns the requested MP's written questions to Cabinet
+        Secretaries + Ministers — every question the MP tabled in
+        the seed slice, most-recent-first by asked_at.
+
+        The endpoint is seed-only — the verified
+        parliament.go.ke/the-national-assembly/questions ingestion
+        path has not shipped yet (issue #286 acceptance bar: "Use
+        seed data only."). When the ingestion path ships, this
+        endpoint will be extended to merge live + seed results;
+        until then, `source` is always `"seed"`.
+
+        Each item carries the full WrittenQuestion shape (id,
+        mp_id, mp_name, minister, ministry, question_text,
+        asked_at, deadline, status, source_url + optional
+        response_text / responded_at when answered) so the frontend
+        can render a question row identically on the MP scorecard
+        page and the standalone /questions/written list view.
+
+        The platform NEVER derives a "responsiveness score" or
+        "approval rating" from these records (rule:
+        NO_POLITICAL_PERFORMANCE_SCORE). The lifecycle status
+        (pending / answered / overdue) is a statement of the
+        parliamentary record, not a verdict on the Minister or the
+        MP.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, description: 'Platform-internal person ID (e.g. "person-001")' }
+      responses:
+        '200':
+          description: The MP's written questions, most-recent-first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mp_id: { type: string, description: 'The requested MP\'s platform-internal person ID' }
+                  name: { type: string, description: 'The requested MP\'s display name (looked up from sampleScorecards)' }
+                  items:
+                    type: array
+                    description: 'Written questions most-recent-first by asked_at. Every item carries all 11 required fields (id, mp_id, mp_name, minister, ministry, question_text, asked_at, deadline, status, source_url + optional response_text/responded_at).'
+                    items: { $ref: '#/components/schemas/WrittenQuestion' }
+                  total: { type: integer, description: 'Total written questions (matches len(items))' }
+                  source: { type: string, enum: [seed], description: 'Always "seed" until the verified parliament.go.ke questions ingestion path ships (issue #286).' }
+                  scorecard_url: { type: string, description: '/api/v1/people/{id}/scorecard URL — convenience echo so the frontend can link back to the MP\'s scorecard page' }
+        '404': { $ref: '#/components/responses/NotFound', description: 'Returned when the person ID does not match a sample MP — the platform surfaces 404 (NOT an empty 200 items list) so a typo in a person ID does not silently look like a legitimate "no questions" response.' }
 
   /constituencies:
     get:

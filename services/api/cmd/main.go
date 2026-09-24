@@ -325,6 +325,20 @@ func main() {
         apiHandler.Handle("/api/v1/questions", questionsHandler)
         apiHandler.Handle("/api/v1/questions/stream", questionsHandler)
 
+        // Written Questions tracker (issue #286) — PUBLIC parliamentary
+        // records (MP → Minister written questions + responses). These
+        // are NOT the AI Q&A /api/v1/questions route (which requires
+        // auth + ScopeAIAsk). Written questions are public because
+        // they are part of the official parliamentary record (the same
+        // provenance as /bills + /acts + /votes). The list endpoint
+        // accepts optional mp_id + status query filters; the detail
+        // sub-router handles /api/v1/questions/written/{id}. Per-MP
+        // questions are also exposed at
+        // /api/v1/people/{id}/questions (dispatched from handlePeople
+        // alongside /scorecard + /bills).
+        apiHandler.HandleFunc("/api/v1/questions/written", makeWrittenQuestionsListHandler())
+        apiHandler.HandleFunc("/api/v1/questions/written/", makeWrittenQuestionDetailHandler())
+
         // Follow (legacy single-shot endpoint, kept for backward compat).
         followHandler := middleware.RequireToken(verifier)(
                 middleware.RequireScope(auth.ScopeNotificationWrite)(http.HandlerFunc(handleFollow)),
@@ -1445,6 +1459,8 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // the trailing path tail:
         //   - "" (root, no trailing slash)  → list the 5 sample people
         //   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
+        //   - "{id}/bills"                   → Bills sponsored (issue #282)
+        //   - "{id}/questions"               → MP written questions (issue #286)
         //   - "{id}"                          → person detail (still pending,
         //                                       issue #19 — kept as stub)
         // Normalise: treat both /api/v1/people and /api/v1/people/ as the list call (issue #264).
@@ -1469,6 +1485,18 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleBillsByPerson(w, r, personID)
+		return
+	}
+	// Written Questions sub-resource (issue #286). Returns the MP's
+	// written questions tabled to Cabinet Secretaries + Ministers.
+	// Dispatched parallel to /scorecard + /bills.
+	if strings.HasSuffix(tail, "/questions") {
+		personID := strings.TrimSuffix(tail, "/questions")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleWrittenQuestionsByPerson(w, r, personID)
 		return
 	}
         // Default: person detail lookup with country-scoped visibility gate.

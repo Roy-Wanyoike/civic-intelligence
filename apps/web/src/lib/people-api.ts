@@ -107,6 +107,65 @@ export async function getMPScorecard(personId: string): Promise<MPScorecard> {
   return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/scorecard`);
 }
 
+// === Written Questions (issue #286) ===
+
+// WrittenQuestionStatus mirrors the Go WrittenQuestionStatus type
+// (services/api/cmd/written_questions.go) 1:1 so the JSON contract
+// stays in lock-step. The 3 values are the wire forms emitted by
+// the API (lowercase, no spaces).
+export type WrittenQuestionStatus = 'pending' | 'answered' | 'overdue';
+
+// WrittenQuestion mirrors the Go WrittenQuestion struct 1:1. Both the
+// per-MP endpoint (/people/{id}/questions), the list endpoint
+// (/questions/written), and the detail endpoint
+// (/questions/written/{id}) return the same item shape so the
+// frontend can render a question row identically on any page.
+export interface WrittenQuestion {
+  id: string;
+  mp_id: string;
+  mp_name: string;
+  minister: string;
+  ministry: string;
+  question_text: string;
+  asked_at: string;
+  // response_text + responded_at are omitted (NOT empty string) for
+  // pending + overdue questions. The omitempty invariant mirrors the
+  // real-world lifecycle: a question is tabled BEFORE a response
+  // exists, and the API surface should not invent empty-string
+  // responses for unanswered questions.
+  response_text?: string;
+  responded_at?: string;
+  deadline: string;
+  status: WrittenQuestionStatus;
+  source_url: string;
+}
+
+// WrittenQuestionsByPersonResponse is the JSON envelope returned by
+// GET /api/v1/people/{id}/questions. The shape mirrors the
+// VotesByPersonResponse + billsByPersonResponse envelopes so the
+// scorecard page can reuse its rendering pattern
+// (mp_id + name + items + total + source + scorecard_url).
+export interface WrittenQuestionsByPersonResponse {
+  mp_id: string;
+  name: string;
+  items: WrittenQuestion[];
+  total: number;
+  source: string;
+  scorecard_url?: string;
+}
+
+// getMPWrittenQuestions fetches an MP's written questions tabled to
+// Cabinet Secretaries + Ministers (issue #286). Returns the raw
+// questions most-recent-first; the scorecard page renders them with a
+// status-coloured badge (green=answered, amber=pending, red=overdue).
+// The platform NEVER derives a "responsiveness score" from these
+// records — the colour coding is a readability affordance ONLY.
+export async function getMPWrittenQuestions(
+  personId: string,
+): Promise<WrittenQuestionsByPersonResponse> {
+  return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/questions`);
+}
+
 // === Constituencies ===
 
 export interface ConstituencyBillRef {
