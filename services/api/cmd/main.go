@@ -460,6 +460,23 @@ func main() {
         SeedGazetteSampleNotices(gazetteAlertStore, calendarAnchor)
         apiHandler.HandleFunc("/api/v1/gazette/alerts", makeGazetteAlertsHandler(gazetteAlertStore))
         apiHandler.HandleFunc("/api/v1/gazette/alerts/", makeGazetteAlertDetailHandler(gazetteAlertStore))
+
+        // SMS + USSD alerts (issue #289). The smsSubscriberStore is the
+        // package-level in-memory store, seeded with 10 sample
+        // subscribers spanning 5 countries (KE, UG, TZ, GH, NG). The
+        // SMSSender is selected at startup from the AFRICAS_TALKING_API_KEY
+        // env var — a *StubSMSSender when the key is missing (dev + tests),
+        // an *AfricasTalkingSMSSender when set (production wiring follows
+        // in a follow-up task; the architecture is ready today). The
+        // USSD endpoint is the Africa's Talking callback URL: a citizen
+        // dials the USSD code, AT calls /api/v1/ussd on every keystroke,
+        // and the platform responds with the next menu screen.
+        smsSender := NewSMSSender(nil)
+        _ = smsSender // also referenced below for the broadcast + list handlers
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribe", makeSMSSubscribeHandler(smsSubscriberStore))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribers", makeSMSSubscribersHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/send", makeSMSSendHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/ussd", makeUSSDHandler(smsSubscriberStore))
         // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
         // differentiator: a visual relationship explorer that traces how
         // Bills, Acts, Institutions, People, Constitution Articles, and
@@ -1500,6 +1517,21 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleBillsByPerson(w, r, personID)
+		return
+	}
+
+	// Registered interests sub-resource (task FEAT-10 / issue #288). The
+	// handler returns the MP's declared directorships, land + property,
+	// shareholdings, gifts, other income, and loans from the seed slice
+	// pending the live Declaration of Interests Register ingestion path.
+	// Supports an optional ?category= filter (closed enum, 400 on typo).
+	if strings.HasSuffix(tail, "/interests") {
+		personID := strings.TrimSuffix(tail, "/interests")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleInterestsByPerson(w, r, personID)
 		return
 	}
         // Default: person detail lookup with country-scoped visibility gate.

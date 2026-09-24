@@ -38,6 +38,7 @@ import {
   MapPin,
   LogIn,
   Network,
+  PieChart,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ThemeToggle } from './theme-toggle';
@@ -125,6 +126,7 @@ const navGroups: NavGroup[] = [
       { href: '/graph', i18nKey: 'pages.graph', icon: Network, description: 'Trace how Bills, Acts, People, and Institutions are connected' },
       { href: '/compare', i18nKey: 'pages.compare', icon: Globe, description: 'Cross-country civic comparison — legislation, debt, indicators' },
       { href: '/indicators', i18nKey: 'pages.indicators', icon: BarChart3, description: 'Civic indicators dashboard — Bills, Acts, debt, sessions' },
+      { href: '/budget', i18nKey: 'pages.budget', icon: PieChart, description: 'National budget allocations by ministry — interactive treemap' },
       { href: '/research', i18nKey: 'pages.research', icon: FileSearch, description: 'Research missions and reports' },
       { href: '/trust', i18nKey: 'pages.trust', icon: ShieldCheck, description: 'Trust and verification network' },
       { href: '/report', i18nKey: 'pages.reports', icon: FileBarChart, description: 'Generated civic reports' },
