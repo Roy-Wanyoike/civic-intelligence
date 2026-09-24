@@ -4,18 +4,18 @@
 
 ### Understand what your government is doing. No legal or parliamentary jargon required.
 
-**Evidence-grounded civic intelligence for Africa** 🌍 — one platform, fourteen countries.
+**Evidence-grounded civic intelligence for Africa** 🌍 — one platform, nineteen countries.
 
-🇰🇪 Kenya · 🇺🇬 Uganda · 🇹🇿 Tanzania · 🇬🇭 Ghana · 🇳🇬 Nigeria · 🇿🇦 South Africa · 🇷🇼 Rwanda · 🇿🇲 Zambia · 🇸🇳 Senegal · 🇪🇬 Egypt · 🇲🇦 Morocco · 🇨🇩 DR Congo · 🇪🇹 Ethiopia · 🇲🇼 Malawi
+🇰🇪 Kenya · 🇺🇬 Uganda · 🇹🇿 Tanzania · 🇬🇭 Ghana · 🇳🇬 Nigeria · 🇿🇦 South Africa · 🇷🇼 Rwanda · 🇿🇲 Zambia · 🇸🇳 Senegal · 🇪🇬 Egypt · 🇲🇦 Morocco · 🇨🇩 DR Congo · 🇪🇹 Ethiopia · 🇲🇼 Malawi · 🇨🇲 Cameroon · 🇲🇿 Mozambique · 🇨🇮 Ivory Coast · 🇧🇫 Burkina Faso · 🇳🇪 Niger
 
-[![Tests](https://img.shields.io/badge/tests-1003%20Go%20%2B%2028%20Python%20%2B%20TS%20PASS-brightgreen)]()
-[![Countries](https://img.shields.io/badge/countries-14-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1188%20Go%20%2B%2028%20Python%20%2B%20TS%20PASS-brightgreen)]()
+[![Countries](https://img.shields.io/badge/countries-19-blue)]()
 [![Pages](https://img.shields.io/badge/frontend-73%20pages-9cf)]()
-[![API](https://img.shields.io/badge/API-70%20routes-orange)]()
-[![Commits](https://img.shields.io/badge/commits-164-lightgrey)]()
+[![API](https://img.shields.io/badge/API-76%2B%20routes-orange)]()
+[![Commits](https://img.shields.io/badge/commits-182-lightgrey)]()
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 [![Vercel](https://img.shields.io/badge/deploy-Vercel%20ready-black)]()
-[![Release](https://img.shields.io/badge/release-v0.2.0-blueviolet)]()
+[![Release](https://img.shields.io/badge/release-v0.2.2-blueviolet)]()
 
 </div>
 
@@ -25,7 +25,7 @@
 
 Civic Intelligence is an **open-source, multi-country civic intelligence system** that transforms authoritative government information across Africa into **plain-language explanations**, **verified timelines**, **evidence-backed answers**, and **citizen alerts**.
 
-The platform runs as **one codebase serving fourteen countries**. Each country sees only its own data by default — Bills, Acts, Institutions, People, Debt, Constitution, and Government History — through a per-country **adapter** that implements the same `contracts.LegislativeSourceAdapter` interface. A contributor from Uganda works on `adapters/uganda/` and never touches Kenya's data; a contributor from Nigeria works on `adapters/nigeria/` and never touches Tanzania's data. The platform routes each request to the correct adapter based on the selected country (set via the navbar **Government Selector**).
+The platform runs as **one codebase serving nineteen countries**. Each country sees only its own data by default — Bills, Acts, Institutions, People, Debt, Constitution, and Government History — through a per-country **adapter** that implements the same `contracts.LegislativeSourceAdapter` interface. A contributor from Uganda works on `adapters/uganda/` and never touches Kenya's data; a contributor from Nigeria works on `adapters/nigeria/` and never touches Tanzania's data. The platform routes each request to the correct adapter based on the selected country (set via the navbar **Government Selector**).
 
 A citizen can:
 
@@ -64,7 +64,7 @@ See [`FLAGSHIP_FEATURES.md`](./FLAGSHIP_FEATURES.md) for the full feature catalo
 
 ### One project, many countries
 
-The platform is a **single deployable** that serves all 14 countries. There is no per-country fork, no per-country database, and no per-country frontend — only per-country **adapters** that plug into the same core domain.
+The platform is a **single deployable** that serves all 19 countries. There is no per-country fork, no per-country database, and no per-country frontend — only per-country **adapters** that plug into the same core domain.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -83,7 +83,7 @@ The platform is a **single deployable** that serves all 14 countries. There is n
                                ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │                   COUNTRY ADAPTER LAYER                               │
-│  One interface (contracts.LegislativeSourceAdapter) — 14 impls:       │
+│  One interface (contracts.LegislativeSourceAdapter) — 19 impls:       │
 │                                                                       │
 │  ┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐│
 │  │kenya   ││uganda  ││tanzania││ghana   ││nigeria ││s. africa││rwanda ││
@@ -114,7 +114,7 @@ The Government Selector in `apps/web/src/components/government-selector.tsx` ren
 
 ### Adapter architecture
 
-Every country adapter implements the same `contracts.LegislativeSourceAdapter` interface. The 14 adapters live in `adapters/`:
+Every country adapter implements the same `contracts.LegislativeSourceAdapter` interface. The 19 adapters live in `adapters/`:
 
 | Adapter | Country | Code | Status |
 |---------|---------|------|--------|
@@ -132,6 +132,11 @@ Every country adapter implements the same `contracts.LegislativeSourceAdapter` i
 | `adapters/dr_congo/` | DR Congo 🇨🇩 | `CD` | ✅ Ready (Parliament of the DRC, bicameral) |
 | `adapters/ethiopia/` | Ethiopia 🇪🇹 | `ET` | ✅ Ready (Federal Parliamentary Assembly, bicameral) |
 | `adapters/malawi/` | Malawi 🇲🇼 | `MW` | ✅ Ready (National Assembly of Malawi, unicameral) |
+| `adapters/cameroon/` | Cameroon 🇨🇲 | `CM` | ✅ Ready (National Assembly of Cameroon, unicameral) |
+| `adapters/mozambique/` | Mozambique 🇲🇿 | `MZ` | ✅ Ready (Assembly of the Republic, unicameral) |
+| `adapters/ivory_coast/` | Ivory Coast 🇨🇮 | `CI` | ✅ Ready (National Assembly of Ivory Coast, unicameral) |
+| `adapters/burkina_faso/` | Burkina Faso 🇧🇫 | `BF` | ✅ Ready (Transitional Legislative Assembly, unicameral) |
+| `adapters/niger/` | Niger 🇳🇪 | `NE` | ✅ Ready (National Assembly of Niger, unicameral) |
 
 Each adapter is a Go module with its own `go.mod` so it can evolve independently. The shared domain (`services/legislation/`, `services/evidence/`, …) never references a specific country — it only references the adapter interface.
 
@@ -656,19 +661,19 @@ All funds go toward server costs, AI processing, and data sourcing. We do not ac
 
 ## Stats
 
-- **1003** Go tests (across API + 14 country adapters + legislation + simulation + contract + integration + chaos)
+- **1188** Go tests (across API + 19 country adapters + legislation + simulation + contract + integration + chaos)
 - **28** Python tests (AI gateway + capabilities + eval)
 - **TypeScript PASS** (frontend type-check + lint)
 - **73** frontend pages
-- **70** API routes
+- **76+** API routes
 - **94** documented OpenAPI paths
 - **22** SQL migrations (9 schemas, pgvector)
 - **14** Architecture Decision Records
-- **14** country adapters
+- **19** country adapters
 - **12** AI capabilities
 - **10** flagship features
-- **164** commits
-- **v0.2.0** current release (see [CHANGELOG.md](./CHANGELOG.md))
+- **182** commits
+- **v0.2.2** current release (see [CHANGELOG.md](./CHANGELOG.md))
 
 ---
 
