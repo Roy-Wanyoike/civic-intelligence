@@ -444,6 +444,23 @@ func main() {
         SeedGazetteSampleNotices(gazetteAlertStore, calendarAnchor)
         apiHandler.HandleFunc("/api/v1/gazette/alerts", makeGazetteAlertsHandler(gazetteAlertStore))
         apiHandler.HandleFunc("/api/v1/gazette/alerts/", makeGazetteAlertDetailHandler(gazetteAlertStore))
+
+        // SMS + USSD alerts (issue #289). The smsSubscriberStore is the
+        // package-level in-memory store, seeded with 10 sample
+        // subscribers spanning 5 countries (KE, UG, TZ, GH, NG). The
+        // SMSSender is selected at startup from the AFRICAS_TALKING_API_KEY
+        // env var — a *StubSMSSender when the key is missing (dev + tests),
+        // an *AfricasTalkingSMSSender when set (production wiring follows
+        // in a follow-up task; the architecture is ready today). The
+        // USSD endpoint is the Africa's Talking callback URL: a citizen
+        // dials the USSD code, AT calls /api/v1/ussd on every keystroke,
+        // and the platform responds with the next menu screen.
+        smsSender := NewSMSSender(nil)
+        _ = smsSender // also referenced below for the broadcast + list handlers
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribe", makeSMSSubscribeHandler(smsSubscriberStore))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribers", makeSMSSubscribersHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/send", makeSMSSendHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/ussd", makeUSSDHandler(smsSubscriberStore))
         // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
         // differentiator: a visual relationship explorer that traces how
         // Bills, Acts, Institutions, People, Constitution Articles, and

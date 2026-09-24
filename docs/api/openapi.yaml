@@ -2377,6 +2377,57 @@ components:
             total_edges: { type: integer }
             depth: { type: integer, description: "Traversal depth (0 = no traversal, 1-3 = BFS hops, edge count = path length)" }
 
+    SMSSubscriber:
+      type: object
+      description: |
+        A phone number that has opted into SMS alerts. The Phone field
+        is stored in E.164 format so Africa's Talking can route the
+        message without further parsing. Keywords is a slice of
+        lower-cased, de-duplicated keywords; when the ingestion service
+        emits a gazette notice whose title/body matches ANY of the
+        subscriber's keywords, the platform queues an SMS for that
+        subscriber. The Active flag is true by default; an admin can
+        flip it to false to mute a subscriber (e.g. on a spam complaint)
+        without losing their history.
+      properties:
+        phone: { type: string, description: "E.164 phone number (e.g. +254712345678)." }
+        country: { type: string, description: "ISO 3166-1 alpha-2 country code (e.g. KE)." }
+        keywords:
+          type: array
+          items: { type: string }
+          description: "Lower-cased, de-duplicated keyword filters (e.g. [tender, health])."
+        created_at: { type: string, format: date-time }
+        active: { type: boolean, description: "false = muted (admin can disable without deleting the record)." }
+
+    SMSAlert:
+      type: object
+      description: |
+        A single delivered (or attempted) SMS message. Status is one
+        of: queued, sent, failed. SourceEvent is the upstream event id
+        that triggered the SMS (e.g. a gazette notice ID, or
+        "broadcast" for the admin send endpoint).
+      properties:
+        id: { type: string, description: "Platform-internal alert id with the sms_ prefix (e.g. sms_abc123)." }
+        phone: { type: string, description: "E.164 recipient phone number." }
+        message: { type: string, description: "SMS body as sent (truncated to 160 chars GSM 7-bit single-segment)." }
+        sent_at: { type: string, format: date-time }
+        status: { type: string, enum: [queued, sent, failed] }
+        source_event: { type: string, description: "Upstream event id (e.g. gazette notice ID, or 'broadcast')." }
+
+    USSDSession:
+      type: object
+      description: |
+        A single USSD session state. Africa's Talking sends one of
+        these per user keystroke; the Text field is the cumulative
+        input across the whole session (asterisk-separated). The
+        Response field is the rendered CON/END-prefixed menu text the
+        platform returned for that keystroke.
+      properties:
+        session_id: { type: string, description: "Africa's Talking session id (e.g. ATPid_1234)." }
+        phone: { type: string, description: "E.164 phone number (normalised with a leading + if missing)." }
+        text: { type: string, description: "Cumulative user input across the session (asterisk-separated levels)." }
+        response: { type: string, description: "Rendered CON/END-prefixed USSD menu text." }
+
   responses:
     Health:
       description: OK
@@ -2848,3 +2899,209 @@ security:
                 description: RSS 2.0 XML document (<rss version="2.0">).
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---- SMS + USSD alerts (issue #289) ----
+  #
+  # Africa's Talking SMS + USSD gateway. The platform's first
+  # low-bandwidth / feature-phone surface — citizens without data,
+  # without a smartphone, and without a credit balance can dial the
+  # USSD code to see the latest Bills, look up their MP, ask a
+  # question, or subscribe to SMS alerts. The subscribe endpoint is
+  # also reachable from the website "Subscribe to SMS alerts" form,
+  # so it's documented here as a public POST.
+  #
+  # Selection at startup:
+  #   AFRICAS_TALKING_API_KEY set  → AfricasTalkingSMSSender (live)
+  #   AFRICAS_TALKING_API_KEY unset → StubSMSSender (logs only)
+  # The architecture is production-ready; the live HTTP path is
+  # exercised by the sandbox integration tests in a follow-up task.
+
+  /alerts/sms/subscribe:
+    post:
+      tags: [sms, alerts]
+      summary: Subscribe a phone number to SMS alerts
+      description: |
+        Registers a phone number for SMS alerts on the supplied
+        keywords. The phone MUST be in E.164 format (e.g.
+        "+254712345678") so Africa's Talking can route the message
+        without further parsing. Keywords are lower-cased, trimmed,
+        and de-duplicated. The endpoint is PUBLIC (no auth required)
+        — a citizen subscribes from the website form, from the USSD
+        menu option 4, or by sending "SUBSCRIBE" to the platform's
+        short code (the SMS-gateway callback will POST here).
+
+        Duplicate subscriptions return 409 Conflict (NOT 201 Created)
+        with the existing record in the body, so a citizen who
+        re-submits the same phone number can confirm their keywords
+        without creating a duplicate row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, keywords]
+              properties:
+                phone: { type: string, description: "E.164 phone number (e.g. +254712345678)" }
+                country: { type: string, description: "ISO 3166-1 alpha-2 country code (e.g. KE); defaults to KE when omitted" }
+                keywords:
+                  type: array
+                  items: { type: string }
+                  description: "Lower-cased keyword filters (e.g. [tender, health]). An empty array is rejected."
+      responses:
+        '201':
+          description: Subscriber created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SMSSubscriber' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Phone number is already subscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: already_subscribed }
+                  message: { type: string }
+                  subscriber: { $ref: '#/components/schemas/SMSSubscriber' }
+
+  /alerts/sms/subscribers:
+    get:
+      tags: [sms, alerts, admin]
+      summary: List SMS subscribers (admin only)
+      description: |
+        Returns every SMS subscriber (active + inactive). The
+        response carries the SMSSender name in the `sender` field so
+        an operator can immediately see whether AFRICAS_TALKING_API_KEY
+        was set at startup ("africas_talking" vs "stub").
+      security:
+        - bearerAuth:
+            - user:admin
+        - bearerAuth:
+            - notification:write
+      parameters:
+        - { in: query, name: active, schema: { type: boolean }, description: "Filter by the Active flag." }
+        - { in: query, name: country, schema: { type: string }, description: "ISO 3166-1 alpha-2 country code (e.g. KE)." }
+      responses:
+        '200':
+          description: List of subscribers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/SMSSubscriber' } }
+                  total: { type: integer }
+                  sender: { type: string, description: "Active SMSSender name (africas_talking | stub)" }
+                  note: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /alerts/sms/send:
+    post:
+      tags: [sms, alerts, admin]
+      summary: Broadcast an SMS to subscribers (admin only)
+      description: |
+        Sends the same SMS body to every active subscriber whose
+        keywords intersect the request's keywords (or every active
+        subscriber when keywords is empty). The fan-out is
+        synchronous from the caller's perspective — the response
+        blocks until every recipient has been attempted. For large
+        lists this will be replaced by an async queue.
+      security:
+        - bearerAuth:
+            - user:admin
+        - bearerAuth:
+            - notification:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  maxLength: 160
+                  description: "SMS body (GSM 7-bit single-segment limit = 160 chars)."
+                keywords:
+                  type: array
+                  items: { type: string }
+                  description: "Optional keyword filter; empty = broadcast to all active subscribers."
+                source:
+                  type: string
+                  description: "Upstream event id that triggered the broadcast (e.g. gazette notice ID). Defaults to 'broadcast'."
+      responses:
+        '200':
+          description: Broadcast summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sent: { type: integer, description: "Number of recipients the SMSSender accepted." }
+                  failed: { type: integer, description: "Number of recipients the SMSSender rejected." }
+                  total: { type: integer, description: "Total recipients attempted (sent + failed)." }
+                  sender: { type: string }
+                  deliveries:
+                    type: array
+                    items: { $ref: '#/components/schemas/SMSAlert' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /ussd:
+    post:
+      tags: [sms, ussd]
+      summary: Africa's Talking USSD callback
+      description: |
+        Stateless USSD session handler. Africa's Talking calls this
+        endpoint once per user keystroke; the request body carries the
+        cumulative `text` the user has typed so far (asterisk-
+        separated). The response is either `CON <menu>` (session
+        continues) or `END <text>` (session ends).
+
+        The four top-level menu options cover the platform's
+        most-asked-for use cases for low-bandwidth users:
+
+          1. Latest Bills      — top 3 Bills before Parliament
+          2. My MP             — the citizen's MP by phone prefix
+          3. Ask a question    — surfaces the Q&A endpoint
+          4. Subscribe        — opts the phone into SMS alerts
+
+        The endpoint is PUBLIC (no auth required) — Africa's Talking
+        calls the callback from its gateway, not from a user session.
+        The phone number in the request body is the user's identity
+        for the duration of the session.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                sessionId: { type: string, description: "Africa's Talking session id (e.g. ATPid_1234)." }
+                phoneNumber: { type: string, description: "E.164 phone number; the '+' prefix is added if missing." }
+                serviceCode: { type: string, description: "USSD service code (e.g. *384*99#)." }
+                text: { type: string, description: "Cumulative user input across the session; '*' is the level separator." }
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id: { type: string }
+                phone_number: { type: string }
+                service_code: { type: string }
+                text: { type: string }
+      responses:
+        '200':
+          description: USSD response (text/plain with CON/END prefix for form-encoded callers; JSON for application/json callers)
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: "CON or END prefixed USSD menu text (e.g. 'CON Welcome to Civic Intelligence\\n1. Latest Bills\\n...')."
+            application/json:
+              schema: { $ref: '#/components/schemas/USSDSession' }
+        '400': { $ref: '#/components/responses/BadRequest' }
