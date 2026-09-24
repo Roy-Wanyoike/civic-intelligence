@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   CheckSquare,
+  Clock,
   ExternalLink,
   Facebook,
   FileText,
@@ -11,7 +13,11 @@ import {
   Mail,
   MapPin,
   MessageCircle,
+<<<<<<< HEAD
+  MessageSquareText,
+=======
   MinusCircle,
+>>>>>>> origin/main
   Phone,
   ThumbsDown,
   ThumbsUp,
@@ -23,9 +29,14 @@ import type { Metadata } from 'next';
 <<<<<<< HEAD
 import {
   getMPScorecard,
+<<<<<<< HEAD
+  getMPWrittenQuestions,
+  type WrittenQuestionStatus,
+=======
   getRegisteredInterests,
   type RegisteredInterest,
   type RegisteredInterestCategory,
+>>>>>>> origin/main
 } from '@/lib/people-api';
 =======
 import { getMPScorecard, getMPVotes, type VoteKind } from '@/lib/people-api';
@@ -132,6 +143,36 @@ const activityKindIcon: Record<string, typeof FileText> = {
   committee_meeting: Users,
 };
 
+<<<<<<< HEAD
+// writtenQuestionStyling maps each WrittenQuestionStatus to its label
+// + icon + tailwind classes for the per-row badge in the Written
+// Questions section (issue #286). The colour code is:
+//   - answered → green  (CheckSquare)        — Minister has responded
+//   - pending  → amber  (Clock)              — tabled, awaiting response
+//   - overdue  → red    (AlertTriangle)      — deadline passed, no response
+// The platform NEVER ranks these — the colour coding is purely a
+// readability affordance, not a verdict on the Minister or the MP.
+// (rule: NO_POLITICAL_PERFORMANCE_SCORE).
+const writtenQuestionStyling: Record<
+  WrittenQuestionStatus,
+  { label: string; icon: typeof CheckSquare; badge: string }
+> = {
+  answered: {
+    label: 'Answered',
+    icon: CheckSquare,
+    badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  },
+  pending: {
+    label: 'Pending',
+    icon: Clock,
+    badge: 'bg-amber-100 text-amber-800 border-amber-200',
+  },
+  overdue: {
+    label: 'Overdue',
+    icon: AlertTriangle,
+    badge: 'bg-rose-100 text-rose-800 border-rose-200',
+  },
+=======
 // voteStyling maps each VoteKind to its label + icon + tailwind classes
 // for the per-row badge in the Voting Record section (issue #284).
 // The colour code is:
@@ -167,6 +208,7 @@ const voteStyling: Record<
     icon: XCircle,
     badge: 'bg-stone-100 text-stone-700 border-stone-200',
   },
+>>>>>>> origin/main
 };
 
 export default async function ScorecardPage({
@@ -175,6 +217,22 @@ export default async function ScorecardPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+<<<<<<< HEAD
+  // Fetch the scorecard + written questions in parallel. The scorecard
+  // is the page's primary data — if it fails, we 404. The written
+  // questions fetch is best-effort: if it fails (e.g. transient
+  // upstream hiccup), the page still renders the rest of the
+  // scorecard and the Written Questions section falls back to its
+  // empty state (issue #286 graceful-degradation contract).
+  let sc: Awaited<ReturnType<typeof getMPScorecard>> | null = null;
+  let writtenQuestions:
+    | Awaited<ReturnType<typeof getMPWrittenQuestions>>
+    | null = null;
+  try {
+    [sc, writtenQuestions] = await Promise.all([
+      getMPScorecard(id),
+      getMPWrittenQuestions(id).catch(() => null),
+=======
   // Fetch the scorecard + votes in parallel. The scorecard is the page's
   // primary data — if it fails, we 404. The votes fetch is best-effort:
   // if it fails (e.g. transient upstream hiccup), the page still renders
@@ -202,6 +260,7 @@ export default async function ScorecardPage({
     [sc, votes] = await Promise.all([
       getMPScorecard(id),
       getMPVotes(id).catch(() => null),
+>>>>>>> origin/main
     ]);
 >>>>>>> origin/main
   } catch {
@@ -429,6 +488,116 @@ export default async function ScorecardPage({
         )}
       </section>
 
+<<<<<<< HEAD
+      {/* Written questions — issue #286. MP → Minister written
+          questions tabled in this parliamentary period, colour-coded
+          by lifecycle status: green=answered, amber=pending,
+          red=overdue. The colour coding is a readability affordance
+          ONLY — the platform NEVER ranks these or derives a
+          "responsiveness score" (rule: NO_POLITICAL_PERFORMANCE_SCORE).
+          Each row links to the official parliament.go.ke record. */}
+      <section aria-labelledby="written-questions-heading" className="mb-8">
+        <h2
+          id="written-questions-heading"
+          className="font-serif text-xl font-semibold text-civic-forest"
+        >
+          Written questions
+        </h2>
+        <p className="mt-1 text-xs text-civic-stone">
+          Questions tabled to Cabinet Secretaries + Ministers, with
+          lifecycle status (answered / pending / overdue) and the
+          response text when published. Each entry links to the official
+          parliamentary record.
+        </p>
+        {!writtenQuestions || writtenQuestions.items.length === 0 ? (
+          <p className="mt-3 rounded-md border border-civic-border bg-civic-mist p-4 text-sm text-civic-stone">
+            No written questions tabled in this parliamentary period.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {writtenQuestions.items.map((q, i) => {
+              const styling =
+                writtenQuestionStyling[q.status] ??
+                writtenQuestionStyling.pending;
+              const StatusIcon = styling.icon;
+              return (
+                <li
+                  key={`${q.id}-${i}`}
+                  className="rounded-md border border-civic-border bg-white p-4"
+                >
+                  {/* Status badge + minister + ministry */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${styling.badge}`}
+                    >
+                      <StatusIcon className="h-3 w-3" aria-hidden="true" />
+                      {styling.label}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs text-civic-stone">
+                      <MessageSquareText
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                      <span className="font-medium text-civic-ink">
+                        {q.minister}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span>{q.ministry}</span>
+                    </span>
+                  </div>
+
+                  {/* Question text */}
+                  <p className="mt-2 text-sm leading-relaxed text-civic-forest">
+                    {q.question_text}
+                  </p>
+
+                  {/* Metadata row — asked date + deadline + responded date */}
+                  <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-civic-stone">
+                    <div className="flex items-center gap-1">
+                      <dt className="font-semibold uppercase tracking-wide">
+                        Asked:
+                      </dt>
+                      <dd>{formatDate(q.asked_at)}</dd>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <dt className="font-semibold uppercase tracking-wide">
+                        Deadline:
+                      </dt>
+                      <dd>{formatDate(q.deadline)}</dd>
+                    </div>
+                    {q.responded_at && (
+                      <div className="flex items-center gap-1">
+                        <dt className="font-semibold uppercase tracking-wide">
+                          Response date:
+                        </dt>
+                        <dd>{formatDate(q.responded_at)}</dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  {/* Response text — only rendered when the Minister has
+                      published a response (status=answered). */}
+                  {q.response_text && (
+                    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+                        Minister&apos;s response
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-emerald-900">
+                        {q.response_text}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Source link */}
+                  <a
+                    href={q.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-1 text-xs text-sky-700 hover:underline"
+                  >
+                    Source <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </a>
+=======
       {/* Registered interests — issue #288. Each declared interest renders
           as a card with a category badge, the description (verbatim from
           the Declaration of Interests Register), the KES value (or
@@ -500,16 +669,20 @@ export default async function ScorecardPage({
                       Source <ExternalLink className="h-3 w-3" aria-hidden="true" />
                     </a>
                   </div>
+>>>>>>> origin/main
                 </li>
               );
             })}
           </ul>
         )}
+<<<<<<< HEAD
+=======
         {interestsDisclaimer && (
           <p className="mt-2 text-[11px] text-civic-stone">
             {interestsDisclaimer}
           </p>
         )}
+>>>>>>> origin/main
       </section>
 
       {/* Committee memberships */}
