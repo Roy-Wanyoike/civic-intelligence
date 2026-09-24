@@ -6,6 +6,7 @@
 
 import type {
   AIResponse,
+  Amendment,
   Bill,
   BillEvent,
   BillSummary,
@@ -170,6 +171,17 @@ export async function getBillTimeline(id: string): Promise<{ events: BillEvent[]
 
 export async function getBillVersions(id: string): Promise<{ versions: BillVersion[] }> {
   return getJSON(`/api/v1/bills/${id}/versions`);
+}
+
+// getBillAmendments returns the seed amendments proposed against a
+// single Bill (issue #293 / FEAT-15). The amendments tracker is
+// seed-only for now — the live Hansard committee-stage ingestion path
+// is pending issue #19. The response carries `source: "seed"` so
+// callers can distinguish seed data from future live amendments.
+export async function getBillAmendments(
+  id: string,
+): Promise<{ amendments: Amendment[]; total: number; source: string }> {
+  return getJSON(`/api/v1/bills/${id}/amendments`);
 }
 
 export async function getBillSummary(id: string): Promise<BillSummary> {

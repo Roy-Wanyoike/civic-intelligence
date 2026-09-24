@@ -12,6 +12,7 @@ import { colors } from '@/lib/design-tokens';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { GovernmentProvider } from '@/lib/government-context';
+import { isEmbedRequest } from '@/lib/embed';
 import {
   DEFAULT_SELECTION,
   GOVERNMENT_COOKIE,
@@ -175,6 +176,23 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Issue #291 — embeddable widgets. Routes under /embed/* render as
+  // chrome-less, standalone widgets that third-party sites load via
+  // <iframe>. They don't need the navbar/footer/CommandPalette/service
+  // worker, nor the React Query / theme / government providers (the
+  // widgets use inline styles + their own fetch helpers, so the
+  // provider tree is dead weight inside an iframe). The middleware
+  // sets `x-civic-embed: 1` on the request for /embed/* paths so the
+  // layout can branch without re-parsing the URL here (App Router
+  // layouts don't receive the pathname).
+  if (isEmbedRequest()) {
+    return (
+      <html lang="en">
+        <body style={{ margin: 0, padding: 0, background: '#ffffff' }}>{children}</body>
+      </html>
+    );
+  }
+
   // Spec §66 — resolve locale + messages on the server (reads the
   // `civic-locale` cookie). Falls back to 'en' if the cookie is absent
   // or unknown — see src/i18n/request.ts.
