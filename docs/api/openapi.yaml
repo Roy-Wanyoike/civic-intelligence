@@ -50,6 +50,7 @@ tags:
   - name: sponsor
   - name: operational
   - name: topics
+  - name: whatsapp
 
 paths:
   /healthz:
@@ -2377,6 +2378,98 @@ components:
             total_edges: { type: integer }
             depth: { type: integer, description: "Traversal depth (0 = no traversal, 1-3 = BFS hops, edge count = path length)" }
 
+    WhatsAppMessage:
+      type: object
+      description: |
+        An inbound WhatsApp message from the WhatsApp Business Cloud API.
+        The fields match the simplified flat payload the webhook accepts
+        (the production webhook ingress — a small adapter in front of
+        this handler — translates Meta's deeply-nested webhook envelope
+        into this flat shape before dispatching).
+
+        The From field is stored in E.164 format (e.g. "+254712345678")
+        so the rate limiter + the WhatsAppSender see a consistent key.
+        The Timestamp is Meta's Unix-seconds string (preserved verbatim
+        for traceability). The MessageID is Meta's wamid.* identifier so
+        the platform can deduplicate inbound messages on retry.
+      required: [from, body]
+      properties:
+        from: { type: string, description: "E.164 phone number of the sender (e.g. +254712345678). The '+' prefix is added if missing." }
+        body: { type: string, description: "The inbound message text (e.g. 'BILL 23 of 2024')." }
+        timestamp: { type: string, description: "Meta's Unix-seconds timestamp string." }
+        message_id: { type: string, description: "Meta's wamid.* identifier for deduplication on retry." }
+
+    WhatsAppDelivery:
+      type: object
+      description: |
+        The outcome of an outbound WhatsApp send. Status is one of:
+        queued, sent, failed. The MessageID is Meta's wamid.* for the
+        outbound message (empty when the stub sender is used).
+      properties:
+        id: { type: string, description: "Platform-internal delivery id with the wa_ prefix (e.g. wa_abc123)." }
+        to: { type: string, description: "E.164 recipient phone number." }
+        message: { type: string, description: "WhatsApp body as sent." }
+        sent_at: { type: string, format: date-time }
+        status: { type: string, enum: [queued, sent, failed] }
+        message_id: { type: string, description: "Meta's outbound wamid.* identifier (empty when the stub sender is used)." }
+        source: { type: string, description: "Which sender produced this delivery (cloud | stub)." }
+
+    WhatsAppWebhookResponse:
+      type: object
+      description: |
+        The JSON envelope returned by the webhook. The status field
+        tells the platform's own admin tooling whether the inbound
+        message was processed (ok), rate-limited (rate_limited), or
+        rejected (invalid). Meta only inspects the HTTP status code
+        (200 = OK); the JSON status is for the platform's own
+        observability.
+
+        The route field surfaces the bot's routing decision (bill | mp |
+        gazette | help | qa | rate_limited | invalid) so an operator
+        can see at a glance whether a citizen's message hit a keyword
+        route or went to the AI Q&A pipeline.
+
+        The rate_limit field surfaces the per-phone rate-limit state
+        (limit, remaining, reset_at) so the citizen can see how many
+        questions they have left in the free tier.
+      properties:
+        status: { type: string, enum: [ok, rate_limited, invalid], description: "Platform-internal processing status (Meta only inspects the HTTP code)." }
+        message_id: { type: string, description: "Echo of the inbound wamid.* for deduplication." }
+        from: { type: string, description: "Normalised E.164 sender phone number." }
+        route: { type: string, enum: [bill, mp, gazette, help, qa, rate_limited, invalid], description: "The bot's routing decision." }
+        reply: { type: string, description: "The outbound reply text the WhatsAppSender delivered (or logged in stub mode)." }
+        sender: { type: string, description: "Active WhatsAppSender name (cloud | stub) so an operator can see whether WHATSAPP_API_KEY was set." }
+        delivery: { $ref: '#/components/schemas/WhatsAppDelivery', description: "The delivery record for the outbound reply (nil when no reply was sent)." }
+        rate_limit:
+          type: object
+          nullable: true
+          description: "Per-phone rate-limit state (nil when rate limiting is disabled)."
+          properties:
+            limit: { type: integer, description: "Configured daily free-tier limit (default 5; override with WHATSAPP_FREE_DAILY_LIMIT)." }
+            remaining: { type: integer, description: "Questions remaining in the current UTC day." }
+            reset_at: { type: string, format: date-time, description: "UTC time at which the counter resets (next UTC midnight)." }
+
+    WhatsAppStatus:
+      type: object
+      description: |
+        The bot's health + configuration. The sender field surfaces
+        the active WhatsAppSender name (cloud | stub) so an operator
+        can immediately see whether WHATSAPP_API_KEY +
+        WHATSAPP_PHONE_NUMBER_ID were set at startup. The daily_limit
+        field surfaces the configured free-tier ceiling. The keywords
+        field lists the bot's keyword routes so an operator can
+        discover the bot's capabilities from a single GET.
+      properties:
+        status: { type: string, description: "Always 'ok' when the bot is healthy." }
+        sender: { type: string, description: "Active WhatsAppSender name (cloud | stub)." }
+        daily_limit: { type: integer, description: "Configured daily free-tier limit (default 5)." }
+        now_utc: { type: string, format: date-time, description: "Current UTC time on the server." }
+        keywords:
+          type: array
+          items: { type: string }
+          description: "The bot's keyword routes (BILL / MP / GAZETTE / HELP)."
+        webhook_docs: { type: string, format: uri, description: "Link to Meta's webhook documentation." }
+
   responses:
     Health:
       description: OK
@@ -2848,3 +2941,87 @@ security:
                 description: RSS 2.0 XML document (<rss version="2.0">).
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  # === WhatsApp Business bot (issue #290) ===
+  #
+  # The bot receives inbound WhatsApp messages on /whatsapp/webhook,
+  # applies per-phone rate limiting (5 questions/day free, configurable
+  # via WHATSAPP_FREE_DAILY_LIMIT), routes by keyword (BILL / MP / GAZETTE /
+  # HELP), and dispatches free-form questions to the AI Q&A endpoint.
+  #
+  # Selection at startup:
+  #   WHATSAPP_API_KEY + WHATSAPP_PHONE_NUMBER_ID set → CloudWhatsAppSender (live)
+  #   either unset                                     → StubWhatsAppSender (logs only)
+  # The architecture is production-ready; the live HTTP path to Meta's
+  # Cloud API uses the CloudWhatsAppSender (fully wired), but tests +
+  # dev run on the StubWhatsAppSender until the credentials are configured.
+  # The webhook always returns 200 OK (even on rate-limit or invalid input)
+  # so Meta doesn't retry the webhook delivery — retries would duplicate
+  # the inbound message in the bot's logs and re-consume the citizen's
+  # daily limit.
+
+  /whatsapp/webhook:
+    post:
+      tags: [whatsapp]
+      summary: WhatsApp Business Cloud API inbound webhook callback
+      description: |
+        Stateless inbound webhook handler. Meta's WhatsApp Cloud API
+        calls this endpoint once per inbound message a citizen sends to
+        the platform's WhatsApp Business number. The webhook:
+
+          1. Parses the (flat) WhatsApp message JSON body.
+          2. Normalises the sender phone number to E.164.
+          3. Applies per-phone rate limiting (5 questions/day free,
+             configurable via WHATSAPP_FREE_DAILY_LIMIT).
+          4. Routes by keyword:
+               BILL [number]    — Bill summary (e.g. BILL 23 of 2024)
+               MP [name]        — MP scorecard (e.g. MP Wetangula)
+               GAZETTE [keyword] — latest gazette notice (e.g. GAZETTE tender)
+               HELP             — the keyword menu
+             Any other message is dispatched to the AI Q&A endpoint
+             (services/ai) as a free-form civic question.
+          5. Sends the reply via the WhatsAppSender (stub or cloud).
+          6. Returns a JSON envelope with the reply, the route, the
+             sender name, the delivery record, and the per-phone
+             rate-limit state.
+
+        The endpoint is PUBLIC (no auth required) — Meta calls the
+        webhook from its Cloud API gateway, not from a user session.
+        The phone number in the request body is the user's identity
+        for the duration of the message.
+
+        The endpoint ALWAYS returns 200 OK (even on rate-limit or
+        invalid input) so Meta doesn't retry the webhook delivery.
+        The JSON `status` field is the platform's own signal for
+        whether the message was actually processed (ok |
+        rate_limited | invalid).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhatsAppMessage'
+      responses:
+        '200':
+          description: Webhook accepted (always 200 so Meta doesn't retry)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhatsAppWebhookResponse' }
+
+  /whatsapp/status:
+    get:
+      tags: [whatsapp]
+      summary: WhatsApp bot health check
+      description: |
+        Returns the bot's health + configuration. The response surfaces
+        the active WhatsAppSender name (cloud | stub) so an operator can
+        immediately see whether WHATSAPP_API_KEY + WHATSAPP_PHONE_NUMBER_ID
+        were set at startup, plus the configured daily free-tier limit
+        and the keyword menu. Used by Meta's webhook subscription
+        verification flow AND by the platform's own liveness probes.
+      responses:
+        '200':
+          description: Bot health + configuration
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhatsAppStatus' }
