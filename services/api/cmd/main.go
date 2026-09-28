@@ -383,6 +383,24 @@ func main() {
         // Topics (issue #267) — civic topic explorer with 10 topics.
         apiHandler.HandleFunc("/api/v1/topics", handleTopicsList)
         apiHandler.HandleFunc("/api/v1/topics/", handleTopicDetail)
+        // Budget visualization (issue #285)
+        apiHandler.HandleFunc("/api/v1/budget", handleBudget)
+        
+        // Written questions (issue #286)
+        apiHandler.HandleFunc("/api/v1/questions/written", makeWrittenQuestionsListHandler())
+        apiHandler.HandleFunc("/api/v1/questions/written/", makeWrittenQuestionDetailHandler())
+        
+        // RSS feeds (issue #280)
+        apiHandler.HandleFunc("/api/v1/feed/bills.rss", makeBillsRSSFeedHandler(kenyaLaw))
+        apiHandler.HandleFunc("/api/v1/feed/what-changed.rss", makeWhatChangedRSSFeedHandler(kenyaLaw))
+        apiHandler.HandleFunc("/api/v1/feed/brief.rss", makeBriefRSSFeedHandler(briefStore))
+        apiHandler.HandleFunc("/api/v1/feed/people.rss", makeMPRSSFeedHandler())
+        
+        // WhatsApp bot (issue #290)
+        waBot := NewWhatsAppBot(nil, cfg.AIServiceURL, kenyaLaw, gazetteAlertStore)
+        waSender := NewWhatsAppSender(nil)
+        apiHandler.HandleFunc("/api/v1/whatsapp/webhook", makeWhatsAppWebhookHandler(waBot, waSender))
+        apiHandler.HandleFunc("/api/v1/whatsapp/status", makeWhatsAppStatusHandler(waSender, waBot.rateLimiter))
 
         // Apply OptionalAuth + rate limiting + metrics to the API routes.
         // Notifications — in-memory store for now.

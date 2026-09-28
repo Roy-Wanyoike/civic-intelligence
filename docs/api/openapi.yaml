@@ -3306,3 +3306,65 @@ security:
           content:
             text/plain:
               schema: { type: string }
+
+  /budget:
+    get:
+      tags: [budget]
+      summary: Budget allocations by ministry
+      parameters:
+        - { in: query, name: country, schema: { type: string } }
+        - { in: query, name: year, schema: { type: integer } }
+      responses:
+        '200': { description: Budget allocations }
+
+  /questions/written:
+    get:
+      tags: [written-questions]
+      summary: List written questions
+      parameters:
+        - { in: query, name: mp_id, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string, enum: [pending, answered, overdue] } }
+      responses:
+        '200': { description: List of written questions }
+
+  /questions/written/{id}:
+    get:
+      tags: [written-questions]
+      summary: Get a written question
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Written question detail }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /feed/people.rss:
+    get:
+      tags: [rss]
+      summary: RSS feed for MP activity
+      responses:
+        '200': { description: RSS 2.0 XML }
+
+  /whatsapp/webhook:
+    post:
+      tags: [whatsapp]
+      summary: WhatsApp Business API webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from: { type: string }
+                body: { type: string }
+                timestamp: { type: string }
+                message_id: { type: string }
+      responses:
+        '200': { description: Webhook processed }
+
+  /whatsapp/status:
+    get:
+      tags: [whatsapp]
+      summary: WhatsApp bot health check
+      responses:
+        '200': { description: Status }
