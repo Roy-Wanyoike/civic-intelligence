@@ -22,7 +22,7 @@ import {
   extractYouTubeVideoId,
 } from '@/components/youtube-embed';
 import { getJSON_ as getJSON, ApiError } from '@/lib/api';
-import { mockTimeline } from '@/lib/mock-data';
+import { mockBills, mockTimeline } from '@/lib/mock-data';
 import type { Bill, BillEvent } from '@/lib/types';
 import type { Metadata } from 'next';
 
@@ -30,9 +30,17 @@ import type { Metadata } from 'next';
  * Bill detail page (spec §13 — Bill Intelligence).
  *
  * Server component that fetches the Bill from `/api/v1/bills/{id}` at
- * request time. If the API is unreachable, shows a friendly error rather
- * than rendering mock data — the audit explicitly flagged this page for
- * silently falling back to `mockBills` (GAP-13-1).
+ * request time. When the Go BFF is unreachable (e.g. on Vercel where the
+ * Go service is not deployed, or during a fresh deploy before ingestion
+ * has run), the page falls back to `mockBills` and renders a prominent
+ * SAMPLE DATA banner so the fallback is never silent. This matches the
+ * behaviour of every sibling sub-page (`/timeline`, `/versions`,
+ * `/amendments`, `/compare`, `/documents`, `/chat`) and fixes the bug
+ * where every Bill link from the Bills list or home page 404'd.
+ *
+ * The audit's GAP-13-1 concern (don't SILENTLY fall back) is preserved by
+ * the visible banner — users always know when they are looking at sample
+ * data vs. a verified record from kenyalaw.org.
  *
  * The timeline preview fetches from `/api/v1/bills/{id}/timeline` and
  * falls back to the curated mock events ONLY when the API is unreachable,
@@ -48,12 +56,21 @@ export const revalidate = 60; // ISR-friendly cache, max 1 minute.
 const API_BASE =
   process.env.API_BASE_URL ?? 'http://localhost:9000';
 
-async function fetchBill(id: string): Promise<Bill | null> {
+async function fetchBill(
+  id: string,
+): Promise<{ bill: Bill | null; source: 'api' | 'mock' }> {
   try {
-    return await getJSON<Bill>(`${API_BASE}/api/v1/bills/${encodeURIComponent(id)}`);
+    const bill = await getJSON<Bill>(
+      `${API_BASE}/api/v1/bills/${encodeURIComponent(id)}`,
+    );
+    return { bill, source: 'api' as const };
   } catch (err) {
-    // Surface unexpected errors to logs; the friendly error UI is rendered
-    // by the caller. ApiError carries the status code so callers can branch.
+    // Surface unexpected errors to logs; then fall back to the mock
+    // roster so the page still renders. Every sibling sub-page already
+    // does this — only this main detail page was throwing, which is why
+    // every Bill link from the Bills list / home page 404'd on Vercel
+    // (where the Go BFF is not deployed). The visible SAMPLE DATA banner
+    // below keeps the fallback honest (audit GAP-13-1).
     if (err instanceof ApiError) {
       // eslint-disable-next-line no-console
       console.warn(`[bills/[id]] API error ${err.status} for ${id}: ${err.message}`);
@@ -61,7 +78,8 @@ async function fetchBill(id: string): Promise<Bill | null> {
       // eslint-disable-next-line no-console
       console.warn(`[bills/[id]] fetch failed for ${id}`, err);
     }
-    return null;
+    const bill = mockBills.find((b) => b.id === id) ?? null;
+    return { bill, source: 'mock' as const };
   }
 }
 
@@ -91,7 +109,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const bill = await fetchBill(id);
+  const { bill } = await fetchBill(id);
   if (!bill) return { title: 'Bill not found' };
   return {
     title: bill.title,
@@ -105,7 +123,7 @@ export default async function BillDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const bill = await fetchBill(id);
+  const { bill, source: billSource } = await fetchBill(id);
 
   if (!bill) {
     return (
@@ -138,6 +156,30 @@ export default async function BillDetailPage({
 
   return (
     <article className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+      {/* SAMPLE DATA banner — shown when the Go BFF is unreachable and
+          the page fell back to the curated mock roster. This keeps the
+          fallback honest (audit GAP-13-1) so a citizen never mistakes
+          a sample Bill for a verified record from kenyalaw.org. */}
+      {billSource === 'mock' && (
+        <div
+          role="status"
+          className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">Showing sample data</p>
+              <p className="mt-0.5 text-amber-800">
+                The live Go BFF is unreachable right now, so this page is
+                showing a curated sample Bill. Real Bills are fetched live
+                from <span className="font-medium">kenyalaw.org</span> and
+                will appear here automatically once the BFF is back online.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="mb-6 text-sm text-civic-stone">
         <ol className="flex items-center gap-2">
