@@ -6,6 +6,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-25
+
+The biggest release yet. 19 countries, 20 flagship features, Qwen AI,
+hero redesign, civic education hub, and a two-section auth page.
+
+### Added — 5 new country adapters (Wave 14)
+
+Cameroon (CM), Mozambique (MZ), Ivory Coast (CI), Burkina Faso (BF),
+Niger (NE). Platform now supports 19 African countries.
+
+### Added — 10 competitor-inspired features
+
+1. **MP voting records** (#284) — 30 seed votes across 5 MPs × 6 Bills,
+   color-coded aye/nay/abstain/absent on the scorecard.
+2. **Budget visualization** (#285) — D3 treemap of 21 ministry
+   allocations totaling ~KES 3.9T, recurrent vs development.
+3. **Written questions tracker** (#286) — 15 seed questions from MPs to
+   Ministers, status badges (pending/answered/overdue).
+4. **Public participation portal** (#287) — e-petitions with signature
+   collection, create/sign/detail flows.
+5. **Registered interests** (#288) — 20 seed asset declarations across
+   5 MPs, 6 categories (directorships, land, shares, gifts, income, loans).
+6. **SMS/USSD alerts** (#289) — Africa's Talking integration, USSD
+   menu (*123#), SMS subscribe/broadcast.
+7. **WhatsApp bot** (#290) — WhatsApp Business API webhook, keyword
+   routing (BILL/MP/GAZETTE/HELP), per-phone rate limiting.
+8. **Embeddable widgets** (#291) — 3 iframe widgets (MP finder, bill
+   tracker, today in parliament) for third-party sites.
+9. **Civic education hub** (#292) — /learn section with 5 structured
+   guides (how a bill becomes law, understanding parliament, reading a
+   bill, constitutional rights, public participation).
+10. **Amendment tracker** (#293) — 10 seed amendments across 3 Bills,
+    status badges (proposed/accepted/rejected).
+
+### Added — Qwen AI integration
+
+- QwenProvider class in services/ai/app/gateway.py — OpenAI-compatible
+  API client for ModelScope (api-inference.modelscope.ai).
+- Default provider changed from 'stub' to 'qwen'.
+- Timeout reduced from 30s to 10s (user requirement: response within 10s).
+- Default model: Qwen-Ambassador/Qwen3.8-Max.
+- .env.example updated with Qwen credentials + Vercel deployment notes.
+- Frontend: replaced spinning loader with subtle 'Thinking…' text.
+
+### Added — Hero section redesign
+
+- Full-bleed Kenya Parliament Buildings image as background.
+- Dark gradient overlay (forest-green → ink) for text readability.
+- Larger headline (text-6xl) with accent highlight on 'government'.
+- Stats row (50+ Bills, 19 Countries, 12 Sources, Daily alerts).
+- Civic Highlights Carousel moved to its own section below the hero.
+
+### Added — Two-section auth page
+
+- Left: Kenya Parliament image with marketing copy + feature bullets + stats.
+- Right: sign-in form + Google button + sign-up CTA.
+- Mobile: single column, branding hidden.
+
+### Fixed
+
+- Edge Runtime error on Vercel: added `export const runtime = 'nodejs'`
+  to middleware.ts (Vercel's multi-service config doesn't support Edge).
+- Merge conflict markers in scorecard/page.tsx + people-api.ts resolved.
+- Unused Loader2 import removed from ask-form.tsx.
+
+### Updated
+
+- README: 79 pages, 90+ API routes, 20 flagship features, 194 commits,
+  123 merged PRs, Qwen AI badge.
+- Stale TODO comments removed across codebase.
+- Phase-1-audit.md updated — all P0/P1 issues marked CLOSED.
+
 ## [0.2.2] — 2026-09-22
 
 Patch release fixing the two distinct build errors that blocked the
