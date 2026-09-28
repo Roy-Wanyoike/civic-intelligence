@@ -43,8 +43,8 @@ class Settings(BaseSettings):
     database_statement_timeout_ms: int = 5000
 
     # --- model gateway ---
-    model_gateway_default_provider: Literal["stub", "openai", "anthropic"] = "stub"
-    model_gateway_timeout_seconds: int = 30
+    model_gateway_default_provider: Literal["stub", "openai", "anthropic", "qwen"] = "qwen"
+    model_gateway_timeout_seconds: int = 10
     model_gateway_max_retries: int = 2
     model_gateway_budget_usd_per_day: float = 20.0
 
@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     openai_default_model: str = "gpt-4o-mini"
     anthropic_api_key: str = ""
     anthropic_default_model: str = "claude-3-5-haiku-latest"
+
+    # --- Qwen (via ModelScope API) ---
+    qwen_api_key: str = ""
+    qwen_base_url: str = "https://api-inference.modelscope.ai/v1/chat/completions"
+    qwen_default_model: str = "Qwen-Ambassador/Qwen3.8-Max"
 
     # --- RAG ---
     rag_top_k: int = 8

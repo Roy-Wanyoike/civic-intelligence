@@ -10,9 +10,10 @@
 
 [![Tests](https://img.shields.io/badge/tests-1188%20Go%20%2B%2028%20Python%20%2B%20TS%20PASS-brightgreen)]()
 [![Countries](https://img.shields.io/badge/countries-19-blue)]()
-[![Pages](https://img.shields.io/badge/frontend-73%20pages-9cf)]()
-[![API](https://img.shields.io/badge/API-76%2B%20routes-orange)]()
-[![Commits](https://img.shields.io/badge/commits-182-lightgrey)]()
+[![Pages](https://img.shields.io/badge/frontend-79%20pages-9cf)]()
+[![API](https://img.shields.io/badge/API-90%2B%20routes-orange)]()
+[![AI](https://img.shields.io/badge/AI-12%20capabilities%20%2B%20Qwen-teal)]()
+[![Commits](https://img.shields.io/badge/commits-194-lightgrey)]()
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 [![Vercel](https://img.shields.io/badge/deploy-Vercel%20ready-black)]()
 [![Release](https://img.shields.io/badge/release-v0.2.2-blueviolet)]()
@@ -41,7 +42,7 @@ Government information is public, but often impenetrable. Parliamentary terminol
 
 ## Key Features
 
-The platform ships **10 flagship features**. Every feature is grounded in authoritative sources and respects the **country scope** set by the Government Selector.
+The platform ships **20 flagship features** (10 original + 10 competitor-inspired). Every feature is grounded in authoritative sources and respects the **country scope** set by the Government Selector.
 
 | # | Feature | Description | API |
 |---|---------|-------------|-----|
@@ -664,15 +665,16 @@ All funds go toward server costs, AI processing, and data sourcing. We do not ac
 - **1188** Go tests (across API + 19 country adapters + legislation + simulation + contract + integration + chaos)
 - **28** Python tests (AI gateway + capabilities + eval)
 - **TypeScript PASS** (frontend type-check + lint)
-- **73** frontend pages
-- **76+** API routes
-- **94** documented OpenAPI paths
+- **79** frontend pages
+- **90+** API routes
+- **100+** documented OpenAPI paths
 - **22** SQL migrations (9 schemas, pgvector)
 - **14** Architecture Decision Records
 - **19** country adapters
-- **12** AI capabilities
-- **10** flagship features
-- **182** commits
+- **12** AI capabilities (powered by Qwen via ModelScope)
+- **20** flagship features (10 original + 10 competitor-inspired)
+- **194** commits
+- **123** merged PRs
 - **v0.2.2** current release (see [CHANGELOG.md](./CHANGELOG.md))
 
 ---

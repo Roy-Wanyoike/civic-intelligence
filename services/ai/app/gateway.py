@@ -174,6 +174,75 @@ def _estimate_openai_cost_cents(model: str, prompt_tokens: int, completion_token
     return Decimal(str(usd * 100)).quantize(Decimal("0.0001"))
 
 
+# ---------- Qwen provider (via ModelScope API) ----------
+
+class QwenProvider:
+    """Qwen Chat Completions provider via ModelScope API.
+    Activated when AI_MODEL_GATEWAY_DEFAULT_PROVIDER=qwen.
+    Uses OpenAI-compatible API at https://api-inference.modelscope.ai/v1/chat/completions
+    """
+
+    name = "qwen"
+
+    def __init__(self, api_key: str, base_url: str, default_model: str, timeout: float) -> None:
+        self._api_key = api_key
+        self._base_url = base_url
+        self._default_model = default_model
+        self._timeout = timeout
+        self._client = httpx.AsyncClient(
+            timeout=timeout,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+
+    @retry(
+        retry=retry_if_exception_type((httpx.TimeoutException, httpx.NetworkError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.3, max=2),
+        reraise=True,
+    )
+    async def complete(self, request: ModelRequest) -> ModelResponse:
+        payload: dict[str, Any] = {
+            "model": self._default_model,
+            "messages": [
+                {"role": "system", "content": request.system_prompt},
+                {"role": "user", "content": request.user_prompt},
+            ],
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+        }
+        if request.response_format == "json":
+            payload["response_format"] = {"type": "json_object"}
+        try:
+            t0 = time.monotonic()
+            resp = await self._client.post(self._base_url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            content = data["choices"][0]["message"]["content"]
+            parsed = None
+            if request.response_format == "json":
+                import json
+                parsed = json.loads(content)
+            return ModelResponse(
+                content=content,
+                parsed_json=parsed,
+                model=data.get("model", self._default_model),
+                provider=self.name,
+                prompt_tokens=data.get("usage", {}).get("prompt_tokens", 0),
+                completion_tokens=data.get("usage", {}).get("completion_tokens", 0),
+                latency_ms=latency_ms,
+                cost_cents=Decimal("0"),  # Qwen via ModelScope is free for now
+                finish_reason=data["choices"][0].get("finish_reason", "stop"),
+            )
+        except httpx.TimeoutException as e:
+            raise GatewayTimeoutError(str(e)) from e
+        except httpx.HTTPStatusError as e:
+            raise GatewayError(f"Qwen HTTP {e.response.status_code}: {e.response.text[:200]}") from e
+
+
 # ---------- gateway ----------
 
 class ModelGateway:
@@ -246,15 +315,20 @@ def build_gateway(settings: Settings) -> ModelGateway:
     primary: ModelProvider
     fallbacks: list[ModelProvider] = []
 
-    if settings.model_gateway_default_provider == "openai" and settings.openai_api_key:
+    if settings.model_gateway_default_provider == "qwen" and settings.qwen_api_key:
+        primary = QwenProvider(
+            settings.qwen_api_key,
+            settings.qwen_base_url,
+            settings.qwen_default_model,
+            float(settings.model_gateway_timeout_seconds),
+        )
+    elif settings.model_gateway_default_provider == "openai" and settings.openai_api_key:
         primary = OpenAIProvider(
             settings.openai_api_key,
             settings.openai_default_model,
             float(settings.model_gateway_timeout_seconds),
         )
     elif settings.model_gateway_default_provider == "anthropic" and settings.anthropic_api_key:
-        # Anthropic provider not implemented in this iteration — fall back to stub
-        # with a logged warning. See GitHub issue #CI-AI-002.
         log.warning("anthropic_provider_not_implemented_falling_back_to_stub")
         primary = StubProvider()
     else:
