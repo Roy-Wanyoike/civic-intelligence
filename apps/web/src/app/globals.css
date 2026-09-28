@@ -134,3 +134,105 @@ body {
 .dark .bg-civic-leaf\/10 { background-color: rgba(21, 120, 74, 0.15); }
 .dark .bg-civic-acacia\/20 { background-color: rgba(212, 160, 23, 0.15); }
 .dark .bg-civic-mist\/50 { background-color: rgba(15, 35, 27, 0.5); }
+
+/* Civic prose — readable body styling for /learn guides.
+ *
+ * The Tailwind typography plugin is intentionally NOT a dependency
+ * (see tailwind.config.ts — the `typography` key is a no-op). Instead
+ * we hand-roll the same patterns: scoped descendants of `.civic-prose`
+ * get the typographic defaults a reader expects from long-form content.
+ *
+ * Dark-mode overrides ride the existing `.dark` class so prose follows
+ * the rest of the site's theme without per-rule branching.
+ */
+.civic-prose {
+  color: rgb(var(--foreground));
+  font-size: 1rem;
+  line-height: 1.75;
+  max-width: 72ch;
+}
+.civic-prose > * + * { margin-top: 1rem; }
+.civic-prose h2 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--civic-forest, #0c3b2e);
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+  scroll-margin-top: 6rem;
+}
+.civic-prose h3 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--civic-forest, #0c3b2e);
+  margin-top: 1.5rem;
+  margin-bottom: 0.25rem;
+  line-height: 1.35;
+  scroll-margin-top: 6rem;
+}
+.civic-prose h4 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--civic-forest, #0c3b2e);
+  margin-top: 1.25rem;
+  margin-bottom: 0.25rem;
+  scroll-margin-top: 6rem;
+}
+.civic-prose p { margin-top: 0; }
+.civic-prose ul,
+.civic-prose ol {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+}
+.civic-prose ul { list-style: disc; }
+.civic-prose ol { list-style: decimal; }
+.civic-prose li { margin-top: 0.25rem; }
+.civic-prose li::marker { color: rgb(var(--muted)); }
+.civic-prose a {
+  color: rgb(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.civic-prose a:hover { text-decoration-thickness: 2px; }
+.civic-prose strong { font-weight: 600; color: rgb(var(--foreground)); }
+.civic-prose em { font-style: italic; }
+.civic-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  background: rgb(var(--background));
+  border: 1px solid rgb(var(--border));
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+}
+.civic-prose blockquote {
+  border-left: 4px solid rgb(var(--primary));
+  padding-left: 1rem;
+  font-style: italic;
+  color: rgb(var(--muted));
+}
+.civic-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+.civic-prose th,
+.civic-prose td {
+  border: 1px solid rgb(var(--border));
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.civic-prose th { background: rgb(var(--background)); font-weight: 600; }
+
+/* Dark-mode tweaks for prose — keep the heading contrast readable
+ * against the dark paper background. */
+.dark .civic-prose h2,
+.dark .civic-prose h3,
+.dark .civic-prose h4 {
+  color: rgb(120 200 160);
+}
+.dark .civic-prose strong {
+  color: rgb(245 247 246);
+}
