@@ -107,8 +107,7 @@ export async function getMPScorecard(personId: string): Promise<MPScorecard> {
   return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/scorecard`);
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
+
 // === Written Questions (issue #286) ===
 
 // WrittenQuestionStatus mirrors the Go WrittenQuestionStatus type
@@ -151,7 +150,11 @@ export interface WrittenQuestionsByPersonResponse {
   mp_id: string;
   name: string;
   items: WrittenQuestion[];
-=======
+  total: number;
+  source: string;
+  scorecard_url?: string;
+}
+
 // === Registered Interests (issue #288) ===
 
 // RegisteredInterestCategory is the closed enum of declaration categories
@@ -207,8 +210,8 @@ export async function getRegisteredInterests(
   return getJSON(
     `/api/v1/people/${encodeURIComponent(personId)}/interests${tail}`,
   );
->>>>>>> origin/main
-=======
+}
+
 // === MP Voting Records (issue #284) ===
 
 // VoteKind mirrors the Go VoteKind type (services/api/cmd/votes.go) 1:1
@@ -247,13 +250,11 @@ export interface VotesByPersonResponse {
   person_id: string;
   name: string;
   items: VoteRecord[];
->>>>>>> origin/main
   total: number;
   source: string;
   scorecard_url?: string;
 }
 
-<<<<<<< HEAD
 // getMPWrittenQuestions fetches an MP's written questions tabled to
 // Cabinet Secretaries + Ministers (issue #286). Returns the raw
 // questions most-recent-first; the scorecard page renders them with a
@@ -264,7 +265,8 @@ export async function getMPWrittenQuestions(
   personId: string,
 ): Promise<WrittenQuestionsByPersonResponse> {
   return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/questions`);
-=======
+}
+
 // VotesByBillResponse is the JSON envelope returned by
 // GET /api/v1/bills/{id}/votes.
 export interface VotesByBillResponse {
@@ -291,7 +293,6 @@ export async function getMPVotes(personId: string): Promise<VotesByPersonRespons
 // total) + the per-MP roll-call items list.
 export async function getBillVotes(billId: string): Promise<VotesByBillResponse> {
   return getJSON(`/api/v1/bills/${encodeURIComponent(billId)}/votes`);
->>>>>>> origin/main
 }
 
 // === Constituencies ===
