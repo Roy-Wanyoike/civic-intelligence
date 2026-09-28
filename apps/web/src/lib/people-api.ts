@@ -107,6 +107,194 @@ export async function getMPScorecard(personId: string): Promise<MPScorecard> {
   return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/scorecard`);
 }
 
+
+// === Written Questions (issue #286) ===
+
+// WrittenQuestionStatus mirrors the Go WrittenQuestionStatus type
+// (services/api/cmd/written_questions.go) 1:1 so the JSON contract
+// stays in lock-step. The 3 values are the wire forms emitted by
+// the API (lowercase, no spaces).
+export type WrittenQuestionStatus = 'pending' | 'answered' | 'overdue';
+
+// WrittenQuestion mirrors the Go WrittenQuestion struct 1:1. Both the
+// per-MP endpoint (/people/{id}/questions), the list endpoint
+// (/questions/written), and the detail endpoint
+// (/questions/written/{id}) return the same item shape so the
+// frontend can render a question row identically on any page.
+export interface WrittenQuestion {
+  id: string;
+  mp_id: string;
+  mp_name: string;
+  minister: string;
+  ministry: string;
+  question_text: string;
+  asked_at: string;
+  // response_text + responded_at are omitted (NOT empty string) for
+  // pending + overdue questions. The omitempty invariant mirrors the
+  // real-world lifecycle: a question is tabled BEFORE a response
+  // exists, and the API surface should not invent empty-string
+  // responses for unanswered questions.
+  response_text?: string;
+  responded_at?: string;
+  deadline: string;
+  status: WrittenQuestionStatus;
+  source_url: string;
+}
+
+// WrittenQuestionsByPersonResponse is the JSON envelope returned by
+// GET /api/v1/people/{id}/questions. The shape mirrors the
+// VotesByPersonResponse + billsByPersonResponse envelopes so the
+// scorecard page can reuse its rendering pattern
+// (mp_id + name + items + total + source + scorecard_url).
+export interface WrittenQuestionsByPersonResponse {
+  mp_id: string;
+  name: string;
+  items: WrittenQuestion[];
+  total: number;
+  source: string;
+  scorecard_url?: string;
+}
+
+// === Registered Interests (issue #288) ===
+
+// RegisteredInterestCategory is the closed enum of declaration categories
+// the API accepts on the ?category= filter. Mirrors the Go-side
+// RegisteredInterestCategory const block in services/api/cmd/interests.go.
+export type RegisteredInterestCategory =
+  | 'directorship'
+  | 'land_property'
+  | 'shares'
+  | 'gifts'
+  | 'other_income'
+  | 'loans';
+
+// RegisteredInterest is a single declared interest sourced from the MP's
+// official Declaration of Interests Register entry. value_kes is 0 when
+// the value is not disclosed / not applicable (e.g. a non-monetary gift)
+// — the description text carries the qualifier in that case.
+export interface RegisteredInterest {
+  person_id: string;
+  person_name: string;
+  category: RegisteredInterestCategory;
+  description: string;
+  value_kes: number;
+  declared_at: string;
+  source_url: string;
+  source: string;
+}
+
+// RegisteredInterestsResponse is the JSON envelope returned by
+// /api/v1/people/{id}/interests. The category field is the echoed
+// ?category= filter value when a filter was applied; omitted otherwise.
+export interface RegisteredInterestsResponse {
+  person_id: string;
+  person_name: string;
+  items: RegisteredInterest[];
+  total: number;
+  category?: RegisteredInterestCategory;
+  source: 'seed';
+  scorecard_url: string;
+  disclaimer: string;
+}
+
+// getRegisteredInterests fetches the declared interests for the given MP.
+// Pass a category to narrow the response to a single declaration category;
+// omit it to fetch every declared interest for the MP.
+export async function getRegisteredInterests(
+  personId: string,
+  params: { category?: RegisteredInterestCategory } = {},
+): Promise<RegisteredInterestsResponse> {
+  const qs = new URLSearchParams();
+  if (params.category) qs.set('category', params.category);
+  const tail = qs.size ? `?${qs.toString()}` : '';
+  return getJSON(
+    `/api/v1/people/${encodeURIComponent(personId)}/interests${tail}`,
+  );
+}
+
+// === MP Voting Records (issue #284) ===
+
+// VoteKind mirrors the Go VoteKind type (services/api/cmd/votes.go) 1:1
+// so the JSON contract stays in lock-step. The 4 values are the wire
+// forms emitted by the API (lowercase, no spaces).
+export type VoteKind = 'aye' | 'nay' | 'abstain' | 'absent';
+
+// VoteRecord mirrors the Go VoteRecord struct 1:1. Both the per-MP and
+// per-Bill endpoints return the same item shape so the frontend can
+// render a vote row identically on either page.
+export interface VoteRecord {
+  person_id: string;
+  person_name: string;
+  vote: VoteKind;
+  bill_id: string;
+  bill_title: string;
+  division: string;
+  date: string;
+  source_url: string;
+}
+
+// VoteCounts is the per-division tally returned by /bills/{id}/votes.
+// The platform NEVER derives a "pass / fail" verdict from these counts
+// — they are surfaced raw.
+export interface VoteCounts {
+  aye: number;
+  nay: number;
+  abstain: number;
+  absent: number;
+  total: number;
+}
+
+// VotesByPersonResponse is the JSON envelope returned by
+// GET /api/v1/people/{id}/votes.
+export interface VotesByPersonResponse {
+  person_id: string;
+  name: string;
+  items: VoteRecord[];
+  total: number;
+  source: string;
+  scorecard_url?: string;
+}
+
+// getMPWrittenQuestions fetches an MP's written questions tabled to
+// Cabinet Secretaries + Ministers (issue #286). Returns the raw
+// questions most-recent-first; the scorecard page renders them with a
+// status-coloured badge (green=answered, amber=pending, red=overdue).
+// The platform NEVER derives a "responsiveness score" from these
+// records — the colour coding is a readability affordance ONLY.
+export async function getMPWrittenQuestions(
+  personId: string,
+): Promise<WrittenQuestionsByPersonResponse> {
+  return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/questions`);
+}
+
+// VotesByBillResponse is the JSON envelope returned by
+// GET /api/v1/bills/{id}/votes.
+export interface VotesByBillResponse {
+  bill_id: string;
+  bill_title: string;
+  division: string;
+  date: string;
+  source_url: string;
+  counts: VoteCounts;
+  items: VoteRecord[];
+  total: number;
+  source: string;
+}
+
+// getMPVotes fetches an MP's voting history (issue #284). Returns the
+// raw vote records most-recent-first; the scorecard page renders them
+// with a color-coded badge (green=aye, red=nay, gray=abstain/absent).
+export async function getMPVotes(personId: string): Promise<VotesByPersonResponse> {
+  return getJSON(`/api/v1/people/${encodeURIComponent(personId)}/votes`);
+}
+
+// getBillVotes fetches the division summary for a single Bill (issue
+// #284). Returns the per-division tally (aye / nay / abstain / absent /
+// total) + the per-MP roll-call items list.
+export async function getBillVotes(billId: string): Promise<VotesByBillResponse> {
+  return getJSON(`/api/v1/bills/${encodeURIComponent(billId)}/votes`);
+}
+
 // === Constituencies ===
 
 export interface ConstituencyBillRef {

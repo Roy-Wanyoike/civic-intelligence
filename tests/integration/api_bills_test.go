@@ -198,6 +198,12 @@ func TestBills_DetailUnknownReturns404(t *testing.T) {
 // assertions when the bills list reports `source: "seed"` (i.e. the
 // live crawl is down) — the versions + documents sub-routes always
 // return 200 unconditionally.
+//
+// Issue #293 note: the /amendments sub-route is seed-only for FEAT-15
+// and always returns 200 (the handler falls back to the seed Bills slice
+// to verify the parent Bill exists, per the #265 contract — never 503
+// for a known Bill). So /amendments is asserted as 200 regardless of the
+// list endpoint's `source` field.
 func TestBills_SubRoutesReturnDocumentedShape(t *testing.T) {
 	// Discover a real Bill ID first. With issue #265, the list always
 	// returns 200; `degraded` tells us whether the live crawl worked.
@@ -215,12 +221,15 @@ func TestBills_SubRoutesReturnDocumentedShape(t *testing.T) {
 	// handlers that call findBillByID will return 503 because the
 	// adapter is still unreachable. Versions + documents always
 	// return 200 (they're stubs that don't touch the adapter).
+	// Amendments also always returns 200 — it falls back to the seed
+	// Bills slice (issue #293 / #265 contract — never 503 for a known Bill).
 	expectStatus := map[string]int{
-		"timeline":  http.StatusOK,
-		"changes":   http.StatusOK,
-		"versions":  http.StatusOK,
-		"documents": http.StatusOK,
-		"summary":   http.StatusOK,
+		"timeline":   http.StatusOK,
+		"changes":    http.StatusOK,
+		"versions":   http.StatusOK,
+		"documents":  http.StatusOK,
+		"summary":    http.StatusOK,
+		"amendments": http.StatusOK,
 	}
 	if list.Source == "seed" {
 		expectStatus["timeline"] = http.StatusServiceUnavailable
@@ -237,6 +246,7 @@ func TestBills_SubRoutesReturnDocumentedShape(t *testing.T) {
 		{"versions", expectStatus["versions"]},
 		{"documents", expectStatus["documents"]},
 		{"summary", expectStatus["summary"]},
+		{"amendments", expectStatus["amendments"]},
 	} {
 		var resp map[string]any
 		status := mustGet(t, apiURL("/bills/"+firstID+"/"+sub.path), &resp)

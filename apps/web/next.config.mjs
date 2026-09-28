@@ -18,6 +18,35 @@ const nextConfig = {
       { source: '/api/v1/:path*', destination: `${apiUrl}/api/v1/:path*` },
     ];
   },
+  // Issue #291 — embeddable widgets. Routes under /embed/* are loaded
+  // in third-party sites via <iframe>, so they need to opt out of the
+  // platform's default clickjacking protection. We:
+  //   1. Set `Content-Security-Policy: frame-ancestors *` — the modern
+  //      standard, respected by all evergreen browsers. This permits
+  //      any origin to embed the route.
+  //   2. Remove `X-Frame-Options` (Next.js does not set it by default,
+  //      but Vercel's edge layer sometimes injects `SAMEORIGIN`). Setting
+  //      it to an empty string overrides any inherited value.
+  // All other routes keep their default headers (no `frame-ancestors`
+  // directive = `X-Frame-Options: SAMEORIGIN` semantics) so the main
+  // site remains protected against clickjacking.
+  async headers() {
+    return [
+      {
+        source: '/embed/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: 'frame-ancestors *',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: '',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);

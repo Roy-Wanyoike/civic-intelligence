@@ -12,6 +12,7 @@ import {
   ScrollText,
   Lightbulb,
   Video,
+  Scale,
 } from 'lucide-react';
 import { TimelineView } from '@/components/timeline';
 import { BillAskPanel } from '@/components/bill-ask-panel';
@@ -247,6 +248,7 @@ export default async function BillDetailPage({
             { href: '', icon: FileText, label: 'Overview', active: true },
             { href: '/timeline', icon: History, label: 'Timeline' },
             { href: '/versions', icon: FileText, label: 'Versions' },
+            { href: '/amendments', icon: Scale, label: 'Amendments' },
             { href: '/compare', icon: GitCompare, label: 'Compare' },
             { href: '/documents', icon: FileText, label: 'Documents' },
             { href: '/chat', icon: MessageCircle, label: 'Ask' },

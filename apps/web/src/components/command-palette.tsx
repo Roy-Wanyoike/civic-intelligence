@@ -93,6 +93,7 @@ const NAV_GROUPS = [
       { href: '/graph', label: 'Knowledge Graph' },
       { href: '/compare', label: 'Compare' },
       { href: '/indicators', label: 'Indicators' },
+      { href: '/budget', label: 'Budget' },
       { href: '/research', label: 'Research' },
       { href: '/trust', label: 'Trust' },
       { href: '/report', label: 'Reports' },

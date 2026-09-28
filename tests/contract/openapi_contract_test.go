@@ -154,6 +154,11 @@ func normalizeRoute(route string) string {
                         "/debt", "/terminology", "/people", "/committees", "/institutions",
                         "/loans", "/grants", "/provenance", "/evidence", "/claims",
                         "/constitution/articles", "/graph",
+                        // issue #287 — the public-participation portal
+                        // sub-router serves /{id} (detail) + /{id}/sign
+                        // (POST sign). Both paths start with /petitions/ so
+                        // the sub-router contract is satisfied by either.
+                        "/petitions",
                         // issue #280 — the per-MP RSS feed sub-router. The
                         // actual openapi path is /feed/people/{id}.rss (with
                         // a literal .rss suffix on the path parameter), so the

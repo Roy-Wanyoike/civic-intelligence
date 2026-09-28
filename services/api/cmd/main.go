@@ -421,6 +421,22 @@ func main() {
         apiHandler.HandleFunc("/api/v1/debt", makeDebtRouter(debtRepo))
         apiHandler.HandleFunc("/api/v1/debt/", makeDebtRouter(debtRepo))
 
+        // Public Participation Portal (issue #287 / task FEAT-9). The
+        // petitionStore is an in-memory store pre-populated with 5
+        // hand-curated e-petitions spanning the 3 statuses (open,
+        // closed, answered) and varying signature counts. The
+        // platform NEVER derives a "popular support score" or
+        // "approval rating" from these records (rule:
+        // NO_POLITICAL_PERFORMANCE_SCORE). The list endpoint accepts
+        // optional status + country query filters; the detail
+        // sub-router handles /api/v1/petitions/{id} (GET detail) +
+        // /api/v1/petitions/{id}/sign (POST sign — increments the
+        // count + appends a signature). In production this would be a
+        // public_participation.petitions + .signatures SQL repository.
+        petitionStore := NewPetitionStoreSeeded()
+        apiHandler.HandleFunc("/api/v1/petitions", makePetitionsHandler(petitionStore))
+        apiHandler.HandleFunc("/api/v1/petitions/", makePetitionDetailHandler(petitionStore))
+
         // Civic Calendar (task ENG-K1 — Feature 1). The calendarStore is a
         // package-level in-memory store seeded with 26 realistic Kenya
         // Parliament events spanning ~3 months. In production this would
@@ -444,6 +460,23 @@ func main() {
         SeedGazetteSampleNotices(gazetteAlertStore, calendarAnchor)
         apiHandler.HandleFunc("/api/v1/gazette/alerts", makeGazetteAlertsHandler(gazetteAlertStore))
         apiHandler.HandleFunc("/api/v1/gazette/alerts/", makeGazetteAlertDetailHandler(gazetteAlertStore))
+
+        // SMS + USSD alerts (issue #289). The smsSubscriberStore is the
+        // package-level in-memory store, seeded with 10 sample
+        // subscribers spanning 5 countries (KE, UG, TZ, GH, NG). The
+        // SMSSender is selected at startup from the AFRICAS_TALKING_API_KEY
+        // env var — a *StubSMSSender when the key is missing (dev + tests),
+        // an *AfricasTalkingSMSSender when set (production wiring follows
+        // in a follow-up task; the architecture is ready today). The
+        // USSD endpoint is the Africa's Talking callback URL: a citizen
+        // dials the USSD code, AT calls /api/v1/ussd on every keystroke,
+        // and the platform responds with the next menu screen.
+        smsSender := NewSMSSender(nil)
+        _ = smsSender // also referenced below for the broadcast + list handlers
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribe", makeSMSSubscribeHandler(smsSubscriberStore))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/subscribers", makeSMSSubscribersHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/alerts/sms/send", makeSMSSendHandler(smsSubscriberStore, smsSender))
+        apiHandler.HandleFunc("/api/v1/ussd", makeUSSDHandler(smsSubscriberStore))
         // Civic Knowledge Graph (ENG-I1, Wave 9). The platform's signature
         // differentiator: a visual relationship explorer that traces how
         // Bills, Acts, Institutions, People, Constitution Articles, and
@@ -694,6 +727,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 handleBillTimeline(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "changes"):
                                 handleBillChanges(w, r, adapter, billID)
+                        case strings.HasPrefix(sub, "amendments"):
+                                handleBillAmendments(w, r, adapter, billID)
                         case strings.HasPrefix(sub, "versions"):
                                 writeJSON(w, http.StatusOK, map[string]any{"bill_id": billID, "versions": []any{}})
                         case strings.HasPrefix(sub, "documents"):
@@ -702,6 +737,8 @@ func makeBillDetailHandler(adapter BillsAdapter, aiServiceURL string) http.Handl
                                 handleBillSummary(w, r, adapter, billID, aiServiceURL)
                         case strings.HasPrefix(sub, "follow"):
                                 handleFollow(w, r)
+                        case strings.HasPrefix(sub, "votes"):
+                                handleVotesByBill(w, r, billID)
                         default:
                                 writeError(w, http.StatusNotFound, "not_found", "unknown sub-route: "+sub)
                         }
@@ -1445,6 +1482,8 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
         // the trailing path tail:
         //   - "" (root, no trailing slash)  → list the 5 sample people
         //   - "{id}/scorecard"               → MP scorecard (task ENG-K2)
+        //   - "{id}/votes"                    → MP voting history (issue #284)
+        //   - "{id}/bills"                    → Bills sponsored (issue #282)
         //   - "{id}"                          → person detail (still pending,
         //                                       issue #19 — kept as stub)
         // Normalise: treat both /api/v1/people and /api/v1/people/ as the list call (issue #264).
@@ -1462,6 +1501,15 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
                 makeScorecardHandler()(w, r)
                 return
         }
+	if strings.HasSuffix(tail, "/votes") {
+		personID := strings.TrimSuffix(tail, "/votes")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleVotesByPerson(w, r, personID)
+		return
+	}
 	if strings.HasSuffix(tail, "/bills") {
 		personID := strings.TrimSuffix(tail, "/bills")
 		if personID == "" {
@@ -1469,6 +1517,21 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleBillsByPerson(w, r, personID)
+		return
+	}
+
+	// Registered interests sub-resource (task FEAT-10 / issue #288). The
+	// handler returns the MP's declared directorships, land + property,
+	// shareholdings, gifts, other income, and loans from the seed slice
+	// pending the live Declaration of Interests Register ingestion path.
+	// Supports an optional ?category= filter (closed enum, 400 on typo).
+	if strings.HasSuffix(tail, "/interests") {
+		personID := strings.TrimSuffix(tail, "/interests")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleInterestsByPerson(w, r, personID)
 		return
 	}
         // Default: person detail lookup with country-scoped visibility gate.
