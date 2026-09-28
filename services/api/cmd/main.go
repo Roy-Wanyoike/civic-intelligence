@@ -176,6 +176,18 @@ func handleBillsByPerson(w http.ResponseWriter, r *http.Request, personID string
 }
 
 
+// parseIntDefaultEnv reads an integer from an env var, falling back to the
+// default when unset or invalid. Used by the WhatsApp rate-limiter (issue #290).
+func parseIntDefaultEnv(key string, defaultVal int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return defaultVal
+}
+
+
 func main() {
         var cfg Config
         if err := config.Load(&cfg); err != nil {
@@ -1508,6 +1520,15 @@ func handlePeople(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleVotesByPerson(w, r, personID)
+		return
+	}
+	if strings.HasSuffix(tail, "/questions") {
+		personID := strings.TrimSuffix(tail, "/questions")
+		if personID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "person ID required")
+			return
+		}
+		handleWrittenQuestionsByPerson(w, r, personID)
 		return
 	}
 	if strings.HasSuffix(tail, "/bills") {

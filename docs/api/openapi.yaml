@@ -3253,3 +3253,56 @@ security:
                 properties:
                   error:   { type: string, example: petition_closed }
                   message: { type: string, example: "petition pet-004 is not open for signatures (status: closed)" }
+
+  /alerts/sms/subscribe:
+    post:
+      tags: [sms]
+      summary: Subscribe to SMS alerts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone: { type: string }
+                country: { type: string }
+                keywords: { type: array, items: { type: string } }
+      responses:
+        '201': { description: Subscribed }
+        '409': { description: Already subscribed }
+
+  /alerts/sms/subscribers:
+    get:
+      tags: [sms]
+      summary: List SMS subscribers
+      responses:
+        '200': { description: List of subscribers }
+
+  /alerts/sms/send:
+    post:
+      tags: [sms]
+      summary: Broadcast SMS
+      responses:
+        '200': { description: Broadcast sent }
+
+  /ussd:
+    post:
+      tags: [ussd]
+      summary: USSD callback handler
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                sessionId: { type: string }
+                phoneNumber: { type: string }
+                text: { type: string }
+      responses:
+        '200':
+          description: USSD response
+          content:
+            text/plain:
+              schema: { type: string }
