@@ -70,3 +70,10 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
+
+// Force Node.js runtime — Vercel's multi-service "services" config does
+// not support Edge Functions. Without this, the middleware defaults to
+// the Edge Runtime and the Vercel build fails with:
+//   "Edge Runtime is not supported in services."
+// (issue: vercel deploy error, 2026-09-25)
+export const runtime = 'nodejs';
