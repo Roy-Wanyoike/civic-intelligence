@@ -12,7 +12,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { guides, CATEGORY_STYLES } from './guides';
-import type { GuideCategory } from './guides/types';
+import type { GuideCategory } from './guides';
 
 /**
  * Civic Education Hub — landing page at `/learn`.
@@ -121,7 +121,7 @@ export default function LearnLandingPage() {
                     {guide.title}
                   </h3>
                   <p className="mt-2 flex-1 text-sm text-civic-stone">
-                    {guide.summary}
+                    {guide.description}
                   </p>
                   <div className="mt-5 flex items-center gap-4 text-xs text-civic-stone">
                     <span className="inline-flex items-center gap-1">

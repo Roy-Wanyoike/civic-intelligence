@@ -16,6 +16,7 @@ import {
   getAllGuideSlugs,
   CATEGORY_STYLES,
 } from '../guides';
+import type { GuideSection } from '../guides';
 import { GuideFeedback } from '@/components/guide-feedback';
 
 /**
@@ -23,15 +24,19 @@ import { GuideFeedback } from '@/components/guide-feedback';
  *
  * Server component. Pre-renders every published guide at build time via
  * `generateStaticParams`. Reads the slug, finds the matching guide in the
- * registry, emits SEO metadata, and renders:
+ * `guides.ts` data file, emits SEO metadata, and renders:
  *   - a breadcrumb back to /learn,
  *   - a header with category badge + reading time + last-reviewed,
  *   - a body grid: main content (left, prose-styled) + TOC sidebar (right),
+ *   - a per-section "See also" inline link list (source_links + related_bills),
  *   - a sources list,
  *   - a related-platform-links list, and
  *   - the "Was this helpful?" feedback widget.
  *
  * The TOC is derived from `guide.sections` — no manual TOC maintenance.
+ * Body paragraphs are plain strings; the renderer parses inline markdown
+ * link syntax `[label](href)` into <a> tags so paragraphs can link to
+ * live platform pages without escaping JSX in the data file.
  */
 export const dynamicParams = false;
 
@@ -138,7 +143,7 @@ export default async function GuidePage({
         <h1 className="mt-4 font-serif text-3xl font-semibold text-civic-forest sm:text-4xl">
           {guide.title}
         </h1>
-        <p className="mt-3 text-base text-civic-stone">{guide.summary}</p>
+        <p className="mt-3 text-base text-civic-stone">{guide.description}</p>
       </header>
 
       {/* Body grid: main content + sticky TOC */}
@@ -147,26 +152,7 @@ export default async function GuidePage({
         <div className="min-w-0">
           <div className="civic-prose">
             {guide.sections.map((section) => (
-              <section
-                key={section.id}
-                id={section.id}
-                aria-labelledby={`${section.id}-title`}
-                className="scroll-mt-24"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 id={`${section.id}-title`} className="!mt-0 !mb-0">
-                    {section.title}
-                  </h2>
-                  {section.badge && (
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${style.badge}`}
-                    >
-                      {section.badge}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3">{section.body}</div>
-              </section>
+              <SectionBody key={section.id} section={section} style={style.badge} />
             ))}
           </div>
 
@@ -270,7 +256,7 @@ export default async function GuidePage({
                     href={`#${section.id}`}
                     className="block text-civic-ink transition hover:text-civic-leaf"
                   >
-                    {section.title}
+                    {section.heading}
                   </a>
                 </li>
               ))}
@@ -297,6 +283,137 @@ export default async function GuidePage({
       </nav>
     </article>
   );
+}
+
+/**
+ * SectionBody — renders a single `GuideSection` inside the prose wrapper.
+ *
+ * The body is an array of paragraph strings; each becomes a <p>. Inline
+ * markdown link syntax `[label](href)` is parsed so paragraphs can link to
+ * live platform pages (e.g. `/bills`, `/acts`) without escaping JSX in the
+ * data file. Per-section `source_links` and `related_bills` render as a
+ * compact "See also" list below the body — the spec-mandated hook (issue
+ * #292 §3) for in-context cross-links.
+ */
+function SectionBody({
+  section,
+  style,
+}: {
+  section: GuideSection;
+  style: string;
+}) {
+  const hasSeeAlso =
+    (section.source_links && section.source_links.length > 0) ||
+    (section.related_bills && section.related_bills.length > 0);
+  return (
+    <section
+      key={section.id}
+      id={section.id}
+      aria-labelledby={`${section.id}-title`}
+      className="scroll-mt-24"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 id={`${section.id}-title`} className="!mt-0 !mb-0">
+          {section.heading}
+        </h2>
+        {section.badge && (
+          <span
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${style}`}
+          >
+            {section.badge}
+          </span>
+        )}
+      </div>
+      <div className="mt-3">
+        {section.body.map((paragraph, idx) => (
+          <p key={idx}>{renderInline(paragraph)}</p>
+        ))}
+      </div>
+
+      {hasSeeAlso && (
+        <div className="not-prose mt-4 rounded-lg border border-civic-border bg-civic-mist/40 p-3 text-sm">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-civic-stone">
+            See also
+          </p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {section.source_links?.map((src) => (
+              <li key={src.url}>
+                <a
+                  href={src.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-civic-leaf hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  {src.label}
+                </a>
+              </li>
+            ))}
+            {section.related_bills?.map((link) => (
+              <li key={`${link.href}-${link.label}`}>
+                <Link
+                  href={link.href}
+                  className="inline-flex items-center gap-1 text-civic-leaf hover:underline"
+                >
+                  <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * renderInline — minimal inline-markdown parser.
+ *
+ * Supports a single syntax: `[label](href)`. Returns a React fragment with
+ * interleaved strings and Next `<Link>` (for internal paths starting with
+ * `/`) or `<a>` (for external URLs).
+ *
+ * Intentionally NOT a full markdown parser — the data file is plain
+ * paragraphs with the occasional inline link. Anything fancier (lists,
+ * tables, images) lives in dedicated section fields (`source_links`,
+ * `related_bills`) rather than in body prose.
+ */
+function renderInline(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const re = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const [, label, href] = match;
+    if (href.startsWith('/')) {
+      parts.push(
+        <Link key={`l-${key++}`} href={href}>
+          {label}
+        </Link>,
+      );
+    } else {
+      parts.push(
+        <a
+          key={`l-${key++}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {label}
+        </a>,
+      );
+    }
+    lastIndex = re.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return <>{parts}</>;
 }
 
 /**
