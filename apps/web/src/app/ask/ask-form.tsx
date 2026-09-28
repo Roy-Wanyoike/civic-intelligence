@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Send, Loader2, AlertTriangle, ExternalLink, LogIn, Sparkles } from 'lucide-react';
+import { Send, AlertTriangle, ExternalLink, LogIn, Sparkles } from 'lucide-react';
 import { RealityBadge } from '@/components/reality-labels';
 
 /**
