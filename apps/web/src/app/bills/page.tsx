@@ -14,11 +14,20 @@ const STATUS_FILTERS = ['all', 'in_progress', 'enacted', 'withdrawn'] as const;
 const HOUSE_FILTERS = ['all', 'National Assembly', 'Senate'] as const;
 const TOPIC_FILTERS = ['all', 'housing', 'data-protection', 'public-finance', 'education', 'transport', 'county-government'] as const;
 
+// Use API_BASE_URL so the Bills list page can reach a remote BFF in
+// production (e.g. when deployed to Railway / Render / Fly.io). The
+// previous implementation hardcoded `http://localhost:9000` which is
+// unreachable from Vercel's serverless runtime — the mock fallback
+// was therefore ALWAYS active on Vercel, masking both real Bills and
+// real BFF outages behind the same "Showing sample data" banner.
+const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:9000';
+
 async function fetchBills(): Promise<{ bills: Bill[]; source: string }> {
   try {
     // During dev, /api/v1/bills is rewritten to the Go API on port 9000.
-    // On Vercel, it's rewritten to the Go service (if deployed) or fails.
-    const resp = await fetch('http://localhost:9000/api/v1/bills', {
+    // On Vercel, the absolute URL reaches a remote BFF (if API_BASE_URL
+    // is set) or fails fast and falls back to mock data.
+    const resp = await fetch(`${API_BASE}/api/v1/bills`, {
       next: { revalidate: 300 }, // cache for 5 minutes
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

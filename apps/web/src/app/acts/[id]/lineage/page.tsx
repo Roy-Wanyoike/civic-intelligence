@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { ArrowLeft, GitBranch } from 'lucide-react';
+import { ArrowLeft, GitBranch, AlertCircle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { getJSON_ as getJSON } from '@/lib/api';
 import { RealityBadge, RealityDisclaimer } from '@/components/reality-labels';
@@ -23,10 +22,47 @@ export default async function LineagePage({
 }) {
   const { id } = await params;
   let lineage: LineageResponse | null = null;
+  let bffUnreachable = false;
   try {
     lineage = await getJSON<LineageResponse>(`/api/v1/acts/${id}/lineage`);
-  } catch {
-    notFound();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[acts/[id]/lineage] fetch failed for ${id}:`, err);
+    bffUnreachable = true;
+  }
+
+  if (bffUnreachable || !lineage) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-6 text-amber-900">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            <h1 className="font-serif text-xl font-semibold">
+              Lineage unavailable
+            </h1>
+          </div>
+          <p className="mt-2 text-sm">
+            The Acts data API is unreachable right now. Please try again in a
+            few minutes — every lineage step is fetched live from{' '}
+            <span className="font-medium">kenyalaw.org</span> via the Go BFF.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href={`/acts/${id}/lineage`}
+              className="inline-flex items-center gap-2 rounded-md bg-civic-forest px-4 py-2 text-sm font-semibold text-civic-paper hover:bg-civic-leaf"
+            >
+              Try again
+            </Link>
+            <Link
+              href={`/acts/${id}`}
+              className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              ← Back to act
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

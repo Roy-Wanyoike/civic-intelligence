@@ -1,0 +1,93 @@
+# docker-compose.yml — Civic Intelligence Platform
+#
+# Runs the full stack locally: Go BFF + Python AI service + Next.js web.
+# Useful for end-to-end testing before deploying to Railway / Render / Vercel.
+#
+#   docker compose up         # start all three services
+#   docker compose up api      # just the Go BFF (the only one Vercel can't host)
+#   docker compose down        # stop + remove containers
+#
+# The Go BFF is seeded with in-memory sample data on first boot, so the
+# stack is fully functional without a Postgres connection. See
+# services/api/README.md for the env vars that switch to Postgres-backed
+# repositories.
+
+services:
+  # ─────────────────────────────────────────────────────────────────────
+  # Go BFF (services/api) — the backend Vercel doesn't host natively.
+  # ─────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    image: civic-intelligence-api:local
+    container_name: civic-api
+    ports:
+      - "9000:9000"
+    environment:
+      # The BFF reads these env vars (see Config struct in cmd/main.go).
+      # Defaults are sane for local dev; override via a .env file.
+      API_SERVICE_ADDR: ":9000"
+      DEV_MODE: "true"             # bypass JWT signature verification — DEV ONLY
+      AI_SERVICE_URL: "http://ai:8000"
+      # Postgres-backed repos are optional — leave commented for in-memory
+      # (the BFF ships with real / sample seed data; see services/api/README.md).
+      # DATABASE_URL: "postgres://civic:civic@postgres:5432/civic?sslmode=disable"
+    depends_on:
+      - ai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/api/v1/healthz"]
+      interval: 30s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Python AI service (services/ai) — FastAPI app.
+  # ─────────────────────────────────────────────────────────────────────
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    image: civic-intelligence-ai:local
+    container_name: civic-ai
+    ports:
+      - "8000:8000"
+    environment:
+      # The AI service reads AI_SERVICE_URL / QWEN_API_KEY from env. The
+      # platform's default provider is Qwen (via z-ai-web-dev-sdk). Without
+      # a key, the AI service runs in "no-provider" mode and returns a
+      # graceful "AI features unavailable" response.
+      # QWEN_API_KEY: "${QWEN_API_KEY:?set QWEN_API_KEY in .env or export it}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Next.js web app (apps/web) — optional; usually run via `pnpm dev`.
+  # ─────────────────────────────────────────────────────────────────────
+  # Uncomment to run the web app in Docker instead of `pnpm dev`.
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: apps/web/Dockerfile
+  #   image: civic-intelligence-web:local
+  #   container_name: civic-web
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     API_BASE_URL: "http://api:9000"
+  #     AI_SERVICE_URL: "http://ai:8000"
+  #     API_SERVICE_URL: "http://api:9000"
+  #   depends_on:
+  #     - api
+  #     - ai
+
+# Note: no volumes are mounted — the BFF's in-memory repos are reset on
+# restart, which is the desired behaviour for local dev. When you wire up
+# Postgres, add a `postgres` service + a named volume for the DB.
