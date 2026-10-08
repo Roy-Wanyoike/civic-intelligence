@@ -176,17 +176,47 @@ def _estimate_openai_cost_cents(model: str, prompt_tokens: int, completion_token
 
 # ---------- Qwen provider (via ModelScope API) ----------
 
+# qwen_chat_completions_path is appended to the user-provided base URL
+# when the base URL doesn't already include it. This way the config
+# accepts BOTH conventions:
+#   - OpenAI-style base URL:  https://api-inference.modelscope.ai/v1
+#   - Full endpoint URL:      https://api-inference.modelscope.ai/v1/chat/completions
+# The OpenAI-style base URL is what ModelScope's docs + the user's
+# dashboard both surface, so we treat it as the canonical form.
+QWEN_CHAT_COMPLETIONS_PATH = "/chat/completions"
+
+
+def _normalize_qwen_base_url(url: str) -> str:
+    """Ensure the base URL ends with /chat/completions.
+
+    Accepts both the OpenAI-style base URL (``https://.../v1``) and the
+    full endpoint URL (``https://.../v1/chat/completions``). Trailing
+    slashes are stripped first so both ``/v1/`` and ``/v1`` normalize
+    identically.
+    """
+    if not url:
+        return QWEN_CHAT_COMPLETIONS_PATH.lstrip("/")
+    stripped = url.rstrip("/")
+    if stripped.endswith(QWEN_CHAT_COMPLETIONS_PATH):
+        return stripped
+    return f"{stripped}{QWEN_CHAT_COMPLETIONS_PATH}"
+
+
 class QwenProvider:
     """Qwen Chat Completions provider via ModelScope API.
     Activated when AI_MODEL_GATEWAY_DEFAULT_PROVIDER=qwen.
-    Uses OpenAI-compatible API at https://api-inference.modelscope.ai/v1/chat/completions
+    Uses OpenAI-compatible API at https://api-inference.modelscope.ai/v1
     """
 
     name = "qwen"
 
     def __init__(self, api_key: str, base_url: str, default_model: str, timeout: float) -> None:
         self._api_key = api_key
-        self._base_url = base_url
+        # Accept either the OpenAI-style base URL (https://.../v1) or the
+        # full endpoint URL (https://.../v1/chat/completions). The
+        # normaliser makes both forms equivalent so the user can paste
+        # whatever ModelScope's dashboard gives them.
+        self._endpoint = _normalize_qwen_base_url(base_url)
         self._default_model = default_model
         self._timeout = timeout
         self._client = httpx.AsyncClient(
@@ -217,7 +247,7 @@ class QwenProvider:
             payload["response_format"] = {"type": "json_object"}
         try:
             t0 = time.monotonic()
-            resp = await self._client.post(self._base_url, json=payload)
+            resp = await self._client.post(self._endpoint, json=payload)
             resp.raise_for_status()
             data = resp.json()
             latency_ms = int((time.monotonic() - t0) * 1000)

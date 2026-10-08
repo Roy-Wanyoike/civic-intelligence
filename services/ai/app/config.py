@@ -54,8 +54,10 @@ class Settings(BaseSettings):
     anthropic_default_model: str = "claude-3-5-haiku-latest"
 
     # --- Qwen (via ModelScope API) ---
+    # The base URL is the OpenAI-style form (without /chat/completions).
+    # The QwenProvider normalises it to the full endpoint URL on init.
     qwen_api_key: str = ""
-    qwen_base_url: str = "https://api-inference.modelscope.ai/v1/chat/completions"
+    qwen_base_url: str = "https://api-inference.modelscope.ai/v1"
     qwen_default_model: str = "Qwen-Ambassador/Qwen3.8-Max"
 
     # --- RAG ---
