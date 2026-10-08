@@ -28,12 +28,12 @@ import (
 
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/dr_congo"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/egypt"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/burkina_faso"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/cameroon"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/burkina_faso"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/cameroon"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/ethiopia"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/ivory_coast"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/mozambique"
-	"github.com/Roy-Wanyoike/civic-intelligence/adapters/niger"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/ivory_coast"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/mozambique"
+        "github.com/Roy-Wanyoike/civic-intelligence/adapters/niger"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/ghana"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/kenya"
         "github.com/Roy-Wanyoike/civic-intelligence/adapters/malawi"
@@ -771,7 +771,7 @@ func (w malawiWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, erro
 // Cameroon wrapper (added in Wave 14)
 // ---------------------------------------------------------------------------
 type cameroonWrapper struct {
-	inner *cameroon.CameroonAdapter
+        inner *cameroon.CameroonAdapter
 }
 func (w cameroonWrapper) CountryCode() string  { return "CM" }
 func (w cameroonWrapper) CountryName() string  { return "Cameroon" }
@@ -779,32 +779,32 @@ func (w cameroonWrapper) FlagEmoji() string    { return "🇨🇲" }
 func (w cameroonWrapper) ParliamentName() string { return "National Assembly of Cameroon" }
 func (w cameroonWrapper) LegislatureType() string { return "unicameral" }
 func (w cameroonWrapper) GetStages() []contracts.StageDefinition {
-	stages, err := w.inner.GetStages(context.Background())
-	if err != nil { return nil }
-	return stages
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil { return nil }
+        return stages
 }
 func (w cameroonWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
-	s, err := w.inner.GetLegislativeStructure(context.Background())
-	if err != nil || s == nil { return contracts.LegislativeStructure{} }
-	return *s
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil { return contracts.LegislativeStructure{} }
+        return *s
 }
 func (w cameroonWrapper) GetOfficialSources() []SourceDefinition {
-	return []SourceDefinition{
-		{Name: "National Assembly of Cameroon", URL: "https://www.parliament.cm/", AuthorityLevel: "primary", ItemType: "bill"},
-		{Name: "Official Gazette of Cameroon", URL: "https://www.sgg.cm/", AuthorityLevel: "official", ItemType: "gazette"},
-	}
+        return []SourceDefinition{
+                {Name: "National Assembly of Cameroon", URL: "https://www.parliament.cm/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Official Gazette of Cameroon", URL: "https://www.sgg.cm/", AuthorityLevel: "official", ItemType: "gazette"},
+        }
 }
 func (w cameroonWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
-	items, err := w.inner.Discover(ctx)
-	if err != nil { return nil, err }
-	return billsFromSourceItems("CM", items), nil
+        items, err := w.inner.Discover(ctx)
+        if err != nil { return nil, err }
+        return billsFromSourceItems("CM", items), nil
 }
 
 // ---------------------------------------------------------------------------
 // Mozambique wrapper (added in Wave 14)
 // ---------------------------------------------------------------------------
 type mozambiqueWrapper struct {
-	inner *mozambique.MozambiqueAdapter
+        inner *mozambique.MozambiqueAdapter
 }
 func (w mozambiqueWrapper) CountryCode() string  { return "MZ" }
 func (w mozambiqueWrapper) CountryName() string  { return "Mozambique" }
@@ -812,32 +812,32 @@ func (w mozambiqueWrapper) FlagEmoji() string    { return "🇲🇿" }
 func (w mozambiqueWrapper) ParliamentName() string { return "Assembly of the Republic" }
 func (w mozambiqueWrapper) LegislatureType() string { return "unicameral" }
 func (w mozambiqueWrapper) GetStages() []contracts.StageDefinition {
-	stages, err := w.inner.GetStages(context.Background())
-	if err != nil { return nil }
-	return stages
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil { return nil }
+        return stages
 }
 func (w mozambiqueWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
-	s, err := w.inner.GetLegislativeStructure(context.Background())
-	if err != nil || s == nil { return contracts.LegislativeStructure{} }
-	return *s
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil { return contracts.LegislativeStructure{} }
+        return *s
 }
 func (w mozambiqueWrapper) GetOfficialSources() []SourceDefinition {
-	return []SourceDefinition{
-		{Name: "Assembly of the Republic of Mozambique", URL: "https://www.parlamento.gov.mz/", AuthorityLevel: "primary", ItemType: "bill"},
-		{Name: "Boletim da República", URL: "https://www.parlamento.gov.mz/gazette", AuthorityLevel: "official", ItemType: "gazette"},
-	}
+        return []SourceDefinition{
+                {Name: "Assembly of the Republic of Mozambique", URL: "https://www.parlamento.gov.mz/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Boletim da República", URL: "https://www.parlamento.gov.mz/gazette", AuthorityLevel: "official", ItemType: "gazette"},
+        }
 }
 func (w mozambiqueWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
-	items, err := w.inner.Discover(ctx)
-	if err != nil { return nil, err }
-	return billsFromSourceItems("MZ", items), nil
+        items, err := w.inner.Discover(ctx)
+        if err != nil { return nil, err }
+        return billsFromSourceItems("MZ", items), nil
 }
 
 // ---------------------------------------------------------------------------
 // Ivory Coast wrapper (added in Wave 14)
 // ---------------------------------------------------------------------------
 type ivoryCoastWrapper struct {
-	inner *ivory_coast.IvoryCoastAdapter
+        inner *ivory_coast.IvoryCoastAdapter
 }
 func (w ivoryCoastWrapper) CountryCode() string  { return "CI" }
 func (w ivoryCoastWrapper) CountryName() string  { return "Ivory Coast" }
@@ -845,32 +845,32 @@ func (w ivoryCoastWrapper) FlagEmoji() string    { return "🇨🇮" }
 func (w ivoryCoastWrapper) ParliamentName() string { return "National Assembly of Ivory Coast" }
 func (w ivoryCoastWrapper) LegislatureType() string { return "unicameral" }
 func (w ivoryCoastWrapper) GetStages() []contracts.StageDefinition {
-	stages, err := w.inner.GetStages(context.Background())
-	if err != nil { return nil }
-	return stages
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil { return nil }
+        return stages
 }
 func (w ivoryCoastWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
-	s, err := w.inner.GetLegislativeStructure(context.Background())
-	if err != nil || s == nil { return contracts.LegislativeStructure{} }
-	return *s
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil { return contracts.LegislativeStructure{} }
+        return *s
 }
 func (w ivoryCoastWrapper) GetOfficialSources() []SourceDefinition {
-	return []SourceDefinition{
-		{Name: "National Assembly of Ivory Coast", URL: "https://www.assemblee-nationale.ci/", AuthorityLevel: "primary", ItemType: "bill"},
-		{Name: "Journal Officiel de la République de Côte d'Ivoire", URL: "https://www.sgg.gouv.ci/", AuthorityLevel: "official", ItemType: "gazette"},
-	}
+        return []SourceDefinition{
+                {Name: "National Assembly of Ivory Coast", URL: "https://www.assemblee-nationale.ci/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Journal Officiel de la République de Côte d'Ivoire", URL: "https://www.sgg.gouv.ci/", AuthorityLevel: "official", ItemType: "gazette"},
+        }
 }
 func (w ivoryCoastWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
-	items, err := w.inner.Discover(ctx)
-	if err != nil { return nil, err }
-	return billsFromSourceItems("CI", items), nil
+        items, err := w.inner.Discover(ctx)
+        if err != nil { return nil, err }
+        return billsFromSourceItems("CI", items), nil
 }
 
 // ---------------------------------------------------------------------------
 // Burkina Faso wrapper (added in Wave 14)
 // ---------------------------------------------------------------------------
 type burkinaFasoWrapper struct {
-	inner *burkina_faso.BurkinaFasoAdapter
+        inner *burkina_faso.BurkinaFasoAdapter
 }
 func (w burkinaFasoWrapper) CountryCode() string  { return "BF" }
 func (w burkinaFasoWrapper) CountryName() string  { return "Burkina Faso" }
@@ -878,32 +878,32 @@ func (w burkinaFasoWrapper) FlagEmoji() string    { return "🇧🇫" }
 func (w burkinaFasoWrapper) ParliamentName() string { return "Transitional Legislative Assembly" }
 func (w burkinaFasoWrapper) LegislatureType() string { return "unicameral" }
 func (w burkinaFasoWrapper) GetStages() []contracts.StageDefinition {
-	stages, err := w.inner.GetStages(context.Background())
-	if err != nil { return nil }
-	return stages
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil { return nil }
+        return stages
 }
 func (w burkinaFasoWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
-	s, err := w.inner.GetLegislativeStructure(context.Background())
-	if err != nil || s == nil { return contracts.LegislativeStructure{} }
-	return *s
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil { return contracts.LegislativeStructure{} }
+        return *s
 }
 func (w burkinaFasoWrapper) GetOfficialSources() []SourceDefinition {
-	return []SourceDefinition{
-		{Name: "Transitional Legislative Assembly of Burkina Faso", URL: "https://www.assemblee.bf/", AuthorityLevel: "primary", ItemType: "bill"},
-		{Name: "Journal Officiel du Faso", URL: "https://www.sgg.bf/", AuthorityLevel: "official", ItemType: "gazette"},
-	}
+        return []SourceDefinition{
+                {Name: "Transitional Legislative Assembly of Burkina Faso", URL: "https://www.assemblee.bf/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Journal Officiel du Faso", URL: "https://www.sgg.bf/", AuthorityLevel: "official", ItemType: "gazette"},
+        }
 }
 func (w burkinaFasoWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
-	items, err := w.inner.Discover(ctx)
-	if err != nil { return nil, err }
-	return billsFromSourceItems("BF", items), nil
+        items, err := w.inner.Discover(ctx)
+        if err != nil { return nil, err }
+        return billsFromSourceItems("BF", items), nil
 }
 
 // ---------------------------------------------------------------------------
 // Niger wrapper (added in Wave 14)
 // ---------------------------------------------------------------------------
 type nigerWrapper struct {
-	inner *niger.NigerAdapter
+        inner *niger.NigerAdapter
 }
 func (w nigerWrapper) CountryCode() string  { return "NE" }
 func (w nigerWrapper) CountryName() string  { return "Niger" }
@@ -911,25 +911,25 @@ func (w nigerWrapper) FlagEmoji() string    { return "🇳🇪" }
 func (w nigerWrapper) ParliamentName() string { return "National Assembly of Niger" }
 func (w nigerWrapper) LegislatureType() string { return "unicameral" }
 func (w nigerWrapper) GetStages() []contracts.StageDefinition {
-	stages, err := w.inner.GetStages(context.Background())
-	if err != nil { return nil }
-	return stages
+        stages, err := w.inner.GetStages(context.Background())
+        if err != nil { return nil }
+        return stages
 }
 func (w nigerWrapper) GetLegislativeStructure() contracts.LegislativeStructure {
-	s, err := w.inner.GetLegislativeStructure(context.Background())
-	if err != nil || s == nil { return contracts.LegislativeStructure{} }
-	return *s
+        s, err := w.inner.GetLegislativeStructure(context.Background())
+        if err != nil || s == nil { return contracts.LegislativeStructure{} }
+        return *s
 }
 func (w nigerWrapper) GetOfficialSources() []SourceDefinition {
-	return []SourceDefinition{
-		{Name: "National Assembly of Niger", URL: "https://www.assemblee.ne/", AuthorityLevel: "primary", ItemType: "bill"},
-		{Name: "Journal Officiel de la République du Niger", URL: "https://www.sgg.ne/", AuthorityLevel: "official", ItemType: "gazette"},
-	}
+        return []SourceDefinition{
+                {Name: "National Assembly of Niger", URL: "https://www.assemblee.ne/", AuthorityLevel: "primary", ItemType: "bill"},
+                {Name: "Journal Officiel de la République du Niger", URL: "https://www.sgg.ne/", AuthorityLevel: "official", ItemType: "gazette"},
+        }
 }
 func (w nigerWrapper) DiscoverBills(ctx context.Context) ([]BillCandidate, error) {
-	items, err := w.inner.Discover(ctx)
-	if err != nil { return nil, err }
-	return billsFromSourceItems("NE", items), nil
+        items, err := w.inner.Discover(ctx)
+        if err != nil { return nil, err }
+        return billsFromSourceItems("NE", items), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1009,24 +1009,25 @@ func NewMalawiWrapper(inner *malawi.MalawiAdapter) CountryAdapter {
 }
 
 func NewCameroonWrapper(inner *cameroon.CameroonAdapter) CountryAdapter {
-	return cameroonWrapper{inner: inner}
+        return cameroonWrapper{inner: inner}
 }
 func NewMozambiqueWrapper(inner *mozambique.MozambiqueAdapter) CountryAdapter {
-	return mozambiqueWrapper{inner: inner}
+        return mozambiqueWrapper{inner: inner}
 }
 func NewIvoryCoastWrapper(inner *ivory_coast.IvoryCoastAdapter) CountryAdapter {
-	return ivoryCoastWrapper{inner: inner}
+        return ivoryCoastWrapper{inner: inner}
 }
 func NewBurkinaFasoWrapper(inner *burkina_faso.BurkinaFasoAdapter) CountryAdapter {
-	return burkinaFasoWrapper{inner: inner}
+        return burkinaFasoWrapper{inner: inner}
 }
 func NewNigerWrapper(inner *niger.NigerAdapter) CountryAdapter {
-	return nigerWrapper{inner: inner}
+        return nigerWrapper{inner: inner}
 }
 
-// MustRegisterDefault registers the 14 default country adapters (Kenya,
+// MustRegisterDefault registers the 19 default country adapters (Kenya,
 // Uganda, Tanzania, Ghana, Nigeria, South Africa, Rwanda, Zambia, Senegal,
-// Egypt, Morocco, DR Congo, Ethiopia, Malawi) using fresh adapter instances
+// Egypt, Morocco, DR Congo, Ethiopia, Malawi, Cameroon, Mozambique,
+// Ivory Coast, Burkina Faso, and Niger) using fresh adapter instances
 // constructed with zero-value Dependencies. It is safe to call multiple
 // times — subsequent calls are no-ops once the adapters are registered.
 //
@@ -1043,6 +1044,13 @@ func NewNigerWrapper(inner *niger.NigerAdapter) CountryAdapter {
 // Burkina Faso (BF), and Niger (NE) — bringing the platform to 19 countries.
 // (Wave 13 also fixes a regression where these 4 adapters had been written
 // but never registered in MustRegisterDefault — they existed as dead code.)
+//
+// Wave 15 (2026-10-09) closes the final gap: Cameroon, Mozambique, Ivory
+// Coast, Burkina Faso, and Niger were written + had wrappers + had
+// constructors + had contract tests, but were never registered in
+// MustRegisterDefault. They are now registered, bringing the platform
+// from 14 to 19 supported countries. The /api/v1/countries endpoint
+// now lists all 19.
 func MustRegisterDefault() {
         registryMu.Lock()
         defer registryMu.Unlock()
@@ -1087,5 +1095,23 @@ func MustRegisterDefault() {
         }
         if _, ok := registry["MW"]; !ok {
                 registry["MW"] = malawiWrapper{inner: malawi.NewMalawiAdapter()}
+        }
+        // Wave 15 (2026-10-09): the final 5 adapters that existed as dead
+        // code are now live. Each wrapper + constructor was already in
+        // place; only the registration was missing.
+        if _, ok := registry["CM"]; !ok {
+                registry["CM"] = cameroonWrapper{inner: cameroon.NewCameroonAdapter()}
+        }
+        if _, ok := registry["MZ"]; !ok {
+                registry["MZ"] = mozambiqueWrapper{inner: mozambique.NewMozambiqueAdapter()}
+        }
+        if _, ok := registry["CI"]; !ok {
+                registry["CI"] = ivoryCoastWrapper{inner: ivory_coast.NewIvoryCoastAdapter()}
+        }
+        if _, ok := registry["BF"]; !ok {
+                registry["BF"] = burkinaFasoWrapper{inner: burkina_faso.NewBurkinaFasoAdapter()}
+        }
+        if _, ok := registry["NE"]; !ok {
+                registry["NE"] = nigerWrapper{inner: niger.NewNigerAdapter()}
         }
 }

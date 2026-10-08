@@ -64,6 +64,15 @@ var expectedCountries = []struct {
         {"CD", "DR Congo", "🇨🇩", "Parliament of the Democratic Republic of the Congo", "bicameral"},
         {"ET", "Ethiopia", "🇪🇹", "Federal Parliamentary Assembly of Ethiopia", "bicameral"},
         {"MW", "Malawi", "🇲🇼", "National Assembly of Malawi", "unicameral"},
+        // Wave 14 (2026) + Wave 15 (2026-10-09): the final 5 adapters that
+        // existed as dead code are now registered. Each had its wrapper +
+        // constructor + contract tests in place; only the registration in
+        // MustRegisterDefault was missing.
+        {"CM", "Cameroon", "🇨🇲", "National Assembly of Cameroon", "unicameral"},
+        {"MZ", "Mozambique", "🇲🇿", "Assembly of the Republic", "unicameral"},
+        {"CI", "Ivory Coast", "🇨🇮", "National Assembly of Ivory Coast", "unicameral"},
+        {"BF", "Burkina Faso", "🇧🇫", "Transitional Legislative Assembly", "unicameral"},
+        {"NE", "Niger", "🇳🇪", "National Assembly of Niger", "unicameral"},
 }
 
 // setupRegistryForTest returns a registry with all default adapters
