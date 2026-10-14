@@ -33,7 +33,7 @@
   "devDependencies": {
     "@axe-core/cli": "^4.10.1",
     "@axe-core/playwright": "^4.10.1",
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.64.0",
     "@types/d3-force": "^3.0.10",
     "@types/node": "^22.20.4",
     "@types/react": "^18.3.12",
